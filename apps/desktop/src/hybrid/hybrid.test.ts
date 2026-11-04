@@ -83,6 +83,54 @@ describe('Disponibilité réelle', () => {
   });
 });
 describe('Stockage hors connexion', () => {
+  it('refuse une autorisation de cache sans date limite valide', () => {
+    const now = Date.now();
+    for (const authorizedUntil of [Number.NaN, Number.POSITIVE_INFINITY, now + 10000.5]) {
+      const s = store();
+      expect(() =>
+        s.cacheAuthorized(
+          {
+            id: 'balance',
+            version: 1,
+            schemaVersion: 1,
+            synchronizedAt: new Date(now).toISOString(),
+            expiresAt: new Date(now + 5000).toISOString(),
+            data: { amount: '12.34' },
+          },
+          {
+            scope: 'test-scope',
+            resourceId: 'balance',
+            permission: 'ledger:read',
+            authorizedUntil,
+          },
+        ),
+      ).toThrow('OFFLINE_ACCESS_DENIED');
+      expect(s.readCache('balance', 'ledger:read')).toBeNull();
+    }
+  });
+  it('refuse un cache dont l’expiration précède sa synchronisation', () => {
+    const now = Date.now(),
+      s = store();
+    expect(() =>
+      s.cacheAuthorized(
+        {
+          id: 'balance',
+          version: 1,
+          schemaVersion: 1,
+          synchronizedAt: new Date(now + 1000).toISOString(),
+          expiresAt: new Date(now + 500).toISOString(),
+          data: { amount: '12.34' },
+        },
+        {
+          scope: 'test-scope',
+          resourceId: 'balance',
+          permission: 'ledger:read',
+          authorizedUntil: now + 5000,
+        },
+      ),
+    ).toThrow('OFFLINE_ACCESS_DENIED');
+    expect(s.readCache('balance', 'ledger:read')).toBeNull();
+  });
   it('interdit tout disque sensible et exige un périmètre autorisé', () => {
     expect(assertDiskPersistenceAllowed).toThrow('PLATFORM_ENCRYPTION_NOT_VALIDATED');
     expect(() => new MemoryLocalStore().saveDraft(draft())).toThrow('AUTHORIZED_SCOPE_REQUIRED');

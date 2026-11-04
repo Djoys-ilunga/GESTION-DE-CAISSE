@@ -17,4 +17,5 @@ apps/api/src/generated/
 apps/desktop/src-tauri/gen/
 playwright-report/
 test-results/
+native-test-results/
 .idea/

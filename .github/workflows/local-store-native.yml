@@ -4,10 +4,24 @@ on:
   push:
     branches: [main]
     paths:
-      ['packages/local-store/**', 'rust-toolchain.toml', '.github/workflows/local-store-native.yml']
+      [
+        'apps/desktop/**',
+        'packages/shared/**',
+        'packages/local-store/**',
+        'pnpm-lock.yaml',
+        'rust-toolchain.toml',
+        '.github/workflows/local-store-native.yml',
+      ]
   pull_request:
     paths:
-      ['packages/local-store/**', 'rust-toolchain.toml', '.github/workflows/local-store-native.yml']
+      [
+        'apps/desktop/**',
+        'packages/shared/**',
+        'packages/local-store/**',
+        'pnpm-lock.yaml',
+        'rust-toolchain.toml',
+        '.github/workflows/local-store-native.yml',
+      ]
 permissions:
   contents: read
 jobs:
@@ -17,12 +31,12 @@ jobs:
       matrix:
         os: [windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: packages/local-store
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
       - name: Outils OpenSSL Windows
         if: runner.os == 'Windows'
         shell: pwsh
@@ -31,9 +45,30 @@ jobs:
           if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 3010) { exit $LASTEXITCODE }
           'C:\Strawberry\perl\bin' | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           'C:\Program Files\NASM' | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          $global:LASTEXITCODE = 0
       - name: Rust verrouillé
         run: rustup toolchain install 1.90.0 --profile minimal --component rustfmt --component clippy
       - run: cargo fmt --check
       - run: cargo clippy --locked --all-targets -- -D warnings
       - name: SQLCipher et magasin de clés natif
         run: cargo test --locked
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version-file: .node-version
+      - name: pnpm verrouillé
+        working-directory: .
+        run: npm install --global pnpm@11.25.0 --ignore-scripts
+      - name: Dépendances JavaScript verrouillées
+        working-directory: .
+        run: pnpm install --frozen-lockfile
+      - name: Générer le client Prisma sans connexion à une base
+        working-directory: .
+        env:
+          DATABASE_URL: postgresql://unused@127.0.0.1:5432/caissepro
+        run: pnpm db:generate
+      - name: Types, lint, tests unitaires et builds JavaScript
+        working-directory: .
+        run: pnpm check
+      - name: Compiler et lier le véritable desktop avec ses fichiers embarqués
+        working-directory: .
+        run: pnpm --filter @caissepro/desktop exec tauri build --debug --no-bundle

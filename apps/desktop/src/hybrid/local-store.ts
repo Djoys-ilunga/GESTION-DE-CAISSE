@@ -138,6 +138,7 @@ export class MemoryLocalStore implements LocalStore {
       grant.scope !== this.scope ||
       grant.resourceId !== snapshot.id ||
       !grant.permission.trim() ||
+      !Number.isSafeInteger(grant.authorizedUntil) ||
       grant.authorizedUntil <= now ||
       snapshot.schemaVersion !== 1 ||
       !Number.isSafeInteger(snapshot.version) ||
@@ -146,6 +147,7 @@ export class MemoryLocalStore implements LocalStore {
       !Number.isFinite(expiry) ||
       sync > now + 1000 ||
       expiry <= now ||
+      expiry <= sync ||
       expiry - sync > MAX_OFFLINE_TTL ||
       expiry > grant.authorizedUntil
     )

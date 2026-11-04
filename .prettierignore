@@ -7,4 +7,5 @@ Cargo.lock
 apps/api/src/generated
 apps/desktop/src-tauri/gen
 test-results
+native-test-results
 playwright-report
