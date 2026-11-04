@@ -185,6 +185,8 @@ export class LedgerService {
       });
       if (!account) throw new DataError('ACCOUNT_NOT_FOUND');
       await this.access.require(tx, ctx, account.agencyId, 'ledger:read');
+      if (account.cashRegisterId)
+        await this.access.requireCash(tx, ctx, account.cashRegisterId, 'ledger:read');
       const [row] = await tx.$queryRaw<
         {
           currency: Currency;

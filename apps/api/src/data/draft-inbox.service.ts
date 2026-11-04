@@ -13,17 +13,20 @@ export class DraftInboxService {
     value: unknown,
     version: number,
     expectedServerVersion: number | null = null,
+    cashRegisterId: string | null = null,
   ) {
     const draft = draftSchema.parse(value);
+    if (draft.kind === 'receipt' && !cashRegisterId) throw new DataError('DRAFT_CASH_REQUIRED');
     z.number().int().positive().parse(version);
     z.number().int().positive().nullable().parse(expectedServerVersion);
     if (Date.parse(draft.expiresAt) <= Date.now()) throw new DataError('DRAFT_EXPIRED');
     return this.access.run(ctx, async (tx) => {
       await this.access.require(tx, ctx, agencyId, 'draft:receive');
+      if (cashRegisterId) await this.access.requireCash(tx, ctx, cashRegisterId, 'draft:receive');
       const previous = await tx.importedDraft.findFirst({
         where: { companyId: ctx.companyId, authorId: ctx.userId, clientDraftId: draft.id },
       });
-      const payloadHash = fingerprint(draft);
+      const payloadHash = fingerprint({ draft, cashRegisterId });
       if (
         previous?.version === version &&
         previous.payloadHash === payloadHash &&
@@ -40,6 +43,7 @@ export class DraftInboxService {
         (previous.version !== expectedServerVersion ||
           version <= previous.version ||
           previous.agencyId !== agencyId ||
+          previous.cashRegisterId !== cashRegisterId ||
           previous.kind !== kind)
       )
         throw new DataError('DRAFT_CONFLICT');
@@ -58,6 +62,7 @@ export class DraftInboxService {
               id: randomUUID(),
               companyId: ctx.companyId,
               agencyId,
+              cashRegisterId,
               authorId: ctx.userId,
               clientDraftId: draft.id,
               kind,

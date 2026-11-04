@@ -15,7 +15,7 @@ await admin.connect();
 try {
   await admin.query(`CREATE DATABASE "${name}"`);
   url.pathname = `/${name}`;
-  const env = { ...process.env, DATABASE_URL: url.toString(), CAISSEPRO_INTEGRITY_TEST: '1' };
+  const env = { ...process.env, DATABASE_URL: url.toString(), CAISSEPRO_INTEGRITY_TEST: '1', AUTH_RATE_LIMIT_SECRET: randomBytes(32).toString('hex') };
   for (const args of [
     ['--filter', '@caissepro/api', 'db:deploy'],
     ['--filter', '@caissepro/api', 'test:integration'],

@@ -1,0 +1,7 @@
+{
+ "$schema":"../gen/schemas/desktop-schema.json",
+ "identifier":"main",
+ "description":"Commandes de session autorisées uniquement à la fenêtre locale CaissePro.",
+ "windows":["main"],
+ "permissions":["allow-auth-health","allow-auth-login","allow-auth-status","allow-auth-logout","allow-auth-lock","allow-auth-unlock","allow-auth-revalidate","allow-auth-activity","allow-auth-password","allow-workspace-balances","allow-workspace-drafts","allow-workspace-save-draft","allow-workspace-sync","allow-admin-request"]
+}

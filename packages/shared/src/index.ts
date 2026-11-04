@@ -1,4 +1,5 @@
 import { z } from 'zod';
+export * from './auth.js';
 export const API_PROTOCOL_VERSION = 1 as const;
 export const apiHealthSchema = z
   .object({

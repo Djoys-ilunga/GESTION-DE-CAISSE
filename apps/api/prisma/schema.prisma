@@ -68,6 +68,7 @@ model Installation {
 }
 
 model Company {
+  code      String          @unique @default(dbgenerated("('CP-'::text || upper(substr((gen_random_uuid())::text, 1, 12)))")) @db.VarChar(32)
   id        String          @id @default(uuid()) @db.Uuid
   name      String          @db.VarChar(160)
   active    Boolean         @default(true)
@@ -97,31 +98,38 @@ model Agency {
 }
 
 model User {
-  id             String               @id @default(uuid()) @db.Uuid
-  email          String               @unique @db.VarChar(254)
-  displayName    String               @db.VarChar(160)
-  active         Boolean              @default(true)
-  createdAt      DateTime             @default(now()) @db.Timestamptz(3)
-  members        CompanyMember[]
-  openedSessions CashSession[]        @relation("SessionOpener")
-  closedSessions CashSession[]        @relation("SessionCloser")
-  operations     FinancialOperation[]
-  expenses       ExpenseRequest[]
-  approvals      ExpenseApproval[]
-  attachments    Attachment[]
-  audits         AuditEvent[]
-  drafts         ImportedDraft[]
+  securityVersion    Int                  @default(1)
+  mustChangePassword Boolean              @default(false)
+  credential         UserCredential?
+  authSessions       AuthSession[]
+  id                 String               @id @default(uuid()) @db.Uuid
+  email              String               @unique @db.VarChar(254)
+  displayName        String               @db.VarChar(160)
+  active             Boolean              @default(true)
+  createdAt          DateTime             @default(now()) @db.Timestamptz(3)
+  members            CompanyMember[]
+  openedSessions     CashSession[]        @relation("SessionOpener")
+  closedSessions     CashSession[]        @relation("SessionCloser")
+  operations         FinancialOperation[]
+  expenses           ExpenseRequest[]
+  approvals          ExpenseApproval[]
+  attachments        Attachment[]
+  audits             AuditEvent[]
+  drafts             ImportedDraft[]
 }
 
 model CompanyMember {
-  id        String        @id @default(uuid()) @db.Uuid
-  companyId String        @db.Uuid
-  userId    String        @db.Uuid
-  active    Boolean       @default(true)
-  company   Company       @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  user      User          @relation(fields: [userId], references: [id], onDelete: Restrict)
-  roles     MemberRole[]
-  agencies  AgencyGrant[]
+  authorizationVersion Int                 @default(1)
+  cashGrants           CashRegisterGrant[]
+  authSessions         AuthSession[]
+  id                   String              @id @default(uuid()) @db.Uuid
+  companyId            String              @db.Uuid
+  userId               String              @db.Uuid
+  active               Boolean             @default(true)
+  company              Company             @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  user                 User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  roles                MemberRole[]
+  agencies             AgencyGrant[]
 
   @@unique([companyId, id])
   @@unique([companyId, userId])
@@ -177,13 +185,14 @@ model AgencyGrant {
 }
 
 model CashRegister {
-  id        String            @id @default(uuid()) @db.Uuid
-  companyId String            @db.Uuid
-  agencyId  String            @db.Uuid
-  code      String            @db.VarChar(40)
-  name      String            @db.VarChar(160)
-  active    Boolean           @default(true)
-  agency    Agency            @relation(fields: [companyId, agencyId], references: [companyId, id], onDelete: Restrict)
+  grants    CashRegisterGrant[]
+  id        String              @id @default(uuid()) @db.Uuid
+  companyId String              @db.Uuid
+  agencyId  String              @db.Uuid
+  code      String              @db.VarChar(40)
+  name      String              @db.VarChar(160)
+  active    Boolean             @default(true)
+  agency    Agency              @relation(fields: [companyId, agencyId], references: [companyId, id], onDelete: Restrict)
   accounts  TreasuryAccount[]
   sessions  CashSession[]
 
@@ -399,20 +408,80 @@ model AuditEvent {
 }
 
 model ImportedDraft {
-  id            String    @id @default(uuid()) @db.Uuid
-  companyId     String    @db.Uuid
-  agencyId      String    @db.Uuid
-  authorId      String    @db.Uuid
-  clientDraftId String    @db.Uuid
-  kind          DraftKind
-  currency      Currency
-  amount        Decimal   @db.Decimal(18, 2)
-  description   String    @db.VarChar(500)
-  version       Int
-  payloadHash   String    @db.Char(64)
-  receivedAt    DateTime  @default(now()) @db.Timestamptz(3)
-  agency        Agency    @relation(fields: [companyId, agencyId], references: [companyId, id], onDelete: Restrict)
-  author        User      @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  cashRegisterId String?   @db.Uuid
+  id             String    @id @default(uuid()) @db.Uuid
+  companyId      String    @db.Uuid
+  agencyId       String    @db.Uuid
+  authorId       String    @db.Uuid
+  clientDraftId  String    @db.Uuid
+  kind           DraftKind
+  currency       Currency
+  amount         Decimal   @db.Decimal(18, 2)
+  description    String    @db.VarChar(500)
+  version        Int
+  payloadHash    String    @db.Char(64)
+  receivedAt     DateTime  @default(now()) @db.Timestamptz(3)
+  agency         Agency    @relation(fields: [companyId, agencyId], references: [companyId, id], onDelete: Restrict)
+  author         User      @relation(fields: [authorId], references: [id], onDelete: Restrict)
 
   @@unique([companyId, authorId, clientDraftId])
+}
+
+model UserCredential {
+  userId       String   @id @db.Uuid
+  passwordHash String   @db.VarChar(256)
+  changedAt    DateTime @default(now()) @db.Timestamptz(3)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+}
+
+model CashRegisterGrant {
+  companyId      String        @db.Uuid
+  memberId       String        @db.Uuid
+  agencyId       String        @db.Uuid
+  cashRegisterId String        @db.Uuid
+  member         CompanyMember @relation(fields: [companyId, memberId], references: [companyId, id], onDelete: Restrict)
+  register       CashRegister  @relation(fields: [companyId, cashRegisterId, agencyId], references: [companyId, id, agencyId], onDelete: Restrict)
+
+  @@id([companyId, memberId, cashRegisterId])
+}
+
+model AuthSession {
+  id            String        @id @default(uuid()) @db.Uuid
+  companyId     String        @db.Uuid
+  memberId      String        @db.Uuid
+  userId        String        @db.Uuid
+  deviceId      String        @db.Uuid
+  tokenHash     String        @unique @db.Char(64)
+  userVersion   Int
+  memberVersion Int
+  createdAt     DateTime      @default(now()) @db.Timestamptz(3)
+  lastSeenAt    DateTime      @default(now()) @db.Timestamptz(3)
+  expiresAt     DateTime      @db.Timestamptz(3)
+  idleExpiresAt DateTime      @db.Timestamptz(3)
+  lockedAt      DateTime?     @db.Timestamptz(3)
+  revokedAt     DateTime?     @db.Timestamptz(3)
+  member        CompanyMember @relation(fields: [companyId, memberId], references: [companyId, id], onDelete: Restrict)
+  user          User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, userId, revokedAt])
+}
+
+model AuthThrottle {
+  key             String    @id @db.Char(64)
+  windowStartedAt DateTime  @db.Timestamptz(3)
+  failures        Int       @default(0)
+  blockedUntil    DateTime? @db.Timestamptz(3)
+}
+
+model AuthEvent {
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String?  @db.Uuid
+  actorId   String?  @db.Uuid
+  subjectId String?  @db.Uuid
+  sessionId String?  @db.Uuid
+  deviceId  String?  @db.Uuid
+  code      String   @db.VarChar(60)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([companyId, createdAt])
 }

@@ -326,11 +326,11 @@ describe('Intégrité PostgreSQL réelle', () => {
       createdAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 600000).toISOString(),
     };
-    await inbox.receive(f.ctx, f.agencyId, draft, 4);
-    await inbox.receive(f.ctx, f.agencyId, draft, 4);
-    await inbox.receive(f.ctx, f.agencyId, { ...draft, amount: '3.00' }, 8, 4);
+    await inbox.receive(f.ctx, f.agencyId, draft, 4, null, f.registerId);
+    await inbox.receive(f.ctx, f.agencyId, draft, 4, null, f.registerId);
+    await inbox.receive(f.ctx, f.agencyId, { ...draft, amount: '3.00' }, 8, 4, f.registerId);
     await expect(
-      inbox.receive(f.ctx, f.agencyId, { ...draft, amount: '4.00' }, 9, 4),
+      inbox.receive(f.ctx, f.agencyId, { ...draft, amount: '4.00' }, 9, 4, f.registerId),
     ).rejects.toThrow('DRAFT_CONFLICT');
     expect(await db.importedDraft.count({ where: { companyId: f.companyId } })).toBe(1);
     expect(await db.financialOperation.count({ where: { companyId: f.companyId } })).toBe(0);

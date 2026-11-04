@@ -47,6 +47,15 @@ export async function fixture(db: PrismaService) {
       { id: otherRegisterId, companyId, agencyId: otherAgencyId, code: 'C2', name: 'Caisse B' },
     ],
   });
+  const members = await db.companyMember.findMany({
+    where: { companyId, userId: { in: [userId, approverId] } },
+  });
+  await db.cashRegisterGrant.createMany({
+    data: members.flatMap((member) => [
+      { companyId, memberId: member.id, agencyId, cashRegisterId: registerId },
+      { companyId, memberId: member.id, agencyId: otherAgencyId, cashRegisterId: otherRegisterId },
+    ]),
+  });
   await db.treasuryAccount.createMany({
     data: [
       {
