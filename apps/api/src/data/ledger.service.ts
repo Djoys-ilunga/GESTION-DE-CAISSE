@@ -4,6 +4,11 @@ import { z } from 'zod';
 import { currencySchema, positiveAmountSchema } from '@caissepro/shared';
 import { Prisma, type OperationKind, type Currency } from '../generated/prisma/client';
 import { CentralAccess, DataError, type DataContext, type Tx } from './central-access';
+// 18 chiffres de montant × 24 chiffres de taux : aucun arrondi intermédiaire.
+const ExactDecimal = Prisma.Decimal.clone({
+  precision: 60,
+  rounding: Prisma.Decimal.ROUND_HALF_UP,
+});
 const uuid = z.uuid();
 const posting = { agencyId: uuid, idempotencyKey: uuid };
 const receiptSchema = z
@@ -394,8 +399,8 @@ export class LedgerService {
           input.sourceCounterId,
           input.destinationCounterId,
         ]);
-        const target = new Prisma.Decimal(input.amount)
-          .mul(rate.rate)
+        const target = new ExactDecimal(input.amount)
+          .mul(rate.rate.toString())
           .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
           .toFixed(2);
         positiveAmountSchema.parse(target);

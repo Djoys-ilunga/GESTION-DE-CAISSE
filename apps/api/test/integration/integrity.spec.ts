@@ -251,6 +251,35 @@ describe('Intégrité PostgreSQL réelle', () => {
     expect((await ledger.balance(f.ctx, f.usd)).balance).toBe('8.75');
     expect((await ledger.balance(f.ctx, f.cdf)).balance).toBe('3250.16');
   });
+  it('évite tout arrondi intermédiaire des grandes conversions', async () => {
+    await receipt('9007199254740993.01');
+    const rateId = id();
+    await db.exchangeRate.create({
+      data: {
+        id: rateId,
+        companyId: f.companyId,
+        fromCurrency: 'USD',
+        toCurrency: 'CDF',
+        rate: '0.500000000255',
+        effectiveAt: new Date(Date.now() - 10000),
+        source: 'TEST_EXACTITUDE',
+      },
+    });
+    await ledger.convert(f.ctx, {
+      agencyId: f.agencyId,
+      sourceAccountId: f.usd,
+      destinationAccountId: f.cdf,
+      sourceCounterId: f.clearingUsd,
+      destinationCounterId: f.clearingCdf,
+      sourceSessionId: f.sessionId,
+      destinationSessionId: f.sessionId,
+      exchangeRateId: rateId,
+      amount: '9007199254740993.01',
+      idempotencyKey: id(),
+    });
+    expect((await ledger.balance(f.ctx, f.usd)).balance).toBe('0.00');
+    expect((await ledger.balance(f.ctx, f.cdf)).balance).toBe('4503599629667332.31');
+  });
   it('applique RLS même sans filtre entreprise et refuse un compte étranger', async () => {
     const other = await fixture(db);
     const rows = await access.run(f.ctx, (tx) => tx.treasuryAccount.findMany());
