@@ -1,0 +1,16 @@
+[package]
+name = "caissepro-desktop"
+version = "0.2.0"
+edition = "2021"
+rust-version = "1.90"
+
+[lib]
+name = "caissepro_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "=2.7.4", features = [] }
+
+[dependencies]
+tauri = { version = "=2.12.5", features = [] }
+caissepro-local-store = { path = "../../../packages/local-store" }

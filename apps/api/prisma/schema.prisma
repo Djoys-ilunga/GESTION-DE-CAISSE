@@ -1,0 +1,418 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Currency {
+  CDF
+  USD
+}
+
+enum AccountKind {
+  TREASURY
+  CLEARING
+  EQUITY
+}
+
+enum SessionState {
+  OPEN
+  CLOSED
+}
+
+enum OperationKind {
+  RECEIPT
+  DISBURSEMENT
+  TRANSFER
+  FX
+  REVERSAL
+}
+
+enum EntrySide {
+  DEBIT
+  CREDIT
+}
+
+enum ExpenseState {
+  PENDING
+  APPROVED
+  REJECTED
+  PAID
+  CANCELLED
+}
+
+enum ApprovalDecision {
+  APPROVE
+  REJECT
+}
+
+enum ReservationState {
+  ACTIVE
+  CONSUMED
+  RELEASED
+}
+
+enum DraftKind {
+  RECEIPT
+  EXPENSE_REQUEST
+}
+
+model Installation {
+  id        String   @id @default(uuid()) @db.Uuid
+  label     String   @db.VarChar(100)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+}
+
+model Company {
+  id        String          @id @default(uuid()) @db.Uuid
+  name      String          @db.VarChar(160)
+  active    Boolean         @default(true)
+  createdAt DateTime        @default(now()) @db.Timestamptz(3)
+  agencies  Agency[]
+  members   CompanyMember[]
+  roles     Role[]
+  rates     ExchangeRate[]
+  audits    AuditEvent[]
+}
+
+model Agency {
+  id         String               @id @default(uuid()) @db.Uuid
+  companyId  String               @db.Uuid
+  code       String               @db.VarChar(40)
+  name       String               @db.VarChar(160)
+  active     Boolean              @default(true)
+  company    Company              @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  grants     AgencyGrant[]
+  registers  CashRegister[]
+  accounts   TreasuryAccount[]
+  operations FinancialOperation[]
+  drafts     ImportedDraft[]
+
+  @@unique([companyId, id])
+  @@unique([companyId, code])
+}
+
+model User {
+  id             String               @id @default(uuid()) @db.Uuid
+  email          String               @unique @db.VarChar(254)
+  displayName    String               @db.VarChar(160)
+  active         Boolean              @default(true)
+  createdAt      DateTime             @default(now()) @db.Timestamptz(3)
+  members        CompanyMember[]
+  openedSessions CashSession[]        @relation("SessionOpener")
+  closedSessions CashSession[]        @relation("SessionCloser")
+  operations     FinancialOperation[]
+  expenses       ExpenseRequest[]
+  approvals      ExpenseApproval[]
+  attachments    Attachment[]
+  audits         AuditEvent[]
+  drafts         ImportedDraft[]
+}
+
+model CompanyMember {
+  id        String        @id @default(uuid()) @db.Uuid
+  companyId String        @db.Uuid
+  userId    String        @db.Uuid
+  active    Boolean       @default(true)
+  company   Company       @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  roles     MemberRole[]
+  agencies  AgencyGrant[]
+
+  @@unique([companyId, id])
+  @@unique([companyId, userId])
+}
+
+model Role {
+  id          String           @id @default(uuid()) @db.Uuid
+  companyId   String           @db.Uuid
+  code        String           @db.VarChar(60)
+  active      Boolean          @default(true)
+  company     Company          @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  members     MemberRole[]
+  permissions RolePermission[]
+
+  @@unique([companyId, id])
+  @@unique([companyId, code])
+}
+
+model Permission {
+  code        String           @id @db.VarChar(80)
+  description String           @db.VarChar(200)
+  roles       RolePermission[]
+}
+
+model MemberRole {
+  companyId String        @db.Uuid
+  memberId  String        @db.Uuid
+  roleId    String        @db.Uuid
+  member    CompanyMember @relation(fields: [companyId, memberId], references: [companyId, id], onDelete: Restrict)
+  role      Role          @relation(fields: [companyId, roleId], references: [companyId, id], onDelete: Restrict)
+
+  @@id([companyId, memberId, roleId])
+}
+
+model RolePermission {
+  companyId      String     @db.Uuid
+  roleId         String     @db.Uuid
+  permissionCode String     @db.VarChar(80)
+  role           Role       @relation(fields: [companyId, roleId], references: [companyId, id], onDelete: Restrict)
+  permission     Permission @relation(fields: [permissionCode], references: [code], onDelete: Restrict)
+
+  @@id([companyId, roleId, permissionCode])
+}
+
+model AgencyGrant {
+  companyId String        @db.Uuid
+  memberId  String        @db.Uuid
+  agencyId  String        @db.Uuid
+  member    CompanyMember @relation(fields: [companyId, memberId], references: [companyId, id], onDelete: Restrict)
+  agency    Agency        @relation(fields: [companyId, agencyId], references: [companyId, id], onDelete: Restrict)
+
+  @@id([companyId, memberId, agencyId])
+}
+
+model CashRegister {
+  id        String            @id @default(uuid()) @db.Uuid
+  companyId String            @db.Uuid
+  agencyId  String            @db.Uuid
+  code      String            @db.VarChar(40)
+  name      String            @db.VarChar(160)
+  active    Boolean           @default(true)
+  agency    Agency            @relation(fields: [companyId, agencyId], references: [companyId, id], onDelete: Restrict)
+  accounts  TreasuryAccount[]
+  sessions  CashSession[]
+
+  @@unique([companyId, id, agencyId])
+  @@unique([companyId, agencyId, code])
+}
+
+model TreasuryAccount {
+  id             String            @id @default(uuid()) @db.Uuid
+  companyId      String            @db.Uuid
+  agencyId       String            @db.Uuid
+  cashRegisterId String?           @db.Uuid
+  code           String            @db.VarChar(60)
+  currency       Currency
+  kind           AccountKind
+  active         Boolean           @default(true)
+  agency         Agency            @relation(fields: [companyId, agencyId], references: [companyId, id], onDelete: Restrict)
+  register       CashRegister?     @relation(fields: [companyId, cashRegisterId, agencyId], references: [companyId, id, agencyId], onDelete: Restrict)
+  entries        LedgerEntry[]
+  expenses       ExpenseRequest[]
+  reservations   FundReservation[]
+  outgoing       Transfer[]        @relation("TransferSource")
+  incoming       Transfer[]        @relation("TransferDestination")
+
+  @@unique([companyId, id, currency])
+  @@unique([companyId, id, currency, agencyId])
+  @@unique([companyId, agencyId, code, currency])
+  @@unique([companyId, cashRegisterId, currency])
+}
+
+model CashSession {
+  id             String        @id @default(uuid()) @db.Uuid
+  companyId      String        @db.Uuid
+  agencyId       String        @db.Uuid
+  cashRegisterId String        @db.Uuid
+  openedById     String        @db.Uuid
+  closedById     String?       @db.Uuid
+  state          SessionState  @default(OPEN)
+  openedAt       DateTime      @default(now()) @db.Timestamptz(3)
+  closedAt       DateTime?     @db.Timestamptz(3)
+  register       CashRegister  @relation(fields: [companyId, cashRegisterId, agencyId], references: [companyId, id, agencyId], onDelete: Restrict)
+  opener         User          @relation("SessionOpener", fields: [openedById], references: [id], onDelete: Restrict)
+  closer         User?         @relation("SessionCloser", fields: [closedById], references: [id], onDelete: Restrict)
+  entries        LedgerEntry[]
+
+  @@unique([companyId, id])
+}
+
+model FinancialOperation {
+  id               String              @id @default(uuid()) @db.Uuid
+  companyId        String              @db.Uuid
+  agencyId         String              @db.Uuid
+  createdById      String              @db.Uuid
+  kind             OperationKind
+  currency         Currency?
+  idempotencyKey   String              @db.Uuid
+  requestHash      String              @db.Char(64)
+  postedAt         DateTime            @default(now()) @db.Timestamptz(3)
+  transactionId    BigInt              @default(dbgenerated("txid_current()"))
+  expenseRequestId String?             @db.Uuid
+  reversalOfId     String?             @db.Uuid
+  reasonCode       String?             @db.VarChar(80)
+  exchangeRateId   String?             @db.Uuid
+  sourceAmount     Decimal?            @db.Decimal(18, 2)
+  targetAmount     Decimal?            @db.Decimal(18, 2)
+  agency           Agency              @relation(fields: [companyId, agencyId], references: [companyId, id], onDelete: Restrict)
+  creator          User                @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  expense          ExpenseRequest?     @relation(fields: [companyId, expenseRequestId], references: [companyId, id], onDelete: Restrict)
+  original         FinancialOperation? @relation("OperationReversal", fields: [companyId, reversalOfId], references: [companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  reversal         FinancialOperation? @relation("OperationReversal")
+  rate             ExchangeRate?       @relation(fields: [companyId, exchangeRateId], references: [companyId, id], onDelete: Restrict)
+  entries          LedgerEntry[]
+  transfer         Transfer?
+  attachments      Attachment[]
+
+  @@unique([companyId, id])
+  @@unique([companyId, idempotencyKey])
+  @@unique([companyId, expenseRequestId])
+  @@unique([companyId, reversalOfId])
+  @@index([companyId, postedAt])
+}
+
+model LedgerEntry {
+  id            String             @id @default(uuid()) @db.Uuid
+  companyId     String             @db.Uuid
+  operationId   String             @db.Uuid
+  accountId     String             @db.Uuid
+  cashSessionId String?            @db.Uuid
+  lineNo        Int
+  currency      Currency
+  side          EntrySide
+  amount        Decimal            @db.Decimal(18, 2)
+  operation     FinancialOperation @relation(fields: [companyId, operationId], references: [companyId, id], onDelete: Restrict)
+  account       TreasuryAccount    @relation(fields: [companyId, accountId, currency], references: [companyId, id, currency], onDelete: Restrict)
+  session       CashSession?       @relation(fields: [companyId, cashSessionId], references: [companyId, id], onDelete: Restrict)
+
+  @@unique([companyId, operationId, lineNo])
+  @@index([companyId, accountId])
+}
+
+model ExpenseRequest {
+  id            String               @id @default(uuid()) @db.Uuid
+  companyId     String               @db.Uuid
+  agencyId      String               @db.Uuid
+  accountId     String               @db.Uuid
+  requestedById String               @db.Uuid
+  currency      Currency
+  amount        Decimal              @db.Decimal(18, 2)
+  description   String               @db.VarChar(500)
+  state         ExpenseState         @default(PENDING)
+  version       Int                  @default(1)
+  createdAt     DateTime             @default(now()) @db.Timestamptz(3)
+  account       TreasuryAccount      @relation(fields: [companyId, accountId, currency, agencyId], references: [companyId, id, currency, agencyId], onDelete: Restrict)
+  requester     User                 @relation(fields: [requestedById], references: [id], onDelete: Restrict)
+  approval      ExpenseApproval?
+  reservation   FundReservation?
+  operations    FinancialOperation[]
+  attachments   Attachment[]
+
+  @@unique([companyId, id])
+  @@index([companyId, agencyId, state])
+}
+
+model ExpenseApproval {
+  id               String           @id @default(uuid()) @db.Uuid
+  companyId        String           @db.Uuid
+  expenseRequestId String           @db.Uuid
+  approverId       String           @db.Uuid
+  decision         ApprovalDecision
+  currency         Currency
+  amount           Decimal          @db.Decimal(18, 2)
+  createdAt        DateTime         @default(now()) @db.Timestamptz(3)
+  expense          ExpenseRequest   @relation(fields: [companyId, expenseRequestId], references: [companyId, id], onDelete: Restrict)
+  approver         User             @relation(fields: [approverId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, expenseRequestId])
+}
+
+model FundReservation {
+  id               String           @id @default(uuid()) @db.Uuid
+  companyId        String           @db.Uuid
+  expenseRequestId String           @db.Uuid
+  accountId        String           @db.Uuid
+  currency         Currency
+  amount           Decimal          @db.Decimal(18, 2)
+  state            ReservationState @default(ACTIVE)
+  createdAt        DateTime         @default(now()) @db.Timestamptz(3)
+  expense          ExpenseRequest   @relation(fields: [companyId, expenseRequestId], references: [companyId, id], onDelete: Restrict)
+  account          TreasuryAccount  @relation(fields: [companyId, accountId, currency], references: [companyId, id, currency], onDelete: Restrict)
+
+  @@unique([companyId, expenseRequestId])
+  @@index([companyId, accountId, state])
+}
+
+model Transfer {
+  id                   String             @id @default(uuid()) @db.Uuid
+  companyId            String             @db.Uuid
+  operationId          String             @db.Uuid
+  sourceAccountId      String             @db.Uuid
+  destinationAccountId String             @db.Uuid
+  currency             Currency
+  amount               Decimal            @db.Decimal(18, 2)
+  operation            FinancialOperation @relation(fields: [companyId, operationId], references: [companyId, id], onDelete: Restrict)
+  source               TreasuryAccount    @relation("TransferSource", fields: [companyId, sourceAccountId, currency], references: [companyId, id, currency], onDelete: Restrict)
+  destination          TreasuryAccount    @relation("TransferDestination", fields: [companyId, destinationAccountId, currency], references: [companyId, id, currency], onDelete: Restrict)
+
+  @@unique([companyId, operationId])
+}
+
+model ExchangeRate {
+  id           String               @id @default(uuid()) @db.Uuid
+  companyId    String               @db.Uuid
+  fromCurrency Currency
+  toCurrency   Currency
+  rate         Decimal              @db.Decimal(24, 12)
+  effectiveAt  DateTime             @db.Timestamptz(3)
+  source       String               @db.VarChar(100)
+  company      Company              @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  operations   FinancialOperation[]
+
+  @@unique([companyId, id])
+  @@index([companyId, fromCurrency, toCurrency, effectiveAt])
+}
+
+model Attachment {
+  id               String              @id @default(uuid()) @db.Uuid
+  companyId        String              @db.Uuid
+  operationId      String?             @db.Uuid
+  expenseRequestId String?             @db.Uuid
+  uploadedById     String              @db.Uuid
+  objectKey        String              @unique @db.VarChar(200)
+  sha256           String              @db.Char(64)
+  mimeType         String              @db.VarChar(100)
+  byteLength       Int
+  createdAt        DateTime            @default(now()) @db.Timestamptz(3)
+  operation        FinancialOperation? @relation(fields: [companyId, operationId], references: [companyId, id], onDelete: Restrict)
+  expense          ExpenseRequest?     @relation(fields: [companyId, expenseRequestId], references: [companyId, id], onDelete: Restrict)
+  uploader         User                @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
+}
+
+model AuditEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  companyId  String   @db.Uuid
+  actorId    String   @db.Uuid
+  action     String   @db.VarChar(60)
+  targetType String   @db.VarChar(60)
+  targetId   String   @db.Uuid
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  actor      User     @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, targetType, targetId])
+}
+
+model ImportedDraft {
+  id            String    @id @default(uuid()) @db.Uuid
+  companyId     String    @db.Uuid
+  agencyId      String    @db.Uuid
+  authorId      String    @db.Uuid
+  clientDraftId String    @db.Uuid
+  kind          DraftKind
+  currency      Currency
+  amount        Decimal   @db.Decimal(18, 2)
+  description   String    @db.VarChar(500)
+  version       Int
+  payloadHash   String    @db.Char(64)
+  receivedAt    DateTime  @default(now()) @db.Timestamptz(3)
+  agency        Agency    @relation(fields: [companyId, agencyId], references: [companyId, id], onDelete: Restrict)
+  author        User      @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, authorId, clientDraftId])
+}
