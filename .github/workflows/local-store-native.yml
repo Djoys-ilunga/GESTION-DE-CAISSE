@@ -1,0 +1,39 @@
+name: Qualification du stockage local
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      ['packages/local-store/**', 'rust-toolchain.toml', '.github/workflows/local-store-native.yml']
+  pull_request:
+    paths:
+      ['packages/local-store/**', 'rust-toolchain.toml', '.github/workflows/local-store-native.yml']
+permissions:
+  contents: read
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: packages/local-store
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Outils OpenSSL Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install strawberryperl nasm --yes --no-progress
+          if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 3010) { exit $LASTEXITCODE }
+          'C:\Strawberry\perl\bin' | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          'C:\Program Files\NASM' | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Rust verrouillé
+        run: rustup toolchain install 1.90.0 --profile minimal --component rustfmt --component clippy
+      - run: cargo fmt --check
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - name: SQLCipher et magasin de clés natif
+        run: cargo test --locked

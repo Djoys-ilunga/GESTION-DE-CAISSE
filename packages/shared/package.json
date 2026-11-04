@@ -1,1 +1,26 @@
-{"name":"@caissepro/shared","version":"0.2.0","private":true,"type":"module","types":"./dist/index.d.ts","main":"./dist/index.js","exports":{".":{"types":"./dist/index.d.ts","require":"./dist/index.js","import":"./dist/index.js"}},"scripts":{"build":"tsc -p tsconfig.json","typecheck":"tsc --noEmit -p tsconfig.json","test":"vitest run"},"dependencies":{"zod":"4.6.7"},"devDependencies":{"vitest":"3.2.7"}}
+{
+  "name": "@caissepro/shared",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "vitest": "3.2.7"
+  }
+}

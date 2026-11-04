@@ -1,26 +1,327 @@
-import { useEffect,useState,useSyncExternalStore } from 'react';
-import { ArrowDownLeft,ArrowUpRight,ArrowRight,Building2,Check,ChevronRight,CircleHelp,FilePenLine,LayoutDashboard,LockKeyhole,ShieldCheck,Wallet,Wifi,WifiOff } from 'lucide-react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  ArrowRight,
+  Building2,
+  Check,
+  ChevronRight,
+  CircleHelp,
+  FilePenLine,
+  LayoutDashboard,
+  LockKeyhole,
+  ShieldCheck,
+  Wallet,
+  Wifi,
+  WifiOff,
+} from 'lucide-react';
 import type { ConnectionService } from './hybrid/connection';
-export function App({connection}:{connection:ConnectionService}){
- const status=useSyncExternalStore(connection.subscribe,connection.getSnapshot);
- const [page,setPage]=useState('overview');
- useEffect(()=>{connection.start();return()=>connection.stop();},[connection]);
- const online=status.state==='online';
- return <div className="app-shell">
-  <aside className="sidebar"><a className="brand" href="#" aria-label="Accueil CaissePro" onClick={()=>setPage('overview')}><span className="brand-icon"><Wallet size={23}/></span><span>Caisse<span className="brand-pro">Pro</span><small>GESTION DE TRÉSORERIE</small></span></a>
-   <div className="workspace"><span className="workspace-icon"><Building2 size={19}/></span><span>Mon entreprise<small>Configuration initiale</small></span><ChevronRight size={15}/></div>
-   <p className="nav-label">ESPACE DE TRAVAIL</p><nav aria-label="Navigation principale">{[{id:'overview',label:'Vue d’ensemble',icon:LayoutDashboard},{id:'drafts',label:'Brouillons',icon:FilePenLine},{id:'security',label:'Sécurité',icon:ShieldCheck}].map(({id,label,icon:Icon})=><button key={id} className={`nav-button ${page===id?'active':''}`} onClick={()=>setPage(id)} aria-current={page===id?'page':undefined}><Icon size={19}/>{label}{id==='drafts'&&<span className="count">0</span>}</button>)}</nav>
-   <div className="sidebar-bottom"><div className="secure-note"><ShieldCheck size={17}/><span>La sécurité, par conception<small>Serveur financier central</small></span></div><div className="profile"><span className="avatar"><LockKeyhole size={17}/></span><span>Session non ouverte<small>Authentification à configurer</small></span></div></div>
-  </aside>
-  <div className="main-area"><header className="topbar"><div className="breadcrumb">Espace de travail <ChevronRight size={13}/><strong>{page==='overview'?'Vue d’ensemble':page==='drafts'?'Brouillons':'Sécurité'}</strong></div><span className={`connection-badge ${online?'online':'offline'}`} role="status">{online?<Wifi size={15}/>:<WifiOff size={15}/>} {online?'En ligne':status.state==='checking'?'Vérification…':'Hors connexion'}</span></header>
-   <main>{page==='overview'?<>
-    <div className="page-heading"><div><p className="eyebrow">VOTRE ESPACE FINANCIER</p><h1>Bienvenue sur CaissePro<span className="heading-dot">.</span></h1><p>Une vision claire de votre trésorerie, en toute confiance.</p></div><span className="setup-tag">Configuration initiale</span></div>
-    <section className="welcome-card"><div className="hero-content"><span className="hero-label"><span/> VOTRE TRÉSORERIE SOUS CONTRÔLE</span><h2>Les bonnes fondations.<br/>Pour chaque mouvement.</h2><p>Centralisez vos caisses, encadrez vos dépenses<br className="desktop-break"/> et gardez la maîtrise de vos opérations.</p><button onClick={()=>setPage('security')} className="primary-button">Découvrir votre espace <ArrowRight size={17}/></button></div><div className="hero-art" aria-hidden="true"><div className="orbit orbit-one"/><div className="orbit orbit-two"/><div className="art-panel"><div className="art-line"><Wallet size={23}/><span>CAISSEPRO</span><span className="art-dot"/></div><span className="art-caption">UNE GESTION EN CONFIANCE</span><div className="art-currencies"><span>USD</span><span>CDF</span></div><div className="art-foot"><ShieldCheck size={16}/>Chaque opération, tracée.</div></div><div className="art-shield"><ShieldCheck size={27}/></div></div></section>
-    <section className="stat-grid" aria-label="État du projet"><article className="stat-card"><div className="stat-top"><span className="stat-icon"><Building2 size={20}/></span><span className="stat-muted">Organisation</span></div><h3>Agences & caisses</h3><p>Votre structure reste à configurer.</p><span className="stat-bottom">Plusieurs agences, une seule vision <ChevronRight size={14}/></span></article><article className="stat-card"><div className="stat-top"><span className="stat-icon mint"><Wallet size={20}/></span><span className="currency-pill">CDF / USD</span></div><h3>Deux devises, deux suivis</h3><p>Des comptes et des soldes séparés.</p><span className="stat-bottom">Aucun solde disponible</span></article><article className="stat-card"><div className="stat-top"><span className="stat-icon amber"><FilePenLine size={20}/></span><span className="stat-muted">Mode hybride</span></div><h3>Préparer, puis vérifier</h3><p>Les brouillons ne valent jamais paiement.</p><span className="stat-bottom">Aucune opération locale confirmée <Check size={15}/></span></article></section>
-    <div className="lower-grid"><section className="panel"><div className="panel-heading"><h2>Vos opérations</h2><span className="subtle-pill">À venir</span></div><p className="section-description">Les mouvements seront confirmés par le serveur central.</p><div className="operation-row"><span className="operation-icon income"><ArrowDownLeft size={19}/></span><div><h3>Encaissements</h3><p>Des entrées suivies et justifiées</p></div><span className="locked-label"><LockKeyhole size={13}/>Indisponible</span></div><div className="operation-row"><span className="operation-icon expense"><ArrowUpRight size={19}/></span><div><h3>Dépenses</h3><p>Une approbation avant chaque paiement</p></div><span className="locked-label"><LockKeyhole size={13}/>Indisponible</span></div></section><section className="panel safeguards"><span className="safeguard-icon"><ShieldCheck size={23}/></span><h2>La rigueur à chaque étape</h2><p>Vos règles financières structurent chaque opération.</p><ul><li><Check size={15}/>Aucune auto-approbation</li><li><Check size={15}/>Écritures comptabilisées immuables</li><li><Check size={15}/>Aucun paiement hors connexion</li></ul></section></div>
-   </>:page==='drafts'?<><div className="page-heading"><div><p className="eyebrow">MODE HYBRIDE</p><h1>Brouillons</h1><p>Préparer une opération ne modifie aucun solde officiel.</p></div></div><section className="panel empty-state"><FilePenLine size={38}/><h2>Aucun brouillon disponible</h2><p>La saisie sera activée après la mise en place d’une session autorisée.</p><p>Le stockage sensible sur disque reste bloqué pendant la qualification du chiffrement.</p></section></>:<><div className="page-heading"><div><p className="eyebrow">FONDATIONS DE SÉCURITÉ</p><h1>Un cadre financier strict</h1><p>Les permissions et la comptabilisation sont contrôlées sur le serveur.</p></div></div><section className="panel security-details"><ShieldCheck size={32}/><h2>État des fondations</h2><p>Authentification : à développer. Aucune session financière n’est ouverte.</p><p>Stockage local : mémoire uniquement. SQLCipher et les magasins de clés Windows/macOS restent à qualifier sur les systèmes cibles.</p><p>Les données de consultation autorisées devront porter une date et une expiration. Tout changement de périmètre efface le cache local.</p><p>Les transferts, conversions, approbations, paiements et clôtures définitives exigent une connexion et une autorisation serveur.</p></section></>}
-    <div className={`availability-note ${online?'':'unavailable'}`}><CircleHelp size={17}/><span>{online?'API disponible. Une authentification sera nécessaire pour accéder aux informations financières.':'Les informations financières ne sont pas actualisées. Aucune opération ne peut être confirmée hors connexion.'}</span></div>
-    <footer><span>CaissePro <span className="footer-divider">/</span> Une trésorerie maîtrisée.</span><span><ShieldCheck size={13}/>Fondations · Étapes 1 & 2</span></footer>
-   </main></div>
- </div>;
+export function App({ connection }: { connection: ConnectionService }) {
+  const status = useSyncExternalStore(connection.subscribe, connection.getSnapshot);
+  const [page, setPage] = useState('overview');
+  useEffect(() => {
+    connection.start();
+    return () => connection.stop();
+  }, [connection]);
+  const online = status.state === 'online';
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <a
+          className="brand"
+          href="#"
+          aria-label="Accueil CaissePro"
+          onClick={() => setPage('overview')}
+        >
+          <span className="brand-icon">
+            <Wallet size={23} />
+          </span>
+          <span>
+            Caisse<span className="brand-pro">Pro</span>
+            <small>GESTION DE TRÉSORERIE</small>
+          </span>
+        </a>
+        <div className="workspace">
+          <span className="workspace-icon">
+            <Building2 size={19} />
+          </span>
+          <span>
+            Mon entreprise<small>Configuration initiale</small>
+          </span>
+          <ChevronRight size={15} />
+        </div>
+        <p className="nav-label">ESPACE DE TRAVAIL</p>
+        <nav aria-label="Navigation principale">
+          {[
+            { id: 'overview', label: 'Vue d’ensemble', icon: LayoutDashboard },
+            { id: 'drafts', label: 'Brouillons', icon: FilePenLine },
+            { id: 'security', label: 'Sécurité', icon: ShieldCheck },
+          ].map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              className={`nav-button ${page === id ? 'active' : ''}`}
+              onClick={() => setPage(id)}
+              aria-current={page === id ? 'page' : undefined}
+            >
+              <Icon size={19} />
+              {label}
+              {id === 'drafts' && <span className="count">0</span>}
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-bottom">
+          <div className="secure-note">
+            <ShieldCheck size={17} />
+            <span>
+              La sécurité, par conception<small>Serveur financier central</small>
+            </span>
+          </div>
+          <div className="profile">
+            <span className="avatar">
+              <LockKeyhole size={17} />
+            </span>
+            <span>
+              Session non ouverte<small>Authentification à configurer</small>
+            </span>
+          </div>
+        </div>
+      </aside>
+      <div className="main-area">
+        <header className="topbar">
+          <div className="breadcrumb">
+            Espace de travail <ChevronRight size={13} />
+            <strong>
+              {page === 'overview'
+                ? 'Vue d’ensemble'
+                : page === 'drafts'
+                  ? 'Brouillons'
+                  : 'Sécurité'}
+            </strong>
+          </div>
+          <span className={`connection-badge ${online ? 'online' : 'offline'}`} role="status">
+            {online ? <Wifi size={15} /> : <WifiOff size={15} />}{' '}
+            {online ? 'En ligne' : status.state === 'checking' ? 'Vérification…' : 'Hors connexion'}
+          </span>
+        </header>
+        <main>
+          {page === 'overview' ? (
+            <>
+              <div className="page-heading">
+                <div>
+                  <p className="eyebrow">VOTRE ESPACE FINANCIER</p>
+                  <h1>
+                    Bienvenue sur CaissePro<span className="heading-dot">.</span>
+                  </h1>
+                  <p>Une vision claire de votre trésorerie, en toute confiance.</p>
+                </div>
+                <span className="setup-tag">Configuration initiale</span>
+              </div>
+              <section className="welcome-card">
+                <div className="hero-content">
+                  <span className="hero-label">
+                    <span /> VOTRE TRÉSORERIE SOUS CONTRÔLE
+                  </span>
+                  <h2>
+                    Les bonnes fondations.
+                    <br />
+                    Pour chaque mouvement.
+                  </h2>
+                  <p>
+                    Centralisez vos caisses, encadrez vos dépenses
+                    <br className="desktop-break" /> et gardez la maîtrise de vos opérations.
+                  </p>
+                  <button onClick={() => setPage('security')} className="primary-button">
+                    Découvrir votre espace <ArrowRight size={17} />
+                  </button>
+                </div>
+                <div className="hero-art" aria-hidden="true">
+                  <div className="orbit orbit-one" />
+                  <div className="orbit orbit-two" />
+                  <div className="art-panel">
+                    <div className="art-line">
+                      <Wallet size={23} />
+                      <span>CAISSEPRO</span>
+                      <span className="art-dot" />
+                    </div>
+                    <span className="art-caption">UNE GESTION EN CONFIANCE</span>
+                    <div className="art-currencies">
+                      <span>USD</span>
+                      <span>CDF</span>
+                    </div>
+                    <div className="art-foot">
+                      <ShieldCheck size={16} />
+                      Chaque opération, tracée.
+                    </div>
+                  </div>
+                  <div className="art-shield">
+                    <ShieldCheck size={27} />
+                  </div>
+                </div>
+              </section>
+              <section className="stat-grid" aria-label="État du projet">
+                <article className="stat-card">
+                  <div className="stat-top">
+                    <span className="stat-icon">
+                      <Building2 size={20} />
+                    </span>
+                    <span className="stat-muted">Organisation</span>
+                  </div>
+                  <h3>Agences & caisses</h3>
+                  <p>Votre structure reste à configurer.</p>
+                  <span className="stat-bottom">
+                    Plusieurs agences, une seule vision <ChevronRight size={14} />
+                  </span>
+                </article>
+                <article className="stat-card">
+                  <div className="stat-top">
+                    <span className="stat-icon mint">
+                      <Wallet size={20} />
+                    </span>
+                    <span className="currency-pill">CDF / USD</span>
+                  </div>
+                  <h3>Deux devises, deux suivis</h3>
+                  <p>Des comptes et des soldes séparés.</p>
+                  <span className="stat-bottom">Aucun solde disponible</span>
+                </article>
+                <article className="stat-card">
+                  <div className="stat-top">
+                    <span className="stat-icon amber">
+                      <FilePenLine size={20} />
+                    </span>
+                    <span className="stat-muted">Mode hybride</span>
+                  </div>
+                  <h3>Préparer, puis vérifier</h3>
+                  <p>Les brouillons ne valent jamais paiement.</p>
+                  <span className="stat-bottom">
+                    Aucune opération locale confirmée <Check size={15} />
+                  </span>
+                </article>
+              </section>
+              <div className="lower-grid">
+                <section className="panel">
+                  <div className="panel-heading">
+                    <h2>Vos opérations</h2>
+                    <span className="subtle-pill">À venir</span>
+                  </div>
+                  <p className="section-description">
+                    Les mouvements seront confirmés par le serveur central.
+                  </p>
+                  <div className="operation-row">
+                    <span className="operation-icon income">
+                      <ArrowDownLeft size={19} />
+                    </span>
+                    <div>
+                      <h3>Encaissements</h3>
+                      <p>Des entrées suivies et justifiées</p>
+                    </div>
+                    <span className="locked-label">
+                      <LockKeyhole size={13} />
+                      Indisponible
+                    </span>
+                  </div>
+                  <div className="operation-row">
+                    <span className="operation-icon expense">
+                      <ArrowUpRight size={19} />
+                    </span>
+                    <div>
+                      <h3>Dépenses</h3>
+                      <p>Une approbation avant chaque paiement</p>
+                    </div>
+                    <span className="locked-label">
+                      <LockKeyhole size={13} />
+                      Indisponible
+                    </span>
+                  </div>
+                </section>
+                <section className="panel safeguards">
+                  <span className="safeguard-icon">
+                    <ShieldCheck size={23} />
+                  </span>
+                  <h2>La rigueur à chaque étape</h2>
+                  <p>Vos règles financières structurent chaque opération.</p>
+                  <ul>
+                    <li>
+                      <Check size={15} />
+                      Aucune auto-approbation
+                    </li>
+                    <li>
+                      <Check size={15} />
+                      Écritures comptabilisées immuables
+                    </li>
+                    <li>
+                      <Check size={15} />
+                      Aucun paiement hors connexion
+                    </li>
+                  </ul>
+                </section>
+              </div>
+            </>
+          ) : page === 'drafts' ? (
+            <>
+              <div className="page-heading">
+                <div>
+                  <p className="eyebrow">MODE HYBRIDE</p>
+                  <h1>Brouillons</h1>
+                  <p>Préparer une opération ne modifie aucun solde officiel.</p>
+                </div>
+              </div>
+              <section className="panel empty-state">
+                <FilePenLine size={38} />
+                <h2>Aucun brouillon disponible</h2>
+                <p>La saisie sera activée après la mise en place d’une session autorisée.</p>
+                <p>
+                  Le stockage sensible sur disque reste bloqué pendant la qualification du
+                  chiffrement.
+                </p>
+              </section>
+            </>
+          ) : (
+            <>
+              <div className="page-heading">
+                <div>
+                  <p className="eyebrow">FONDATIONS DE SÉCURITÉ</p>
+                  <h1>Un cadre financier strict</h1>
+                  <p>Les permissions et la comptabilisation sont contrôlées sur le serveur.</p>
+                </div>
+              </div>
+              <section className="panel security-details">
+                <ShieldCheck size={32} />
+                <h2>État des fondations</h2>
+                <p>Authentification : à développer. Aucune session financière n’est ouverte.</p>
+                <p>
+                  Stockage local : mémoire uniquement. SQLCipher et les magasins de clés
+                  Windows/macOS restent à qualifier sur les systèmes cibles.
+                </p>
+                <p>
+                  Les données de consultation autorisées devront porter une date et une expiration.
+                  Tout changement de périmètre efface le cache local.
+                </p>
+                <p>
+                  Les transferts, conversions, approbations, paiements et clôtures définitives
+                  exigent une connexion et une autorisation serveur.
+                </p>
+              </section>
+            </>
+          )}
+          <div className={`availability-note ${online ? '' : 'unavailable'}`}>
+            <CircleHelp size={17} />
+            <span>
+              {online
+                ? 'API disponible. Une authentification sera nécessaire pour accéder aux informations financières.'
+                : 'Les informations financières ne sont pas actualisées. Aucune opération ne peut être confirmée hors connexion.'}
+            </span>
+          </div>
+          <footer>
+            <span>
+              CaissePro <span className="footer-divider">/</span> Une trésorerie maîtrisée.
+            </span>
+            <span>
+              <ShieldCheck size={13} />
+              Fondations · Étapes 1 & 2
+            </span>
+          </footer>
+        </main>
+      </div>
+    </div>
+  );
 }

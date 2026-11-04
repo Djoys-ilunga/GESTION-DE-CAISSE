@@ -1,1 +1,12 @@
-{"compilerOptions":{"target":"ES2022","lib":["ES2022"],"strict":true,"noEmitOnError":true,"noUncheckedIndexedAccess":true,"forceConsistentCasingInFileNames":true,"esModuleInterop":true,"skipLibCheck":true}}
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "strict": true,
+    "noEmitOnError": true,
+    "noUncheckedIndexedAccess": true,
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  }
+}

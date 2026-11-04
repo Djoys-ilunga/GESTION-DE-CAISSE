@@ -1,7 +1,40 @@
 {
-  "$schema":"https://schema.tauri.app/config/2",
-  "productName":"CaissePro","version":"0.2.0","identifier":"com.caissepro.desktop",
-  "build":{"beforeDevCommand":"pnpm dev","devUrl":"http://127.0.0.1:1420","beforeBuildCommand":"pnpm build","frontendDist":"../dist"},
-  "app":{"windows":[{"title":"CaissePro — Gestion de trésorerie","width":1280,"height":900,"minWidth":650,"minHeight":650,"devtools":false}],"security":{"csp":"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https: ipc: http://ipc.localhost; object-src 'none'; base-uri 'self'; frame-src 'none'","devCsp":"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https: http://127.0.0.1:3000 http://127.0.0.1:1420 ws://127.0.0.1:1420 ipc: http://ipc.localhost; object-src 'none'; base-uri 'self'; frame-src 'none'","capabilities":[]}},
-  "bundle":{"active":true,"targets":"all","icon":["icons/32x32.png","icons/128x128.png","icons/128x128@2x.png","icons/icon.icns","icons/icon.ico"]}
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "CaissePro",
+  "version": "0.2.0",
+  "identifier": "com.caissepro.desktop",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "CaissePro — Gestion de trésorerie",
+        "width": 1280,
+        "height": 900,
+        "minWidth": 650,
+        "minHeight": 650,
+        "devtools": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https: ipc: http://ipc.localhost; object-src 'none'; base-uri 'self'; frame-src 'none'",
+      "devCsp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https: http://127.0.0.1:3000 http://127.0.0.1:1420 ws://127.0.0.1:1420 ipc: http://ipc.localhost; object-src 'none'; base-uri 'self'; frame-src 'none'",
+      "capabilities": []
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
 }

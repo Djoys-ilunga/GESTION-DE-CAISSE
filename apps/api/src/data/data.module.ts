@@ -4,6 +4,6 @@ import { CentralAccess } from './central-access';
 import { LedgerService } from './ledger.service';
 import { DraftInboxService } from './draft-inbox.service';
 import { CatalogService } from './catalog.service';
-const providers=[PrismaService,CentralAccess,LedgerService,DraftInboxService,CatalogService];
-@Module({providers,exports:providers})
-export class DataModule{}
+const providers = [PrismaService, CentralAccess, LedgerService, DraftInboxService, CatalogService];
+@Module({ providers, exports: providers })
+export class DataModule {}
