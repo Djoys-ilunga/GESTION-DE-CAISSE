@@ -1,0 +1,23 @@
+{
+  "name":"caissepro","version":"0.2.0","private":true,
+  "packageManager":"pnpm@11.25.0","engines":{"node":">=24.11 <25","pnpm":"11.x"},
+  "scripts":{
+    "dev":"pnpm --filter @caissepro/shared build && concurrently -k -n api,desktop \"pnpm --filter @caissepro/api dev\" \"pnpm --filter @caissepro/desktop tauri dev\"",
+    "dev:api":"pnpm --filter @caissepro/shared build && pnpm --filter @caissepro/api dev",
+    "dev:web":"pnpm --filter @caissepro/shared build && pnpm --filter @caissepro/desktop dev",
+    "dev:desktop":"pnpm --filter @caissepro/shared build && pnpm --filter @caissepro/desktop tauri dev",
+    "build":"pnpm --filter @caissepro/shared build && pnpm --filter @caissepro/api build && pnpm --filter @caissepro/desktop build",
+    "build:desktop":"pnpm --filter @caissepro/shared build && pnpm --filter @caissepro/desktop tauri build",
+    "typecheck":"pnpm --filter @caissepro/shared build && pnpm -r typecheck",
+    "lint":"eslint . --max-warnings 0","test":"pnpm --filter @caissepro/shared build && pnpm -r test",
+    "check":"pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "format":"prettier --write .","format:check":"prettier --check .",
+    "setup:env":"node scripts/setup-env.mjs","backup":"node scripts/backup.mjs",
+    "db:up":"docker compose up -d --wait postgres","db:down":"docker compose down",
+    "db:generate":"pnpm --filter @caissepro/api db:generate","db:validate":"pnpm --filter @caissepro/api db:validate",
+    "db:deploy":"pnpm --filter @caissepro/api db:deploy","test:db":"node scripts/test-db.mjs",
+    "test:local":"node scripts/check-local-store.mjs","check:rust":"node scripts/check-rust.mjs",
+    "test:e2e":"playwright test"
+  },
+  "devDependencies":{"@eslint/js":"10.0.1","eslint":"10.14.0","typescript-eslint":"8.72.1","typescript":"5.9.3","globals":"16.5.0","prettier":"3.6.2","concurrently":"9.2.5","@playwright/test":"1.58.2"}
+}

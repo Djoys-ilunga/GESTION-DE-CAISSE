@@ -1,0 +1,11 @@
+packages:
+  - apps/*
+  - packages/*
+overrides:
+  webpack: 5.112.2
+  multer: 2.5.0
+allowBuilds:
+  '@prisma/engines': true
+  '@prisma/client': true
+  prisma: true
+  esbuild: true

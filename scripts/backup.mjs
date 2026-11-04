@@ -1,0 +1,14 @@
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { mkdirSync,readFileSync,writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+const cwd=fileURLToPath(new URL('../',import.meta.url));
+const sha=execFileSync('git',['rev-parse','HEAD'],{cwd,encoding:'utf8'}).trim();
+const destination=fileURLToPath(new URL('../../scratch/caissepro-backups/',import.meta.url));
+mkdirSync(destination,{recursive:true,mode:0o700});
+const output=join(destination,`caissepro-${sha}.tar.gz`);
+execFileSync('git',['archive','--format=tar.gz','--prefix=caissepro/','--output',output,'HEAD'],{cwd});
+const digest=createHash('sha256').update(readFileSync(output)).digest('hex');
+writeFileSync(`${output}.sha256`,`${digest}  caissepro-${sha}.tar.gz\n`,{mode:0o600});
+console.info(`Archive du commit ${sha} créée hors checkout : ${output}`);
