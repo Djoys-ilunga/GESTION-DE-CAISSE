@@ -31,14 +31,13 @@ import {
   type AuthLog,
 } from '@caissepro/shared';
 import type { ConnectionService } from './hybrid/connection';
-import { createLocalDraft } from './hybrid/local-store';
+import { ExpensesPage } from './expenses/ExpensesPage';
 import { AuthController } from './auth/controller';
 import {
   NativeAuthGateway,
   message,
   type AuthGateway,
   type Balances,
-  type SessionDraft,
   type AccessCatalog,
 } from './auth/gateway';
 import './auth.css';
@@ -589,7 +588,7 @@ function Workspace({
     { id: 'overview', label: 'Vue d’ensemble', icon: LayoutDashboard },
     { id: 'cash', label: 'Caisses', icon: Wallet, permission: 'ledger:read' },
     { id: 'receipts', label: 'Encaissements', icon: ReceiptText, permission: 'receipt:read' },
-    { id: 'drafts', label: 'Brouillons dépenses', icon: FilePenLine, permission: 'draft:read_own' },
+    { id: 'expenses', label: 'Dépenses', icon: FilePenLine, permission: 'ledger:read' },
     { id: 'users', label: 'Utilisateurs', icon: Users, permission: 'users:manage' },
     { id: 'logs', label: 'Journal des connexions', icon: ScrollText, permission: 'auth:logs:read' },
     { id: 'security', label: 'Sécurité', icon: ShieldCheck },
@@ -678,8 +677,8 @@ function Workspace({
             <CashPage profile={profile} gateway={gateway} online={online} />
           ) : page === 'receipts' ? (
             <ReceiptsPage profile={profile} gateway={gateway} online={online} />
-          ) : page === 'drafts' ? (
-            <Drafts profile={profile} gateway={gateway} online={online} />
+          ) : page === 'expenses' ? (
+            <ExpensesPage profile={profile} gateway={gateway} online={online} />
           ) : page === 'users' ? (
             <UsersPage gateway={gateway} online={online} />
           ) : page === 'logs' ? (
@@ -853,275 +852,6 @@ function Overview({
         des fonds et validation du serveur.
       </p>
     </>
-  );
-}
-function Drafts({
-  profile,
-  gateway,
-  online,
-}: {
-  profile: SessionProfile;
-  gateway: AuthGateway;
-  online: boolean;
-}) {
-  const [rows, setRows] = useState<SessionDraft[]>([]),
-    [open, setOpen] = useState(false),
-    [error, setError] = useState(''),
-    [busy, setBusy] = useState(false),
-    [results, setResults] = useState<string[]>([]);
-  const refresh = () =>
-    gateway
-      .drafts()
-      .then((rows) => setRows(rows.filter((row) => row.draft.kind === 'expense-request')));
-  useEffect(() => {
-    let active = true;
-    void gateway
-      .drafts()
-      .then((rows) => {
-        if (active) setRows(rows.filter((row) => row.draft.kind === 'expense-request'));
-      })
-      .catch((error) => {
-        if (active) setError(message(error));
-      });
-    return () => {
-      active = false;
-    };
-  }, [gateway, profile.validatedAt]);
-  const sync = async () => {
-    setBusy(true);
-    setError('');
-    try {
-      const results = await gateway.synchronize();
-      setResults(
-        results.map(
-          (r) =>
-            `${r.draftId.slice(0, 8)} : ${r.outcome === 'accepted-as-draft' ? 'reçu comme brouillon' : r.outcome === 'conflict' ? 'conflit à résoudre' : 'envoi refusé'}`,
-        ),
-      );
-      await refresh();
-    } catch (error) {
-      setError(message(error));
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <>
-      <div className="page-heading">
-        <div>
-          <p className="eyebrow">PRÉPARATION SANS COMPTABILISATION</p>
-          <h1>Brouillons de demandes de dépenses</h1>
-          <p>Un brouillon ne confirme jamais un paiement et ne modifie aucun solde.</p>
-        </div>
-        <div className="action-buttons">
-          <button
-            className="secondary-button"
-            onClick={() => void sync()}
-            disabled={!online || busy}
-          >
-            <RefreshCw size={15} />
-            Synchroniser
-          </button>
-          {profile.permissions.includes('draft:write_own') && (
-            <button className="primary-button" onClick={() => setOpen(!open)}>
-              <Plus size={16} />
-              Préparer un brouillon
-            </button>
-          )}
-        </div>
-      </div>
-      <p className="auth-notice">
-        Conservation temporaire pendant cette session, au plus 15 minutes. Fermer l’application ou
-        changer d’utilisateur efface les brouillons locaux.
-      </p>
-      {error && (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      )}
-      {open && (
-        <DraftForm
-          profile={profile}
-          onSave={async (input) => {
-            await gateway.saveDraft(input);
-            await refresh();
-            setOpen(false);
-          }}
-        />
-      )}
-      <section className="panel">
-        {rows.length ? (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Type</th>
-                  <th>Motif</th>
-                  <th>Montant</th>
-                  <th>Version</th>
-                  <th>État</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.draft.id}>
-                    <td>{row.draft.kind === 'receipt' ? 'Encaissement' : 'Demande de dépense'}</td>
-                    <td>{row.draft.description}</td>
-                    <td>
-                      {money(row.draft.amount)} {row.draft.currency}
-                    </td>
-                    <td>{row.version}</td>
-                    <td>
-                      {row.state === 'synced'
-                        ? 'Reçu comme brouillon'
-                        : row.state === 'conflict'
-                          ? 'Conflit'
-                          : row.state === 'error'
-                            ? 'Erreur'
-                            : 'Local'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="empty-state">
-            <FilePenLine size={34} />
-            <h2>Aucun brouillon disponible</h2>
-            <p>Seuls vos propres brouillons sont accessibles dans cette session.</p>
-          </div>
-        )}
-      </section>
-      {results.length > 0 && (
-        <section className="panel sync-results">
-          <h2>Résultats de synchronisation</h2>
-          {results.map((result) => (
-            <p key={result}>{result}</p>
-          ))}
-        </section>
-      )}
-    </>
-  );
-}
-function DraftForm({
-  profile,
-  onSave,
-}: {
-  profile: SessionProfile;
-  onSave(input: {
-    draft: ReturnType<typeof createLocalDraft>;
-    agencyId: string;
-    cashRegisterId: string | null;
-    expectedVersion: null;
-  }): Promise<void>;
-}) {
-  const [kind, setKind] = useState<'receipt' | 'expense-request'>('expense-request'),
-    [agency, setAgency] = useState(profile.agencies[0]?.id ?? ''),
-    [cash, setCash] = useState(''),
-    [currency, setCurrency] = useState<'CDF' | 'USD'>('USD'),
-    [amount, setAmount] = useState(''),
-    [description, setDescription] = useState(''),
-    [error, setError] = useState(''),
-    [busy, setBusy] = useState(false);
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    setError('');
-    try {
-      await onSave({
-        draft: createLocalDraft({ kind, currency, amount: amount.replace(',', '.'), description }),
-        agencyId: agency,
-        cashRegisterId: cash || null,
-        expectedVersion: null,
-      });
-    } catch (error) {
-      setError(message(error));
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <form className="panel editor-form" onSubmit={submit}>
-      <h2>Nouveau brouillon</h2>
-      <div className="form-grid">
-        <label>
-          Type
-          <select value={kind} onChange={(e) => setKind(e.target.value as typeof kind)}>
-            <option value="expense-request">Demande de dépense</option>
-          </select>
-        </label>
-        <label>
-          Agence
-          <select
-            value={agency}
-            onChange={(e) => {
-              setAgency(e.target.value);
-              setCash('');
-            }}
-            required
-          >
-            {profile.agencies.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Caisse
-          <select
-            value={cash}
-            onChange={(e) => setCash(e.target.value)}
-            required={kind === 'receipt'}
-          >
-            <option value="">{kind === 'receipt' ? 'Choisir une caisse' : 'Sans caisse'}</option>
-            {profile.cashRegisters
-              .filter((r) => r.agencyId === agency)
-              .map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-          </select>
-        </label>
-        <label>
-          Devise
-          <select value={currency} onChange={(e) => setCurrency(e.target.value as typeof currency)}>
-            <option>USD</option>
-            <option>CDF</option>
-          </select>
-        </label>
-        <label>
-          Montant exact
-          <input
-            inputMode="decimal"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="0,00"
-            pattern="(?:0|[1-9][0-9]{0,15})[.,][0-9]{2}"
-            required
-          />
-        </label>
-        <label>
-          Motif
-          <input
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            maxLength={500}
-            required
-          />
-        </label>
-      </div>
-      {error && (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      )}
-      <button className="primary-button" disabled={busy}>
-        {busy ? 'Enregistrement…' : 'Conserver comme brouillon'}
-      </button>
-    </form>
   );
 }
 function UsersPage({ gateway, online }: { gateway: AuthGateway; online: boolean }) {

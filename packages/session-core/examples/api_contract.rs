@@ -1,6 +1,8 @@
 //! Contrôle synthétique du courtier contre une API réelle sur loopback.
 //! Les identifiants de test arrivent uniquement sur stdin, jamais en arguments.
-use caissepro_session::{Broker, Draft, Error, ReceiptDetails, SaveDraft};
+use caissepro_session::{
+    Broker, Draft, Error, ExpenseDetails, ReceiptDetails, SaveDraft, SupportingDocument,
+};
 use chrono::Utc;
 use serde::Deserialize;
 use serde_json::json;
@@ -69,6 +71,31 @@ async fn run(input: Input) -> Result<(), Box<dyn std::error::Error>> {
             .len(),
         2
     );
+    admin.expense_action("configure",Some(json!({"currency":"USD","data":{"expectedVersion":null,"requireEvidence":true,"limits":[{"role":"CASHIER","action":"REQUEST","maximum":"1000.00"},{"role":"CASHIER","action":"PAY","maximum":"1000.00"},{"role":"DIRECTOR","action":"APPROVE","maximum":"1000.00"}]}})),Some(administrator.generation)).await?;
+    let director_email = format!("{}@example.test", Uuid::new_v4());
+    admin.admin("create",Some(json!({"email":director_email,"displayName":"Directeur synthétique","initialPassword":input.password,"access":{"roles":["DIRECTOR"],"agencyIds":[agency],"cashRegisterIds":[cash],"active":true}})),Some(administrator.generation)).await?;
+    let director = Broker::new(&input.base, &input.deployment, Uuid::new_v4(), true)?;
+    let first = director
+        .login(
+            input.company_code.clone(),
+            director_email.clone(),
+            Zeroizing::new(input.password.clone()),
+        )
+        .await?;
+    director
+        .change_password(
+            Zeroizing::new(input.password.clone()),
+            Zeroizing::new(input.renewed_password.clone()),
+            Some(first.generation),
+        )
+        .await?;
+    let director_session = director
+        .login(
+            input.company_code.clone(),
+            director_email,
+            Zeroizing::new(input.renewed_password.clone()),
+        )
+        .await?;
     let cashier = Broker::new(&input.base, &input.deployment, Uuid::new_v4(), true)?;
     let first = cashier
         .login(
@@ -102,6 +129,7 @@ async fn run(input: Input) -> Result<(), Box<dyn std::error::Error>> {
     assert!(rows.iter().all(|row| row["balance"] == "0.00"));
     let now = Utc::now();
     let draft = Draft {
+        expense_details: None,
         receipt_details: Some(ReceiptDetails {
             provenance: "Client synthétique".into(),
             category: "VENTE".into(),
@@ -208,6 +236,110 @@ async fn run(input: Input) -> Result<(), Box<dyn std::error::Error>> {
             .await?["total"],
         1
     );
+    let now = Utc::now();
+    let expense_client = Uuid::new_v4();
+    cashier.save_draft(
+        SaveDraft {
+            draft: Draft {
+                id: expense_client,
+                kind: "expense-request".into(),
+                currency: "USD".into(),
+                amount: "2.34".into(),
+                description: "Dépense synthétique avec approbation préalable".into(),
+                created_at: now.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                expires_at: (now + chrono::Duration::minutes(10))
+                    .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                receipt_details: None,
+                expense_details: Some(ExpenseDetails {
+                    beneficiary: "Fournisseur synthétique".into(),
+                    reference: "FACTURE-TEST".into(),
+                    documents: vec![SupportingDocument {
+                        file_name: "facture.pdf".into(),
+                        mime_type: "application/pdf".into(),
+                        data_base64: "JVBERi0xLjQK".into(),
+                    }],
+                }),
+            },
+            agency_id: agency,
+            cash_register_id: Some(cash),
+            expected_version: None,
+        },
+        generation,
+    )?;
+    let expense_sync = cashier.synchronize(generation).await?;
+    assert_eq!(expense_sync.len(), 1);
+    assert_eq!(
+        cashier.expense_action("list", None, generation).await?["total"],
+        0
+    );
+    let pending = cashier.expense_action("drafts", None, generation).await?;
+    let source = &pending["items"][0];
+    assert!(source["expenseRequestId"].is_null());
+    let expense = cashier
+        .expense_action(
+            "submit",
+            Some(json!({"id":source["id"],"expectedVersion":source["version"],"submitted":true})),
+            generation,
+        )
+        .await?;
+    assert_eq!(expense["state"], "PENDING");
+    assert!(cashier.synchronize(generation).await?.is_empty());
+    let approved=director.expense_action("decide",Some(json!({"id":expense["id"],"data":{"expectedVersion":expense["version"],"decision":"APPROVE","reason":"Justificatif vérifié"}})),Some(director_session.generation)).await?;
+    assert_eq!(approved["state"], "APPROVED");
+    let reserved = cashier.cash_catalog(generation).await?;
+    let fund = reserved["data"]["items"][0]["funds"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["currency"] == "USD")
+        .unwrap();
+    assert_eq!(fund["balance"], "12.34");
+    assert_eq!(fund["reserved"], "2.34");
+    assert_eq!(fund["available"], "10.00");
+    assert!(matches!(
+        cashier
+            .expense_action(
+                "pay",
+                Some(
+                    json!({"id":expense["id"],"expectedVersion":approved["version"],"paid":false})
+                ),
+                generation
+            )
+            .await,
+        Err(Error::InvalidInput)
+    ));
+    let voucher = cashier
+        .expense_action(
+            "pay",
+            Some(json!({"id":expense["id"],"expectedVersion":approved["version"],"paid":true})),
+            generation,
+        )
+        .await?;
+    assert_eq!(voucher["amount"], "2.34");
+    assert!(voucher["number"].as_str().unwrap().starts_with("BON-"));
+    let replay = recovered
+        .expense_action(
+            "pay",
+            Some(json!({"id":expense["id"],"expectedVersion":approved["version"],"paid":true})),
+            recovery_generation,
+        )
+        .await?;
+    assert_eq!(voucher, replay);
+    let final_cash = cashier.cash_catalog(generation).await?;
+    let fund = final_cash["data"]["items"][0]["funds"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["currency"] == "USD")
+        .unwrap();
+    assert_eq!(fund["balance"], "10.00");
+    assert_eq!(fund["reserved"], "0.00");
+    assert_eq!(
+        cashier
+            .expense_action("voucher", Some(json!({"id":voucher["id"]})), generation)
+            .await?,
+        voucher
+    );
     let locked = cashier.lock(generation).await?;
     // Cette requête ne s'exécute qu'après déverrouillage ci-dessous.
     assert_eq!(locked.state, "locked");
@@ -227,7 +359,25 @@ async fn run(input: Input) -> Result<(), Box<dyn std::error::Error>> {
             .await?["total"],
         0
     );
-    assert_eq!(cashier.drafts(generation)?.len(), 1);
+    let retained = cashier.drafts(generation)?;
+    assert_eq!(retained.len(), 2);
+    assert_eq!(
+        retained
+            .iter()
+            .find(|r| r.draft.kind == "receipt")
+            .unwrap()
+            .state,
+        "confirmed"
+    );
+    let submitted = retained
+        .iter()
+        .find(|r| r.draft.kind == "expense-request")
+        .unwrap();
+    assert_eq!(submitted.state, "submitted");
+    assert_eq!(
+        submitted.submitted_expense_id.unwrap().to_string(),
+        expense["id"].as_str().unwrap()
+    );
     recovered.logout(recovery_generation).await?;
     admin.admin("access", Some(json!({"userId":created["id"],"expectedVersion":created["version"],"access":{"roles":["AUDITOR"],"agencyIds":[agency],"cashRegisterIds":[cash],"active":true}})), Some(administrator.generation)).await?;
     assert!(matches!(
@@ -253,6 +403,12 @@ async fn run(input: Input) -> Result<(), Box<dyn std::error::Error>> {
 
 #[tokio::main]
 async fn main() {
+    // Ne jamais imprimer une valeur d'assertion susceptible de contenir un secret.
+    std::panic::set_hook(Box::new(|info| {
+        if let Some(location) = info.location() {
+            eprintln!("CAISSEPRO_AUTH_CONTRACT_PANIC_LINE_{}", location.line());
+        }
+    }));
     let mut data = Zeroizing::new(String::new());
     let result = async {
         io::stdin().take(8192).read_to_string(&mut data)?;
@@ -260,8 +416,12 @@ async fn main() {
         run(input).await
     }
     .await;
-    if result.is_err() {
-        eprintln!("CAISSEPRO_AUTH_CONTRACT_FAILED");
+    if let Err(error) = result {
+        let code = error
+            .downcast_ref::<Error>()
+            .map(ToString::to_string)
+            .unwrap_or_else(|| "CONTRACT_CHECK_FAILED".into());
+        eprintln!("CAISSEPRO_AUTH_CONTRACT_FAILED:{code}");
         std::process::exit(1);
     }
     println!("CAISSEPRO_AUTH_CONTRACT_PASSED");

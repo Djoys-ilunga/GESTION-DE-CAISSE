@@ -31,9 +31,12 @@ const run = (program, args, options = {}) => {
     timeout: 180000,
     ...options,
   });
+  const failureCode =
+    result.stderr?.match(/CAISSEPRO_AUTH_CONTRACT_(?:FAILED:[A-Z_]+|PANIC_LINE_[0-9]+)/)?.[0] ?? '';
   if (result.status !== 0)
     throw new Error(
-      'Contrôle de contrat refusé. Vérifier compilation, migrations et disponibilité des outils.',
+      'Contrôle de contrat refusé. Vérifier compilation, migrations et disponibilité des outils. ' +
+        failureCode,
     );
   return result;
 };
@@ -150,13 +153,26 @@ try {
   await checks.connect();
   assert.equal(
     (await checks.query('SELECT count(*)::int AS n FROM "FinancialOperation"')).rows[0].n,
+    2,
+  );
+  assert.equal((await checks.query('SELECT count(*)::int AS n FROM "LedgerEntry"')).rows[0].n, 4);
+  assert.equal((await checks.query('SELECT count(*)::int AS n FROM "ImportedDraft"')).rows[0].n, 2);
+  assert.equal((await checks.query('SELECT count(*)::int AS n FROM "CashReceipt"')).rows[0].n, 1);
+  assert.equal(
+    (await checks.query('SELECT count(*)::int AS n FROM "ExpenseRequest" WHERE state=\'PAID\''))
+      .rows[0].n,
     1,
   );
-  assert.equal((await checks.query('SELECT count(*)::int AS n FROM "LedgerEntry"')).rows[0].n, 2);
-  assert.equal((await checks.query('SELECT count(*)::int AS n FROM "ImportedDraft"')).rows[0].n, 1);
-  assert.equal((await checks.query('SELECT count(*)::int AS n FROM "CashReceipt"')).rows[0].n, 1);
+  assert.equal(
+    (await checks.query('SELECT count(*)::int AS n FROM "PaymentVoucher"')).rows[0].n,
+    1,
+  );
+  assert.equal(
+    (await checks.query('SELECT count(*)::int AS n FROM "ExpenseEvidence"')).rows[0].n,
+    1,
+  );
   console.info(
-    '1 parcours Rust → API réelle → PostgreSQL réussi avec LOGIN restreint NOINHERIT/NOBYPASSRLS : authentification, brouillon transmis sans solde modifié, confirmation explicite unique, reçu numéroté, historique, verrouillage et révocation. SQL final : 1 opération, 2 écritures, 1 reçu et 1 brouillon.',
+    '1 parcours Rust → API réelle → PostgreSQL réussi avec LOGIN restreint NOINHERIT/NOBYPASSRLS : authentification, brouillon transmis sans solde modifié, confirmation explicite unique, reçu numéroté, historique, soumission de dépense distincte, approbation par un directeur, réservation sans paiement, paiement explicite unique, bon de sortie, verrouillage et révocation. SQL final : 2 opérations, 4 écritures, 1 reçu, 1 dépense payée, 1 bon et 2 brouillons.',
   );
 } finally {
   if (server && server.exitCode === null && server.signalCode === null) {

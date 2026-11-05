@@ -6,6 +6,7 @@
   "permissions": [
     "allow-cash-catalog",
     "allow-cash-action",
+    "allow-expense-action",
     "allow-auth-health",
     "allow-auth-login",
     "allow-auth-status",

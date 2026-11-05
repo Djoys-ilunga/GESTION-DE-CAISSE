@@ -15,7 +15,7 @@ pnpm db:deploy
 pnpm dev
 ```
 
-Les neuf migrations doivent être appliquées avant l’utilisation. Les bases existantes ne sont pas réinitialisées. Pour une nouvelle entreprise, suivre la [création du premier administrateur](authentification.md#créer-le-premier-administrateur). L’aperçu `pnpm dev:web` ne permet toujours aucune authentification réelle : ouvrir l’application Tauri pour travailler.
+Toutes les migrations versionnées doivent être appliquées avant l’utilisation. Les bases existantes ne sont pas réinitialisées. Pour une nouvelle entreprise, suivre la [création du premier administrateur](authentification.md#créer-le-premier-administrateur). L’aperçu `pnpm dev:web` ne permet toujours aucune authentification réelle : ouvrir l’application Tauri pour travailler.
 
 1. **Administrateur : « Caisses → Configuration des caisses ».** Créer les agences, puis leurs caisses et les utilisateurs autorisés initialement. Chaque caisse reçoit deux comptes de trésorerie distincts, CDF et USD, et leurs contreparties techniques. Aucun solde initial n’est créé. L’agence et le code de caisse restent fixes ; le nom et l’activation se modifient avec contrôle de version.
 2. **« Utilisateurs ».** Pour les affectations ultérieures, modifier les agences/caisses et les rôles de l’utilisateur. Une affectation nouvelle révoque les sessions concernées : l’utilisateur doit se reconnecter. Les rôles ne sont pas élargis implicitement par une affectation.

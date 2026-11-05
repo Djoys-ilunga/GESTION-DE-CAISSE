@@ -292,103 +292,114 @@ export class LedgerService {
   ) {
     uuid.parse(expenseRequestId);
     z.enum(['APPROVE', 'REJECT']).parse(decision);
-    return this.access.run(ctx, async (tx) => {
-      const first = await tx.expenseRequest.findFirst({
-        where: { companyId: ctx.companyId, id: expenseRequestId },
-      });
-      if (!first) throw new DataError('EXPENSE_NOT_FOUND');
-      await this.access.require(tx, ctx, first.agencyId, 'expense:approve');
-      await this.access.lockAccounts(tx, ctx, [first.accountId]);
-      await tx.$executeRaw`SELECT id FROM "ExpenseRequest" WHERE "companyId"=${ctx.companyId}::uuid AND id=${expenseRequestId}::uuid FOR UPDATE`;
-      const ex = await tx.expenseRequest.findUniqueOrThrow({ where: { id: expenseRequestId } });
-      if (ex.requestedById === ctx.userId) throw new DataError('SELF_APPROVAL_FORBIDDEN');
-      const previous = await tx.expenseApproval.findFirst({
-        where: { companyId: ctx.companyId, expenseRequestId },
-      });
-      if (previous && previous.approverId === ctx.userId && previous.decision === decision)
-        return { expenseRequestId, replayed: true };
-      if (ex.state !== 'PENDING') throw new DataError('EXPENSE_STATE_CONFLICT');
-      await tx.expenseApproval.create({
+    return this.access.run(ctx, (tx) =>
+      this.decideExpenseInTransaction(tx, ctx, expenseRequestId, decision, null),
+    );
+  }
+  async decideExpenseInTransaction(
+    tx: Tx,
+    ctx: DataContext,
+    expenseRequestId: string,
+    decision: 'APPROVE' | 'REJECT',
+    reason: string | null,
+  ) {
+    const first = await tx.expenseRequest.findFirst({
+      where: { companyId: ctx.companyId, id: expenseRequestId },
+    });
+    if (!first) throw new DataError('EXPENSE_NOT_FOUND');
+    await this.access.require(tx, ctx, first.agencyId, 'expense:approve');
+    await this.access.lockAccounts(tx, ctx, [first.accountId]);
+    await tx.$executeRaw`SELECT id FROM "ExpenseRequest" WHERE "companyId"=${ctx.companyId}::uuid AND id=${expenseRequestId}::uuid FOR UPDATE`;
+    const ex = await tx.expenseRequest.findUniqueOrThrow({ where: { id: expenseRequestId } });
+    if (ex.requestedById === ctx.userId) throw new DataError('SELF_APPROVAL_FORBIDDEN');
+    const previous = await tx.expenseApproval.findFirst({
+      where: { companyId: ctx.companyId, expenseRequestId },
+    });
+    if (previous && previous.approverId === ctx.userId && previous.decision === decision)
+      return { expenseRequestId, replayed: true };
+    if (ex.state !== 'PENDING') throw new DataError('EXPENSE_STATE_CONFLICT');
+    await tx.expenseApproval.create({
+      data: {
+        id: randomUUID(),
+        companyId: ctx.companyId,
+        expenseRequestId,
+        approverId: ctx.userId,
+        decision,
+        reason,
+        currency: ex.currency,
+        amount: ex.amount,
+      },
+    });
+    if (decision === 'APPROVE')
+      await tx.fundReservation.create({
         data: {
           id: randomUUID(),
           companyId: ctx.companyId,
           expenseRequestId,
-          approverId: ctx.userId,
-          decision,
+          accountId: ex.accountId,
           currency: ex.currency,
           amount: ex.amount,
         },
       });
-      if (decision === 'APPROVE')
-        await tx.fundReservation.create({
-          data: {
-            id: randomUUID(),
-            companyId: ctx.companyId,
-            expenseRequestId,
-            accountId: ex.accountId,
-            currency: ex.currency,
-            amount: ex.amount,
-          },
-        });
-      await tx.expenseRequest.update({
-        where: { id: ex.id },
-        data: {
-          state: decision === 'APPROVE' ? 'APPROVED' : 'REJECTED',
-          version: { increment: 1 },
-        },
-      });
-      await this.audit(
-        tx,
-        ctx,
-        decision === 'APPROVE' ? 'EXPENSE_APPROVED' : 'EXPENSE_REJECTED',
-        'EXPENSE',
-        ex.id,
-      );
-      return { expenseRequestId, replayed: false };
+    await tx.expenseRequest.update({
+      where: { id: ex.id },
+      data: {
+        state: decision === 'APPROVE' ? 'APPROVED' : 'REJECTED',
+        version: { increment: 1 },
+      },
     });
+    await this.audit(
+      tx,
+      ctx,
+      decision === 'APPROVE' ? 'EXPENSE_APPROVED' : 'EXPENSE_REJECTED',
+      'EXPENSE',
+      ex.id,
+    );
+    return { expenseRequestId, replayed: false };
   }
   async payExpense(ctx: DataContext, value: unknown) {
     const input = paymentSchema.parse(value);
-    return this.access.run(ctx, async (tx) => {
-      await this.access.require(tx, ctx, input.agencyId, 'expense:pay');
-      return this.write(tx, ctx, 'DISBURSEMENT', input, input, async () => {
-        const ex = await tx.expenseRequest.findFirst({
-          where: { companyId: ctx.companyId, id: input.expenseRequestId },
-        });
-        if (!ex || ex.state !== 'APPROVED' || ex.agencyId !== input.agencyId)
-          throw new DataError('EXPENSE_NOT_APPROVED');
-        await this.access.lockAccounts(tx, ctx, [ex.accountId, input.counterAccountId]);
-        await tx.fundReservation.update({
-          where: {
-            companyId_expenseRequestId: { companyId: ctx.companyId, expenseRequestId: ex.id },
-          },
-          data: { state: 'CONSUMED' },
-        });
-        await tx.expenseRequest.update({
-          where: { id: ex.id },
-          data: { state: 'PAID', version: { increment: 1 } },
-        });
-        return {
-          currency: ex.currency,
-          expenseRequestId: ex.id,
-          lines: [
-            {
-              accountId: ex.accountId,
-              cashSessionId: input.cashSessionId,
-              currency: ex.currency,
-              amount: ex.amount.toFixed(2),
-              side: 'CREDIT',
-            },
-            {
-              accountId: input.counterAccountId,
-              cashSessionId: null,
-              currency: ex.currency,
-              amount: ex.amount.toFixed(2),
-              side: 'DEBIT',
-            },
-          ],
-        };
+    return this.access.run(ctx, (tx) => this.payExpenseInTransaction(tx, ctx, input));
+  }
+  async payExpenseInTransaction(tx: Tx, ctx: DataContext, input: z.infer<typeof paymentSchema>) {
+    await this.access.require(tx, ctx, input.agencyId, 'expense:pay');
+    return this.write(tx, ctx, 'DISBURSEMENT', input, input, async () => {
+      const ex = await tx.expenseRequest.findFirst({
+        where: { companyId: ctx.companyId, id: input.expenseRequestId },
       });
+      if (!ex || ex.state !== 'APPROVED' || ex.agencyId !== input.agencyId)
+        throw new DataError('EXPENSE_NOT_APPROVED');
+      await this.access.lockAccounts(tx, ctx, [ex.accountId, input.counterAccountId]);
+      await tx.fundReservation.update({
+        where: {
+          companyId_expenseRequestId: { companyId: ctx.companyId, expenseRequestId: ex.id },
+        },
+        data: { state: 'CONSUMED' },
+      });
+      await tx.expenseRequest.update({
+        where: { id: ex.id },
+        data: { state: 'PAID', version: { increment: 1 } },
+      });
+      return {
+        currency: ex.currency,
+        expenseRequestId: ex.id,
+        lines: [
+          {
+            accountId: ex.accountId,
+            cashSessionId: input.cashSessionId,
+            currency: ex.currency,
+            amount: ex.amount.toFixed(2),
+            side: 'CREDIT',
+          },
+          {
+            accountId: input.counterAccountId,
+            cashSessionId: null,
+            currency: ex.currency,
+            amount: ex.amount.toFixed(2),
+            side: 'DEBIT',
+          },
+        ],
+      };
     });
   }
   async convert(ctx: DataContext, value: unknown) {

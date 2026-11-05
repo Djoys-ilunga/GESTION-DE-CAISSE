@@ -203,34 +203,27 @@ impl Session {
                 return Err(Error::InvalidInput);
             }
             if let Some(document) = &details.supporting_document {
-                use base64::{engine::general_purpose::STANDARD, Engine};
-                if document.file_name.trim().is_empty()
-                    || document.file_name.chars().count() > 160
-                    || document
-                        .file_name
-                        .chars()
-                        .any(|c| c.is_control() || c == '/' || c == '\\')
-                    || document.data_base64.len() > 1398104
-                {
-                    return Err(Error::InvalidInput);
-                }
-                let bytes = STANDARD
-                    .decode(&document.data_base64)
-                    .map_err(|_| Error::InvalidInput)?;
-                if bytes.is_empty()
-                    || bytes.len() > 1048576
-                    || STANDARD.encode(&bytes) != document.data_base64
-                    || !match document.mime_type.as_str() {
-                        "application/pdf" => bytes.starts_with(b"%PDF-"),
-                        "image/png" => bytes.starts_with(&[137, 80, 78, 71, 13, 10, 26, 10]),
-                        "image/jpeg" => bytes.starts_with(&[255, 216, 255]),
-                        _ => false,
-                    }
-                {
-                    return Err(Error::InvalidInput);
-                }
+                document.validate()?;
             }
         }
+        if let Some(details) = &draft.expense_details {
+            if draft.kind != "expense-request"
+                || details.beneficiary.trim().is_empty()
+                || details.beneficiary.chars().count() > 160
+                || details.reference.chars().count() > 160
+                || details.documents.len() > 3
+            {
+                return Err(Error::InvalidInput);
+            }
+            let mut bytes = 0usize;
+            for document in &details.documents {
+                bytes += document.validate()?;
+            }
+            if bytes > 1048576 {
+                return Err(Error::InvalidInput);
+            }
+        }
+
         let created = millis(&draft.created_at)?;
         let expires = millis(&draft.expires_at)?;
         let valid_amount = draft.amount.split_once('.').is_some_and(|(a, b)| {
@@ -259,6 +252,7 @@ impl Session {
             .retain(|_, r| millis(&r.draft.expires_at).is_ok_and(|expiry| expiry > now));
         if let Some(old) = self.drafts.get(&draft.id) {
             if old.state == "confirmed"
+                || old.state == "submitted"
                 || input.expected_version != Some(old.version)
                 || old.agency_id != input.agency_id
                 || old.cash_register_id != input.cash_register_id
@@ -283,6 +277,7 @@ impl Session {
             updated_at: iso(now),
             confirmed_receipt_id: None,
             receipt_number: None,
+            submitted_expense_id: None,
         };
         self.drafts.insert(record.draft.id, record.clone());
         Ok(record)

@@ -138,6 +138,14 @@ impl Api {
                 writes.fetch_add(1, Ordering::SeqCst);
                 (201, json!({"ok":true}))
             }
+            path if path.starts_with("/api/v1/expenses/")
+                && (path.ends_with("/submit")
+                    || path.ends_with("/decision")
+                    || path.ends_with("/pay")) =>
+            {
+                writes.fetch_add(1, Ordering::SeqCst);
+                (201, json!({"ok":true}))
+            }
             "/api/v1/auth/unlock" => (
                 201,
                 json!({"accessToken":"b".repeat(43),"profile":*p.lock().unwrap()}),
@@ -169,6 +177,7 @@ impl Api {
         SaveDraft {
             draft: Draft {
                 receipt_details: None,
+                expense_details: None,
                 id: Uuid::new_v4(),
                 kind: "expense-request".into(),
                 currency: "USD".into(),
@@ -398,6 +407,9 @@ async fn offline_unlock_requires_the_previous_users_password_and_keeps_a_fixed_e
             .await,
         Err(Error::OnlineRequired)
     ));
+    for action in ["submit", "decide", "pay", "configure"] {
+        assert!(matches!(broker.expense_action(action,Some(json!({"id":Uuid::new_v4(),"expectedVersion":1,"paid":true,"submitted":true})),Some(view.generation)).await,Err(Error::OnlineRequired)));
+    }
     assert_eq!(api.writes.load(Ordering::SeqCst), 0);
 }
 
@@ -424,6 +436,58 @@ async fn financial_confirmation_checks_identity_before_sending_any_post() {
             .cash_action(
                 "confirm",
                 Some(json!({"id":Uuid::new_v4(),"expectedVersion":1,"received":true})),
+                Some(view.generation)
+            )
+            .await,
+        Err(Error::Identity)
+    ));
+    assert_eq!(api.writes.load(Ordering::SeqCst), 0);
+    assert_eq!(broker.status().unwrap().state, "anonymous");
+}
+
+#[tokio::test]
+async fn expense_payment_checks_attestation_permission_and_server_identity_before_posting() {
+    let api = Api::new();
+    api.profile
+        .lock()
+        .unwrap()
+        .permissions
+        .push("expense:pay".into());
+    let broker = api.broker();
+    let view = broker
+        .login(
+            "TEST".into(),
+            "alice@example.test".into(),
+            Zeroizing::new("password-test".into()),
+        )
+        .await
+        .unwrap();
+    assert!(matches!(
+        broker
+            .expense_action(
+                "pay",
+                Some(json!({"id":Uuid::new_v4(),"expectedVersion":2,"paid":false})),
+                Some(view.generation)
+            )
+            .await,
+        Err(Error::InvalidInput)
+    ));
+    assert!(matches!(
+        broker
+            .expense_action(
+                "decide",
+                Some(json!({"id":Uuid::new_v4()})),
+                Some(view.generation)
+            )
+            .await,
+        Err(Error::Forbidden)
+    ));
+    *api.deployment.lock().unwrap() = "wrong-deployment".into();
+    assert!(matches!(
+        broker
+            .expense_action(
+                "pay",
+                Some(json!({"id":Uuid::new_v4(),"expectedVersion":2,"paid":true})),
                 Some(view.generation)
             )
             .await,

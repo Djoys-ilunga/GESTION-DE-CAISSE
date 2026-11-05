@@ -89,6 +89,8 @@ pub struct Draft {
     pub expires_at: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub receipt_details: Option<ReceiptDetails>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expense_details: Option<ExpenseDetails>,
 }
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -105,6 +107,44 @@ pub struct ReceiptDetails {
     pub reference: String,
     pub supporting_document: Option<SupportingDocument>,
 }
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExpenseDetails {
+    pub beneficiary: String,
+    pub reference: String,
+    pub documents: Vec<SupportingDocument>,
+}
+impl SupportingDocument {
+    pub(crate) fn validate(&self) -> crate::Result<usize> {
+        use base64::{engine::general_purpose::STANDARD, Engine};
+        if self.file_name.trim().is_empty()
+            || self.file_name.chars().count() > 160
+            || self
+                .file_name
+                .chars()
+                .any(|c| c.is_control() || c == '/' || c == '\\')
+            || self.data_base64.len() > 1398104
+        {
+            return Err(crate::Error::InvalidInput);
+        }
+        let bytes = STANDARD
+            .decode(&self.data_base64)
+            .map_err(|_| crate::Error::InvalidInput)?;
+        if bytes.is_empty()
+            || bytes.len() > 1048576
+            || STANDARD.encode(&bytes) != self.data_base64
+            || !match self.mime_type.as_str() {
+                "application/pdf" => bytes.starts_with(b"%PDF-"),
+                "image/png" => bytes.starts_with(&[137, 80, 78, 71, 13, 10, 26, 10]),
+                "image/jpeg" => bytes.starts_with(&[255, 216, 255]),
+                _ => false,
+            }
+        {
+            return Err(crate::Error::InvalidInput);
+        }
+        Ok(bytes.len())
+    }
+}
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DraftRecord {
@@ -120,6 +160,8 @@ pub struct DraftRecord {
     pub confirmed_receipt_id: Option<Uuid>,
     #[serde(default)]
     pub receipt_number: Option<String>,
+    #[serde(default)]
+    pub submitted_expense_id: Option<Uuid>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

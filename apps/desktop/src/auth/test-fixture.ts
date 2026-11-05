@@ -39,6 +39,23 @@ export function view(p = profile()): NativeSessionView {
 export function fakeGateway(initial: NativeSessionView = anonymous) {
   let current = structuredClone(initial);
   const gateway: AuthGateway = {
+    expensePolicies: vi.fn(async () => ({ items: [] })),
+    configureExpensePolicy: vi.fn(),
+    expenseDrafts: vi.fn(async () => ({ items: [], total: 0, page: 1, pageSize: 25 })),
+    restoreExpenseDraft: vi.fn(),
+    submitExpense: vi.fn(),
+    expenseList: vi.fn(async () => ({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 25,
+      synchronizedAt: new Date().toISOString(),
+    })),
+    expenseDetail: vi.fn(),
+    decideExpense: vi.fn(),
+    payExpense: vi.fn(),
+    paymentVoucher: vi.fn(),
+    expenseEvidence: vi.fn(),
     cashCatalog: vi.fn(async () => ({
       data: {
         items: [],

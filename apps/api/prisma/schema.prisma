@@ -79,6 +79,8 @@ model Company {
   rates           ExchangeRate[]
   audits          AuditEvent[]
   receiptCounters ReceiptCounter[]
+  expensePolicies ExpensePolicy[]
+  voucherCounters VoucherCounter[]
 }
 
 model Agency {
@@ -118,6 +120,7 @@ model User {
   audits             AuditEvent[]
   drafts             ImportedDraft[]
   cashReceipts       CashReceipt[]
+  paymentVouchers    PaymentVoucher[]
 }
 
 model CompanyMember {
@@ -273,6 +276,7 @@ model FinancialOperation {
   transfer         Transfer?
   attachments      Attachment[]
   cashReceipt      CashReceipt?
+  paymentVoucher   PaymentVoucher?
 
   @@unique([companyId, id])
   @@unique([companyId, idempotencyKey])
@@ -300,25 +304,34 @@ model LedgerEntry {
 }
 
 model ExpenseRequest {
-  id            String               @id @default(uuid()) @db.Uuid
-  companyId     String               @db.Uuid
-  agencyId      String               @db.Uuid
-  accountId     String               @db.Uuid
-  requestedById String               @db.Uuid
-  currency      Currency
-  amount        Decimal              @db.Decimal(18, 2)
-  description   String               @db.VarChar(500)
-  state         ExpenseState         @default(PENDING)
-  version       Int                  @default(1)
-  createdAt     DateTime             @default(now()) @db.Timestamptz(3)
-  account       TreasuryAccount      @relation(fields: [companyId, accountId, currency, agencyId], references: [companyId, id, currency, agencyId], onDelete: Restrict)
-  requester     User                 @relation(fields: [requestedById], references: [id], onDelete: Restrict)
-  approval      ExpenseApproval?
-  reservation   FundReservation?
-  operations    FinancialOperation[]
-  attachments   Attachment[]
+  workflowTransaction BigInt?
+  sourceDraftId       String?              @db.Uuid
+  sourceVersion       Int?
+  beneficiary         String?              @db.VarChar(160)
+  reference           String?              @db.VarChar(160)
+  source              ImportedDraft?       @relation(fields: [companyId, sourceDraftId], references: [companyId, id], onDelete: Restrict)
+  evidence            ExpenseEvidence[]
+  voucher             PaymentVoucher?
+  id                  String               @id @default(uuid()) @db.Uuid
+  companyId           String               @db.Uuid
+  agencyId            String               @db.Uuid
+  accountId           String               @db.Uuid
+  requestedById       String               @db.Uuid
+  currency            Currency
+  amount              Decimal              @db.Decimal(18, 2)
+  description         String               @db.VarChar(500)
+  state               ExpenseState         @default(PENDING)
+  version             Int                  @default(1)
+  createdAt           DateTime             @default(now()) @db.Timestamptz(3)
+  account             TreasuryAccount      @relation(fields: [companyId, accountId, currency, agencyId], references: [companyId, id, currency, agencyId], onDelete: Restrict)
+  requester           User                 @relation(fields: [requestedById], references: [id], onDelete: Restrict)
+  approval            ExpenseApproval?
+  reservation         FundReservation?
+  operations          FinancialOperation[]
+  attachments         Attachment[]
 
   @@unique([companyId, id])
+  @@unique([companyId, sourceDraftId])
   @@index([companyId, agencyId, state])
 }
 
@@ -327,6 +340,7 @@ model ExpenseApproval {
   companyId        String           @db.Uuid
   expenseRequestId String           @db.Uuid
   approverId       String           @db.Uuid
+  reason           String?          @db.VarChar(500)
   decision         ApprovalDecision
   currency         Currency
   amount           Decimal          @db.Decimal(18, 2)
@@ -414,29 +428,31 @@ model AuditEvent {
 }
 
 model ImportedDraft {
-  receiptProvenance String?      @db.VarChar(160)
-  receiptCategory   String?      @db.VarChar(80)
-  receiptReference  String?      @db.VarChar(160)
-  evidenceName      String?      @db.VarChar(160)
-  evidenceMime      String?      @db.VarChar(100)
-  evidenceSha       String?      @db.Char(64)
+  expenseDetails    Json?
+  expense           ExpenseRequest?
+  receiptProvenance String?         @db.VarChar(160)
+  receiptCategory   String?         @db.VarChar(80)
+  receiptReference  String?         @db.VarChar(160)
+  evidenceName      String?         @db.VarChar(160)
+  evidenceMime      String?         @db.VarChar(100)
+  evidenceSha       String?         @db.Char(64)
   evidenceBytes     Bytes?
   receipt           CashReceipt?
-  cashRegisterId    String?      @db.Uuid
-  id                String       @id @default(uuid()) @db.Uuid
-  companyId         String       @db.Uuid
-  agencyId          String       @db.Uuid
-  authorId          String       @db.Uuid
-  clientDraftId     String       @db.Uuid
+  cashRegisterId    String?         @db.Uuid
+  id                String          @id @default(uuid()) @db.Uuid
+  companyId         String          @db.Uuid
+  agencyId          String          @db.Uuid
+  authorId          String          @db.Uuid
+  clientDraftId     String          @db.Uuid
   kind              DraftKind
   currency          Currency
-  amount            Decimal      @db.Decimal(18, 2)
-  description       String       @db.VarChar(500)
+  amount            Decimal         @db.Decimal(18, 2)
+  description       String          @db.VarChar(500)
   version           Int
-  payloadHash       String       @db.Char(64)
-  receivedAt        DateTime     @default(now()) @db.Timestamptz(3)
-  agency            Agency       @relation(fields: [companyId, agencyId], references: [companyId, id], onDelete: Restrict)
-  author            User         @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  payloadHash       String          @db.Char(64)
+  receivedAt        DateTime        @default(now()) @db.Timestamptz(3)
+  agency            Agency          @relation(fields: [companyId, agencyId], references: [companyId, id], onDelete: Restrict)
+  author            User            @relation(fields: [authorId], references: [id], onDelete: Restrict)
 
   @@unique([companyId, authorId, clientDraftId])
   @@unique([companyId, id])
@@ -553,4 +569,76 @@ model AuthEvent {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
 
   @@index([companyId, createdAt])
+}
+
+model ExpensePolicy {
+  companyId       String   @db.Uuid
+  currency        Currency
+  version         Int
+  requireEvidence Boolean
+  limits          Json
+  payloadHash     String   @db.Char(64)
+  configuredById  String   @db.Uuid
+  configuredAt    DateTime @db.Timestamptz(3)
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@id([companyId, currency])
+}
+
+model ExpenseEvidence {
+  byteLength       Int
+  id               String         @id @default(uuid()) @db.Uuid
+  companyId        String         @db.Uuid
+  expenseRequestId String         @db.Uuid
+  ordinal          Int
+  fileName         String         @db.VarChar(160)
+  mimeType         String         @db.VarChar(100)
+  sha256           String         @db.Char(64)
+  bytes            Bytes
+  expense          ExpenseRequest @relation(fields: [companyId, expenseRequestId], references: [companyId, id], onDelete: Restrict)
+
+  @@unique([companyId, expenseRequestId, ordinal])
+}
+
+model VoucherCounter {
+  companyId    String  @db.Uuid
+  year         Int
+  lastSequence BigInt
+  company      Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@id([companyId, year])
+}
+
+model PaymentVoucher {
+  id               String             @id @default(uuid()) @db.Uuid
+  companyId        String             @db.Uuid
+  expenseRequestId String             @db.Uuid
+  operationId      String             @db.Uuid
+  createdById      String             @db.Uuid
+  currency         Currency
+  amount           Decimal            @db.Decimal(18, 2)
+  beneficiary      String             @db.VarChar(160)
+  description      String             @db.VarChar(500)
+  reference        String             @db.VarChar(160)
+  companyName      String             @db.VarChar(160)
+  companyCode      String             @db.VarChar(32)
+  agencyName       String             @db.VarChar(160)
+  cashName         String             @db.VarChar(160)
+  requesterName    String             @db.VarChar(160)
+  approverName     String             @db.VarChar(160)
+  cashierName      String             @db.VarChar(160)
+  approvedAt       DateTime           @db.Timestamptz(3)
+  postedAt         DateTime           @db.Timestamptz(3)
+  year             Int
+  sequence         BigInt
+  number           String             @db.VarChar(160)
+  expense          ExpenseRequest     @relation(fields: [companyId, expenseRequestId], references: [companyId, id], onDelete: Restrict)
+  operation        FinancialOperation @relation(fields: [companyId, operationId], references: [companyId, id], onDelete: Restrict)
+  creator          User               @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, id])
+  @@unique([companyId, expenseRequestId])
+  @@unique([companyId, operationId])
+  @@unique([companyId, year, sequence])
+  @@unique([companyId, number])
 }

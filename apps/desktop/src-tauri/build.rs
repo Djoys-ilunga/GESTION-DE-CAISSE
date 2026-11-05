@@ -26,6 +26,7 @@ fn main() {
     let manifest = tauri_build::AppManifest::new().commands(&[
         "cash_catalog",
         "cash_action",
+        "expense_action",
         "auth_health",
         "auth_login",
         "auth_status",

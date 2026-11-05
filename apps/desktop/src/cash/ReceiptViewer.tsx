@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { useState } from 'react';
 import { CheckCircle2, Printer, X, Paperclip } from 'lucide-react';
 import type { ConfirmedReceipt, SupportingDocument } from '@caissepro/shared';
@@ -16,7 +17,7 @@ export function ReceiptViewer({
 }) {
   const [evidence, setEvidence] = useState<SupportingDocument | null>(null),
     [error, setError] = useState('');
-  return (
+  return createPortal(
     <div className="receipt-overlay">
       <section
         className="receipt-dialog"
@@ -137,6 +138,7 @@ export function ReceiptViewer({
           </div>
         )}
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }

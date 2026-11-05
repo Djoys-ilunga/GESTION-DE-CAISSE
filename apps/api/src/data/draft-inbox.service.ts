@@ -1,8 +1,9 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { draftSchema } from '@caissepro/shared';
+import { draftSchema, expenseDetailsSchema, MAX_EVIDENCE_BYTES } from '@caissepro/shared';
 import { z } from 'zod';
 import { CentralAccess, DataError, type DataContext } from './central-access';
+import { Prisma } from '../generated/prisma/client';
 import { fingerprint } from './ledger.service';
 import { decodeEvidence } from './receipt-evidence';
 @Injectable()
@@ -56,8 +57,27 @@ export class DraftInboxService {
         }))
       )
         throw new DataError('DRAFT_ALREADY_CONFIRMED');
+      if (
+        previous &&
+        (await tx.expenseRequest.findFirst({
+          where: { companyId: ctx.companyId, sourceDraftId: previous.id },
+        }))
+      )
+        throw new DataError('DRAFT_ALREADY_SUBMITTED');
+      const expenseDetails =
+        draft.kind === 'expense-request' && draft.expenseDetails
+          ? expenseDetailsSchema.parse(draft.expenseDetails)
+          : undefined;
+      if (expenseDetails) {
+        const total = expenseDetails.documents.reduce(
+          (sum, doc) => sum + (decodeEvidence(doc).evidenceBytes?.length ?? 0),
+          0,
+        );
+        if (total > MAX_EVIDENCE_BYTES) throw new DataError('EVIDENCE_INVALID');
+      }
       const details = draft.kind === 'receipt' ? draft.receiptDetails : undefined;
       const data = {
+        expenseDetails: expenseDetails ? expenseDetails : Prisma.DbNull,
         currency: draft.currency,
         amount: draft.amount,
         description: draft.description,

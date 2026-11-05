@@ -6,6 +6,16 @@ pub use model::*;
 type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("EXPENSE_CONFLICT")]
+    ExpenseConflict,
+    #[error("EXPENSE_POLICY_REQUIRED")]
+    ExpensePolicy,
+    #[error("EXPENSE_LIMIT_EXCEEDED")]
+    ExpenseLimit,
+    #[error("INSUFFICIENT_FUNDS")]
+    InsufficientFunds,
+    #[error("EXPENSE_EVIDENCE_REQUIRED")]
+    ExpenseEvidence,
     #[error("AUTH_REQUIRED")]
     AuthRequired,
     #[error("SESSION_EXPIRED")]

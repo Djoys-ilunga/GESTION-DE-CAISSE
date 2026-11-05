@@ -297,6 +297,7 @@ test('workflow desktop dans Chromium avec double IPC explicite : confirmation et
     printBackground: true,
   });
   expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
+  expect(pdf.toString('latin1').match(/\/Type\s*\/Page\b/g)).toHaveLength(1);
   expect(
     await page.evaluate(() =>
       (

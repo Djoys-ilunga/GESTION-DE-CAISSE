@@ -1,6 +1,20 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import {
   nativeSessionViewSchema,
+  expensePoliciesSchema,
+  expensePolicySchema,
+  expenseDraftListSchema,
+  expenseListSchema,
+  expenseViewSchema,
+  paymentVoucherSchema,
+  type ExpensePolicy,
+  type ExpensePolicyInput,
+  type ExpenseDraftList,
+  type ExpenseList,
+  type ExpenseView,
+  type ExpenseQuery,
+  type DecideExpense,
+  type PaymentVoucher,
   type NativeSessionView,
   type Draft,
   type ManagedUser,
@@ -36,6 +50,7 @@ export type SessionDraft = {
   updatedAt: string;
   confirmedReceiptId?: string | null;
   receiptNumber?: string | null;
+  submittedExpenseId?: string | null;
 };
 export type DraftInput = {
   draft: Draft;
@@ -64,6 +79,20 @@ export type AccessCatalog = {
   cashRegisters: { id: string; agencyId: string; name: string; code: string }[];
 };
 export interface AuthGateway {
+  expensePolicies(): Promise<{ items: ExpensePolicy[] }>;
+  configureExpensePolicy(
+    currency: 'CDF' | 'USD',
+    input: ExpensePolicyInput,
+  ): Promise<ExpensePolicy>;
+  expenseDrafts(page?: number): Promise<ExpenseDraftList>;
+  restoreExpenseDraft(id: string): Promise<SessionDraft>;
+  submitExpense(id: string, expectedVersion: number, submitted: true): Promise<ExpenseView>;
+  expenseList(query?: ExpenseQuery): Promise<ExpenseList>;
+  expenseDetail(id: string): Promise<ExpenseView>;
+  decideExpense(id: string, input: DecideExpense): Promise<ExpenseView>;
+  payExpense(id: string, expectedVersion: number, paid: true): Promise<PaymentVoucher>;
+  paymentVoucher(id: string): Promise<PaymentVoucher>;
+  expenseEvidence(id: string, evidenceId: string): Promise<SupportingDocument>;
   cashCatalog(): Promise<CashSnapshot>;
   cashConfiguration(): Promise<CashConfiguration>;
   createAgency(input: CreateAgency): Promise<{ id: string }>;
@@ -106,6 +135,46 @@ export interface AuthGateway {
   logs(): Promise<AuthLog[]>;
 }
 export class NativeAuthGateway implements AuthGateway {
+  private expenseCall(action: string, payload?: unknown) {
+    return this.call('expense_action', { action, payload });
+  }
+  async expensePolicies() {
+    return expensePoliciesSchema.parse(await this.expenseCall('policies'));
+  }
+  async configureExpensePolicy(currency: 'CDF' | 'USD', input: ExpensePolicyInput) {
+    return expensePolicySchema.parse(
+      await this.expenseCall('configure', { currency, data: input }),
+    );
+  }
+  async expenseDrafts(page = 1) {
+    return expenseDraftListSchema.parse(await this.expenseCall('drafts', { page }));
+  }
+  restoreExpenseDraft(id: string) {
+    return this.expenseCall('restore', { id }) as Promise<SessionDraft>;
+  }
+  async submitExpense(id: string, expectedVersion: number, submitted: true) {
+    return expenseViewSchema.parse(
+      await this.expenseCall('submit', { id, expectedVersion, submitted }),
+    );
+  }
+  async expenseList(query: ExpenseQuery = {}) {
+    return expenseListSchema.parse(await this.expenseCall('list', query));
+  }
+  async expenseDetail(id: string) {
+    return expenseViewSchema.parse(await this.expenseCall('detail', { id }));
+  }
+  async decideExpense(id: string, input: DecideExpense) {
+    return expenseViewSchema.parse(await this.expenseCall('decide', { id, data: input }));
+  }
+  async payExpense(id: string, expectedVersion: number, paid: true) {
+    return paymentVoucherSchema.parse(await this.expenseCall('pay', { id, expectedVersion, paid }));
+  }
+  async paymentVoucher(id: string) {
+    return paymentVoucherSchema.parse(await this.expenseCall('voucher', { id }));
+  }
+  async expenseEvidence(id: string, evidenceId: string) {
+    return supportingDocumentSchema.parse(await this.expenseCall('evidence', { id, evidenceId }));
+  }
   private cashCall<T>(action: string, payload?: unknown): Promise<T> {
     return this.call<T>('cash_action', { action, payload });
   }
@@ -234,6 +303,16 @@ export class NativeAuthGateway implements AuthGateway {
 export function message(error: unknown) {
   const code = error instanceof Error ? error.message : String(error);
   const labels: Record<string, string> = {
+    EXPENSE_CONFLICT:
+      'La demande ou les règles ont changé. Actualisez les demandes et réessayez sur la même demande.',
+    EXPENSE_POLICY_REQUIRED:
+      'Un administrateur doit configurer les plafonds de dépenses pour cette devise.',
+    EXPENSE_LIMIT_EXCEEDED: 'Le montant dépasse votre plafond autorisé pour cette action.',
+    INSUFFICIENT_FUNDS:
+      'Les fonds disponibles sont insuffisants pour réserver ou payer cette dépense.',
+    EXPENSE_EVIDENCE_REQUIRED: 'Au moins un justificatif est requis par les règles de dépenses.',
+    FILE_INVALID:
+      'Justificatifs invalides : PDF, PNG ou JPEG, 3 fichiers maximum et 1 Mio au total.',
     INVALID_CREDENTIALS: 'Identifiants ou déverrouillage non valides.',
     AUTH_THROTTLED: 'Trop de tentatives. Patientez avant de réessayer.',
     SERVER_UNAVAILABLE:

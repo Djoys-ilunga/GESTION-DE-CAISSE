@@ -14,6 +14,23 @@ export class ValidationFilter implements ExceptionFilter {
 @Catch(DataError)
 export class DataErrorFilter implements ExceptionFilter {
   catch(error: DataError, host: ArgumentsHost) {
+    const domainCode = error.code.replace(/^CAISSEPRO_/, '');
+    const publicCodes = [
+      'EXPENSE_POLICY_REQUIRED',
+      'EXPENSE_LIMIT_EXCEEDED',
+      'EXPENSE_EVIDENCE_REQUIRED',
+      'INSUFFICIENT_FUNDS',
+      'CASH_SESSION_REQUIRED',
+      'EXPENSE_VERSION_CONFLICT',
+      'EXPENSE_NOT_APPROVED',
+      'EXPENSE_STATE_CONFLICT',
+      'EXPENSE_POLICY_CONFLICT',
+      'SELF_APPROVAL_FORBIDDEN',
+      'DRAFT_ALREADY_SUBMITTED',
+      'EVIDENCE_INVALID',
+      'POLICY_INVALID',
+      'POLICY_CONFLICT',
+    ];
     const status = error.code.includes('SESSION_REVOKED')
       ? 401
       : error.code.includes('ACCESS_DENIED')
@@ -27,6 +44,7 @@ export class DataErrorFilter implements ExceptionFilter {
       .status(status)
       .json({
         statusCode: status,
+        ...(publicCodes.includes(domainCode) ? { code: domainCode } : {}),
         message:
           status === 403
             ? 'Autorisation insuffisante.'

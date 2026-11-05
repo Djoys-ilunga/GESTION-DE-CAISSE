@@ -1,9 +1,11 @@
 import { z } from 'zod';
 import { currencySchema, positiveAmountSchema } from './money.js';
 import { receiptDetailsSchema } from './receipts.js';
+import { expenseDetailsSchema } from './expenses.js';
 export * from './auth.js';
 export * from './money.js';
 export * from './receipts.js';
+export * from './expenses.js';
 export const API_PROTOCOL_VERSION = 1 as const;
 export const apiHealthSchema = z
   .object({
@@ -24,9 +26,16 @@ export const draftSchema = z
     createdAt: z.iso.datetime(),
     expiresAt: z.iso.datetime(),
     receiptDetails: receiptDetailsSchema.optional(),
+    expenseDetails: expenseDetailsSchema.optional(),
   })
   .strict()
-  .refine((d) => Date.parse(d.expiresAt) > Date.parse(d.createdAt), 'Expiration invalide.');
+  .refine((d) => Date.parse(d.expiresAt) > Date.parse(d.createdAt), 'Expiration invalide.')
+  .refine(
+    (d) =>
+      (!d.receiptDetails || d.kind === 'receipt') &&
+      (!d.expenseDetails || d.kind === 'expense-request'),
+    'Détails incompatibles.',
+  );
 export type Draft = z.infer<typeof draftSchema>;
 export const draftSyncResultSchema = z.discriminatedUnion('outcome', [
   z

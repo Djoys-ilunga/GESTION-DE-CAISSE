@@ -1,6 +1,39 @@
 # Validation de CaissePro — 5 novembre 2026
 
-## Adaptation monocaisse et multicaisse — validation courante
+## Étape 5 : demandes de dépenses et approbations — validation courante
+
+**183 tests automatisés distincts réussis**, plus un parcours intégré Rust/API/PostgreSQL réel et un contrôle de la fenêtre Tauri Linux. Le circuit distingue préparation, transmission du brouillon, soumission explicite, approbation ou rejet motivé, réservation et paiement confirmé avec bon de sortie. Les configurations monocaisse et multicaisse restent couvertes.
+
+| Contrôle                                          | Résultat observé                                                                                                                                              |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Contrats partagés                                 | 9 tests réussis, dont les nouveaux contrats de dépense, plafonds et attestations                                                                              |
+| API avec double de base                           | 4 tests réussis                                                                                                                                               |
+| React et fondations hybrides                      | 58 tests réussis, dont 10 scénarios de dépenses avec courtier simulé                                                                                          |
+| PostgreSQL 17 réel                                | 69 tests distincts réussis : 19 financiers, 18 d’authentification, 16 de caisses/encaissements, 3 de configurations et 13 du circuit de dépenses              |
+| Courtier Rust                                     | 26 tests réussis ; blocage hors connexion, isolation, expiration, brouillon soumis figé et identité serveur avant paiement                                    |
+| SQLCipher Linux                                   | 9 tests réussis sur données synthétiques ; porte publique toujours fermée                                                                                     |
+| API compilée et PostgreSQL                        | 2 tests réussis de disponibilité, CORS, arrêt et échec fermé ; aucun déploiement de migration de développement effectué                                       |
+| Chromium/Playwright                               | 6 tests réussis ; les parcours d’encaissement et de dépense utilisent un double IPC explicite                                                                 |
+| Rust → API compilée → PostgreSQL                  | Parcours intégré réussi avec LOGIN réel NOINHERIT/NOBYPASSRLS et rôles applicatifs distincts de caissier et directeur                                         |
+| Impression des documents                          | Bon de sortie et reçu synthétiques A4 d’une page chacun, contrôlés avec `pdfinfo` ; rendu du bon inspecté                                                     |
+| Prisma, TypeScript, ESLint, NestJS/Vite, Prettier | Schéma, types, lint, builds et format vérifiés                                                                                                                |
+| Tauri Linux                                       | Clippy, compilation `custom-protocol` et vraie fenêtre de connexion sous Xvfb ; permission générée de `expense_action` limitée à la fenêtre locale principale |
+
+Le total PostgreSQL compte les tests distincts : la suite complète de 67 scénarios a été exécutée, puis les 13 scénarios de dépenses ont été rejoués après ajout de deux contrôles de fermeture de caisse et de justificatifs. Les répétitions ne sont pas additionnées au total de 183.
+
+Les tests de dépenses vérifient les permissions, l’interdiction d’auto-approbation et de paiement sans approbation, le rejet motivé, les versions et brouillons figés, les politiques absentes et les plafonds réévalués à chaque action. Ils couvrent l’insuffisance de fonds sans approbation partielle, deux réservations concurrentes, six paiements simultanés d’une même demande, plusieurs bons concurrents, la séparation CDF/USD, les sessions de caisse fermées, l’isolation des auteurs/entreprises, la révocation, les justificatifs et le rollback total si la génération du bon échoue.
+
+Le parcours natif intégré utilise le véritable courtier Rust, l’API compilée et une base temporaire. Il configure des plafonds, encaisse `12.34 USD`, transmet un brouillon de dépense sans soumettre, le soumet explicitement, le fait approuver par un directeur distinct, constate `12.34 USD` de solde et `2.34 USD` réservés, puis confirme le paiement. Un second courtier authentifié réessaie sur la même demande et retrouve le même bon. Le solde final est `10.00 USD` et `0.00 CDF`. SQL final : **2 opérations, 4 écritures, 1 reçu, 1 dépense payée, 1 bon, 1 justificatif de dépense et 2 brouillons**. Verrouillage et révocation restent vérifiés, puis base et rôle de test sont supprimés.
+
+Les erreurs rencontrées ont été corrigées avant validation : nouveaux événements absents de la liste d’audit autorisée, contrôle différé relisant à tort le brouillon privé depuis l’approbateur, création conflictuelle lors de la mise à jour d’un plafond et page blanche supplémentaire à l’impression. La copie des justificatifs est désormais contrôlée et scellée à la soumission sans élargir RLS. La page d’impression est isolée du reste de l’application ; les tests du bon et du reçu vérifient chacun une seule page. Les codes PostgreSQL sont extraits aussi des métadonnées Prisma, puis limités à une liste publique sans secret. Les échecs d’environnement (sockets du bac à sable, chemin Rust et navigateur absent du cache Playwright) ont été distingués des erreurs applicatives et rejoués avec les outils disponibles.
+
+Deux migrations additives sont livrées : `20261105000400_expense_workflow` et `20261105000500_expense_guards`. Les **onze migrations** ont été appliquées sur les bases temporaires des tests. **Elles ne sont pas encore appliquées à la base de développement existante** : le contrôle automatique a refusé cette mutation durable sans autorisation explicite. Aucun contournement, réinitialisation ou publication cloud n’a été effectué. La prochaine action nécessaire est d’autoriser `pnpm db:deploy` sur cette base, puis de configurer les plafonds CDF/USD avec un administrateur.
+
+Limites conservées : qualification Windows/macOS, installateurs, magasins de clés et impression physique non effectués depuis cette machine. La fenêtre Linux prouve l’ouverture et le rendu de la connexion, pas le pilotage graphique natif de tout le circuit ; les finances natives sont éprouvées par le parcours intégré distinct. Les brouillons sensibles restent temporaires en mémoire ; la persistance sur disque est bloquée. La prévisualisation PDF reste indisponible, les images sont consultables. Les demandes historiques sans source de brouillon restent consultables et leurs services internes sont préservés, sans conversion implicite dans le nouveau circuit. Voir [depenses.md](depenses.md).
+
+Commandes : `pnpm check`, `pnpm test:db`, `pnpm test:db expenses.spec.ts`, `pnpm test:session`, `pnpm test:auth:desktop`, `pnpm test:local`, `pnpm test:api:live`, `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium pnpm test:e2e`, `pnpm format:check`, `pnpm db:validate`, puis compilation/Clippy Tauri et `tests/native/smoke-linux.sh` dans le conteneur local sans réseau.
+
+## Historique — adaptation monocaisse et multicaisse
 
 **119 tests automatisés exécutés et réussis pour cette adaptation**, plus une nouvelle compilation Tauri Linux et un contrôle de sa fenêtre réelle. Le modèle existant acceptait déjà une seule caisse : seules la présentation des choix et la documentation ont été adaptées. Aucun changement de schéma, migration, service financier, permission serveur ou stockage sensible n’est introduit. Aucune donnée financière de développement n’a été modifiée.
 

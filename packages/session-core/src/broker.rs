@@ -27,6 +27,211 @@ pub struct Broker {
     clock: Clock,
 }
 impl Broker {
+    pub async fn expense_action(
+        &self,
+        action: &str,
+        payload: Option<Value>,
+        expected: Option<u64>,
+    ) -> Result<Value> {
+        let (generation, _) = self.snapshot(true, true, expected)?;
+        let payload = payload.unwrap_or_else(|| json!({}));
+        let permission = match action {
+            "policies" | "configure" => "cash:configure",
+            "drafts" | "restore" => "draft:read_own",
+            "submit" => "expense:request",
+            "decide" => "expense:approve",
+            "pay" => "expense:pay",
+            "list" | "detail" | "voucher" | "evidence" => "ledger:read",
+            _ => return Err(Error::Forbidden),
+        };
+        self.state()?
+            .session
+            .as_ref()
+            .ok_or(Error::AuthRequired)?
+            .permission(permission)?;
+        let uuid_field = |key: &str| -> Result<Uuid> {
+            Uuid::parse_str(
+                payload
+                    .get(key)
+                    .and_then(Value::as_str)
+                    .ok_or(Error::InvalidInput)?,
+            )
+            .map_err(|_| Error::InvalidInput)
+        };
+        let id = || uuid_field("id");
+        if ["submit", "decide", "pay", "configure"].contains(&action) {
+            if (action == "submit" && payload.get("submitted") != Some(&Value::Bool(true)))
+                || (action == "pay" && payload.get("paid") != Some(&Value::Bool(true)))
+            {
+                return Err(Error::InvalidInput);
+            }
+            self.revalidate(Some(generation)).await?;
+            self.state()?
+                .session
+                .as_ref()
+                .ok_or(Error::AuthRequired)?
+                .permission(permission)?;
+        }
+        let (method, path, body) = match action {
+            "policies" => (Method::GET, "expenses/policies".into(), None),
+            "configure" => {
+                let currency = payload
+                    .get("currency")
+                    .and_then(Value::as_str)
+                    .filter(|s| ["CDF", "USD"].contains(s))
+                    .ok_or(Error::InvalidInput)?;
+                (
+                    Method::PUT,
+                    format!("expenses/policies/{currency}"),
+                    Some(payload.get("data").ok_or(Error::InvalidInput)?.clone()),
+                )
+            }
+            "drafts" => (
+                Method::GET,
+                Self::query_path("expenses/drafts", &payload, &["page"])?,
+                None,
+            ),
+            "restore" => (Method::GET, format!("expenses/drafts/{}", id()?), None),
+            "list" => (
+                Method::GET,
+                Self::query_path(
+                    "expenses/requests",
+                    &payload,
+                    &["page", "state", "currency", "cashRegisterId"],
+                )?,
+                None,
+            ),
+            "detail" => (Method::GET, format!("expenses/requests/{}", id()?), None),
+            "submit" => (
+                Method::POST,
+                format!("expenses/drafts/{}/submit", id()?),
+                Some(json!({"expectedVersion":payload["expectedVersion"],"submitted":true})),
+            ),
+            "decide" => (
+                Method::POST,
+                format!("expenses/requests/{}/decision", id()?),
+                Some(payload.get("data").ok_or(Error::InvalidInput)?.clone()),
+            ),
+            "pay" => (
+                Method::POST,
+                format!("expenses/requests/{}/pay", id()?),
+                Some(json!({"expectedVersion":payload["expectedVersion"],"paid":true})),
+            ),
+            "voucher" => (Method::GET, format!("expenses/vouchers/{}", id()?), None),
+            "evidence" => (
+                Method::GET,
+                format!(
+                    "expenses/requests/{}/evidence/{}",
+                    id()?,
+                    uuid_field("evidenceId")?
+                ),
+                None,
+            ),
+            _ => return Err(Error::Forbidden),
+        };
+        let value = self
+            .protected(method, &path, body, Some(generation))
+            .await?;
+        let now = self.clock.now();
+        let mut state = self.state()?;
+        Self::generation(&state, Some(generation))?;
+        let s = state.session.as_mut().ok_or(Error::AuthRequired)?;
+        s.guard(now)?;
+        if action == "submit" || action == "drafts" {
+            let rows = if action == "submit" {
+                vec![&value]
+            } else {
+                value
+                    .get("items")
+                    .and_then(Value::as_array)
+                    .ok_or(Error::InvalidResponse)?
+                    .iter()
+                    .collect()
+            };
+            for row in rows {
+                let submitted = if action == "submit" {
+                    row.get("id")
+                } else {
+                    row.get("expenseRequestId")
+                };
+                if let Some(submitted) = submitted.filter(|v| !v.is_null()) {
+                    let request_id =
+                        Uuid::parse_str(submitted.as_str().ok_or(Error::InvalidResponse)?)
+                            .map_err(|_| Error::InvalidResponse)?;
+                    let client_id = Uuid::parse_str(
+                        row.get("clientDraftId")
+                            .and_then(Value::as_str)
+                            .ok_or(Error::InvalidResponse)?,
+                    )
+                    .map_err(|_| Error::InvalidResponse)?;
+                    if let Some(record) = s.drafts.get_mut(&client_id) {
+                        if record.draft.kind != "expense-request" {
+                            return Err(Error::InvalidResponse);
+                        }
+                        record.state = "submitted".into();
+                        record.submitted_expense_id = Some(request_id);
+                        record.result = None;
+                    }
+                }
+            }
+        }
+        if action == "pay" || action == "decide" {
+            s.balances = None;
+            s.cash_catalog = None;
+        }
+        if action == "restore" {
+            #[derive(Deserialize)]
+            #[serde(rename_all = "camelCase", deny_unknown_fields)]
+            struct Remote {
+                client_draft_id: Uuid,
+                agency_id: Uuid,
+                cash_register_id: Option<Uuid>,
+                version: u32,
+                currency: String,
+                amount: String,
+                description: String,
+                expense_details: Option<ExpenseDetails>,
+            }
+            let remote: Remote =
+                serde_json::from_value(value).map_err(|_| Error::InvalidResponse)?;
+            if let Some(old) = s.drafts.get(&remote.client_draft_id) {
+                if millis(&old.draft.expires_at)? > now {
+                    if old.state == "synced" && old.version == remote.version {
+                        return serde_json::to_value(old).map_err(|_| Error::InvalidResponse);
+                    }
+                    return Err(Error::Conflict);
+                }
+            }
+            if remote.version == 0 {
+                return Err(Error::InvalidResponse);
+            }
+            let mut record = s.save_draft(
+                SaveDraft {
+                    draft: Draft {
+                        id: remote.client_draft_id,
+                        kind: "expense-request".into(),
+                        currency: remote.currency,
+                        amount: remote.amount,
+                        description: remote.description,
+                        created_at: crate::state::iso(now),
+                        expires_at: crate::state::iso((now + 900000).min(s.absolute_until)),
+                        receipt_details: None,
+                        expense_details: remote.expense_details,
+                    },
+                    agency_id: remote.agency_id,
+                    cash_register_id: remote.cash_register_id,
+                    expected_version: None,
+                },
+                now,
+            )?;
+            record.version = remote.version;
+            record.server_version = Some(remote.version);
+            record.state = "synced".into();
+            s.drafts.insert(record.draft.id, record.clone());
+            return serde_json::to_value(record).map_err(|_| Error::InvalidResponse);
+        }
+        Ok(value)
+    }
     pub async fn cash_catalog(&self, expected: Option<u64>) -> Result<Value> {
         let (generation, _) = self.snapshot(true, false, expected)?;
         let online = {
@@ -302,6 +507,7 @@ impl Broker {
                     created_at: crate::state::iso(now),
                     expires_at: crate::state::iso((now + 900000).min(s.absolute_until)),
                     receipt_details: remote.receipt_details,
+                    expense_details: None,
                 },
                 agency_id: remote.agency_id,
                 cash_register_id: Some(remote.cash_register_id),
@@ -389,6 +595,25 @@ impl Broker {
             request = request.json(&body)
         }
         let mut response = request.send().await.map_err(|_| Error::Unavailable)?;
+        if path.starts_with("expenses/") && [403, 409].contains(&response.status().as_u16()) {
+            let forbidden = response.status().as_u16() == 403;
+            let mut bytes = Vec::new();
+            while let Some(chunk) = response.chunk().await.map_err(|_| Error::Unavailable)? {
+                if bytes.len().saturating_add(chunk.len()) > 4096 {
+                    return Err(Error::InvalidResponse);
+                }
+                bytes.extend_from_slice(&chunk);
+            }
+            let body: Value = serde_json::from_slice(&bytes).map_err(|_| Error::InvalidResponse)?;
+            return Err(match body.get("code").and_then(Value::as_str) {
+                Some("EXPENSE_POLICY_REQUIRED") => Error::ExpensePolicy,
+                Some("EXPENSE_LIMIT_EXCEEDED") => Error::ExpenseLimit,
+                Some("INSUFFICIENT_FUNDS") => Error::InsufficientFunds,
+                Some("EXPENSE_EVIDENCE_REQUIRED") => Error::ExpenseEvidence,
+                _ if forbidden => Error::Forbidden,
+                _ => Error::ExpenseConflict,
+            });
+        }
         match response.status().as_u16() {
             200..=299 => {}
             401 => return Err(Error::Credentials),
@@ -1000,7 +1225,7 @@ impl Broker {
         let mut results = Vec::new();
         for record in records
             .into_iter()
-            .filter(|r| r.state != "synced" && r.state != "confirmed")
+            .filter(|r| r.state != "synced" && r.state != "confirmed" && r.state != "submitted")
         {
             let _ = self.snapshot(true, true, Some(generation))?;
             let result=self.protected(Method::POST,"workspace/drafts/sync",Some(json!({"draft":record.draft,"agencyId":record.agency_id,"cashRegisterId":record.cash_register_id,"version":record.version,"expectedServerVersion":record.server_version})),Some(generation)).await;

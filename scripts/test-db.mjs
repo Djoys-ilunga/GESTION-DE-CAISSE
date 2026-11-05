@@ -23,7 +23,7 @@ try {
   };
   for (const args of [
     ['--filter', '@caissepro/api', 'db:deploy'],
-    ['--filter', '@caissepro/api', 'test:integration'],
+    ['--filter', '@caissepro/api', 'test:integration', ...process.argv.slice(2)],
   ]) {
     const result = spawnSync('pnpm', args, {
       cwd: root,

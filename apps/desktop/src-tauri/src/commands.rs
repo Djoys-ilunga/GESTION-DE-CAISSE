@@ -22,6 +22,18 @@ pub async fn cash_action(
         .await
         .map_err(safe)
 }
+#[tauri::command]
+pub async fn expense_action(
+    broker: State<'_, Broker>,
+    action: String,
+    payload: Option<Value>,
+    expected_generation: u64,
+) -> Reply<Value> {
+    broker
+        .expense_action(&action, payload, Some(expected_generation))
+        .await
+        .map_err(safe)
+}
 fn safe(error: caissepro_session::Error) -> String {
     error.to_string()
 }

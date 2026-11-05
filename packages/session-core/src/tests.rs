@@ -69,6 +69,7 @@ fn draft(s: &Session, now: i64) -> SaveDraft {
     SaveDraft {
         draft: Draft {
             receipt_details: None,
+            expense_details: None,
             id: Uuid::new_v4(),
             kind: "expense-request".into(),
             currency: "USD".into(),
@@ -239,4 +240,65 @@ fn permission_scope_comparison_ignores_order_and_display_names() {
     assert!(first.same_scope(&second));
     second.permissions.clear();
     assert!(!first.same_scope(&second));
+}
+
+#[test]
+fn expense_details_remain_drafts_and_are_isolated_until_expiry() {
+    let now = wall_now();
+    let mut s = session(now);
+    let mut input = draft(&s, now);
+    input.draft.expense_details = Some(ExpenseDetails {
+        beneficiary: "Bénéficiaire privé".into(),
+        reference: "F-1".into(),
+        documents: vec![],
+    });
+    let saved = s.save_draft(input.clone(), now).unwrap();
+    assert_eq!(
+        saved.draft.expense_details.unwrap().beneficiary,
+        "Bénéficiaire privé"
+    );
+    assert_eq!(saved.state, "local");
+    assert!(saved.submitted_expense_id.is_none());
+    assert!(s.balances.is_none());
+    assert!(session(now).list_drafts(now).unwrap().is_empty());
+    assert!(matches!(s.list_drafts(now + 600001), Err(Error::Locked)));
+    s.last_activity = now + 600001;
+    assert!(s.list_drafts(now + 600001).unwrap().is_empty());
+}
+#[test]
+fn submitted_expense_draft_cannot_be_changed_or_reassigned() {
+    let now = wall_now();
+    let mut s = session(now);
+    let mut input = draft(&s, now);
+    let saved = s.save_draft(input.clone(), now).unwrap();
+    let record = s.drafts.get_mut(&saved.draft.id).unwrap();
+    record.state = "submitted".into();
+    record.submitted_expense_id = Some(Uuid::new_v4());
+    input.expected_version = Some(1);
+    input.draft.amount = "99.99".into();
+    assert!(matches!(s.save_draft(input, now), Err(Error::Conflict)));
+    assert_eq!(s.list_drafts(now).unwrap()[0].draft.amount, "12.34");
+}
+#[test]
+fn expense_draft_rejects_forged_or_excessive_evidence_before_storage() {
+    let now = wall_now();
+    let mut s = session(now);
+    let mut input = draft(&s, now);
+    let document = SupportingDocument {
+        file_name: "facture.pdf".into(),
+        mime_type: "application/pdf".into(),
+        data_base64: "aHRtbA==".into(),
+    };
+    input.draft.expense_details = Some(ExpenseDetails {
+        beneficiary: "Fournisseur".into(),
+        reference: String::new(),
+        documents: vec![document.clone()],
+    });
+    assert!(matches!(
+        s.save_draft(input.clone(), now),
+        Err(Error::InvalidInput)
+    ));
+    input.draft.expense_details.as_mut().unwrap().documents = vec![document; 4];
+    assert!(matches!(s.save_draft(input, now), Err(Error::InvalidInput)));
+    assert!(s.drafts.is_empty());
 }

@@ -471,6 +471,15 @@
   }
 }
 @media print {
+  body {
+    background: #fff !important;
+  }
+  body > * {
+    display: none !important;
+  }
+  body > .receipt-overlay {
+    display: block !important;
+  }
   body * {
     visibility: hidden !important;
   }

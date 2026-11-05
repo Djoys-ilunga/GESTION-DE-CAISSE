@@ -42,7 +42,11 @@ export class CentralAccess {
           continue;
         }
         // Prisma peut inclure des extraits de code avant le message PostgreSQL.
-        const markers = [...message.matchAll(/CAISSEPRO_[A-Z_]+/g)];
+        const original = (
+          error as { meta?: { driverAdapterError?: { cause?: { originalMessage?: unknown } } } }
+        )?.meta?.driverAdapterError?.cause?.originalMessage;
+        const databaseMessage = typeof original === 'string' ? original : '';
+        const markers = [...`${message}\n${databaseMessage}`.matchAll(/CAISSEPRO_[A-Z_]+/g)];
         throw new DataError(markers.at(-1)?.[0] ?? 'DATA_INTEGRITY_ERROR');
       }
     }

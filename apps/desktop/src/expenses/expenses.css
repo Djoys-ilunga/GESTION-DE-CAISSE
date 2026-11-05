@@ -1,0 +1,83 @@
+.expense-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 24px 0;
+}
+.expense-tabs button {
+  background: #fff;
+  border: 1px solid #d8e3d9;
+  border-radius: 8px;
+  padding: 12px 18px;
+  color: #315441;
+  cursor: pointer;
+}
+.expense-tabs button[aria-selected='true'] {
+  background: #184d3b;
+  color: #fff;
+  border-color: #184d3b;
+}
+.expense-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 18px 0;
+}
+.expense-fields {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.expense-fields:disabled {
+  opacity: 0.65;
+}
+.expense-fields > label {
+  display: grid;
+  gap: 8px;
+  max-width: 360px;
+}
+.expense-muted {
+  display: block;
+  max-width: 360px;
+  white-space: normal;
+  color: #657d6b;
+  margin-top: 6px;
+}
+.expense-decision {
+  margin-top: 24px;
+  padding: 20px;
+  background: #f5f8f4;
+  border-radius: 8px;
+  display: grid;
+  gap: 16px;
+}
+.expense-decision label {
+  display: grid;
+  gap: 8px;
+}
+.expense-decision .attestation {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.expense-evidence-preview {
+  display: block;
+  max-width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+  margin-top: 20px;
+}
+.expense-detail .action-buttons {
+  flex-wrap: wrap;
+}
+@media (max-width: 700px) {
+  .expense-tabs button {
+    flex: 1;
+  }
+  .expense-toolbar .action-buttons {
+    flex-wrap: wrap;
+  }
+}
