@@ -48,6 +48,25 @@ pub struct Profile {
     pub locked: bool,
     pub authorization_version: u32,
 }
+impl Profile {
+    pub(crate) fn same_scope(&self, other: &Self) -> bool {
+        use std::collections::BTreeSet;
+        self.permissions.iter().collect::<BTreeSet<_>>()
+            == other.permissions.iter().collect::<BTreeSet<_>>()
+            && self.agencies.iter().map(|a| a.id).collect::<BTreeSet<_>>()
+                == other.agencies.iter().map(|a| a.id).collect::<BTreeSet<_>>()
+            && self
+                .cash_registers
+                .iter()
+                .map(|r| (r.id, r.agency_id))
+                .collect::<BTreeSet<_>>()
+                == other
+                    .cash_registers
+                    .iter()
+                    .map(|r| (r.id, r.agency_id))
+                    .collect::<BTreeSet<_>>()
+    }
+}
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionView {

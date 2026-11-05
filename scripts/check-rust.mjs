@@ -1,5 +1,9 @@
 import { spawnSync } from 'node:child_process';
-for (const directory of ['packages/local-store/', 'apps/desktop/src-tauri/']) {
+for (const directory of [
+  'packages/local-store/',
+  'packages/session-core/',
+  'apps/desktop/src-tauri/',
+]) {
   const cwd = new URL(`../${directory}`, import.meta.url);
   for (const args of [
     ['fmt', '--check'],

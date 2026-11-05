@@ -12,7 +12,7 @@ import {
   sessionProfileSchema,
   type SessionProfile,
 } from '@caissepro/shared';
-import { Prisma } from '../generated/prisma/client';
+import type { Prisma } from '../generated/prisma/client';
 import { AuthStore, type AuthTx } from './auth-store';
 import { PasswordService } from './password.service';
 export const SESSION_ABSOLUTE_MS = 8 * 60 * 60 * 1000,

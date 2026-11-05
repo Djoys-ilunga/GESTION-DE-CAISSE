@@ -23,7 +23,7 @@ export class AuthController {
     };
   };
   private publish(view: NativeSessionView) {
-    if (this.stopped) return;
+    if (this.stopped || view.generation < this.snapshot.generation) return;
     if (JSON.stringify(view) === JSON.stringify(this.snapshot)) return;
     this.snapshot = view;
     this.listeners.forEach((listener) => listener());

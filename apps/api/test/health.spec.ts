@@ -14,7 +14,7 @@ describe('Disponibilité HTTP avec double de base', () => {
     count.mockResolvedValue(1);
     const module = await Test.createTestingModule({
       controllers: [HealthController],
-      providers: [{ provide: READINESS_DATABASE, useValue: { installation: { count } } }],
+      providers: [{ provide: READINESS_DATABASE, useValue: { ready: count } }],
     }).compile();
     app = module.createNestApplication({ logger: false });
     configureApp(app, ['http://127.0.0.1:1420']);

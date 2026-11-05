@@ -135,6 +135,8 @@ export type AuthLog = {
   createdAt: string;
   actorId: string | null;
   subjectId: string | null;
+  actorName: string | null;
+  subjectName: string | null;
 };
 
 export const nativeSessionViewSchema = z

@@ -171,3 +171,15 @@ async fn synchronization_cannot_start_without_an_authorized_session() {
         Err(Error::AuthRequired)
     ));
 }
+
+#[test]
+fn permission_scope_comparison_ignores_order_and_display_names() {
+    let now = wall_now();
+    let first = profile(now);
+    let mut second = first.clone();
+    second.permissions.reverse();
+    second.agencies[0].name = "Agence renommée".into();
+    assert!(first.same_scope(&second));
+    second.permissions.clear();
+    assert!(!first.same_scope(&second));
+}

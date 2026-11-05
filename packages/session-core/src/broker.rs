@@ -96,7 +96,7 @@ impl Broker {
         if let Some(body) = body {
             request = request.json(&body)
         }
-        let response = request.send().await.map_err(|_| Error::Unavailable)?;
+        let mut response = request.send().await.map_err(|_| Error::Unavailable)?;
         match response.status().as_u16() {
             200..=299 => {}
             401 => return Err(Error::Credentials),
@@ -113,9 +113,12 @@ impl Broker {
         {
             return Err(Error::InvalidResponse);
         }
-        let bytes = response.bytes().await.map_err(|_| Error::Unavailable)?;
-        if bytes.len() > 2_000_000 {
-            return Err(Error::InvalidResponse);
+        let mut bytes = Vec::new();
+        while let Some(chunk) = response.chunk().await.map_err(|_| Error::Unavailable)? {
+            if bytes.len().saturating_add(chunk.len()) > 2_000_000 {
+                return Err(Error::InvalidResponse);
+            }
+            bytes.extend_from_slice(&chunk);
         }
         serde_json::from_slice(&bytes).map_err(|_| Error::InvalidResponse)
     }
@@ -139,12 +142,14 @@ impl Broker {
     pub async fn tick(&self) -> Result<SessionView> {
         let should_lock = {
             let state = self.state()?;
-            state.session.as_ref().is_some_and(|s| {
-                s.online && !s.locked && self.clock.now() - s.last_activity >= 300_000
-            })
+            state
+                .session
+                .as_ref()
+                .filter(|s| s.online && !s.locked && self.clock.now() - s.last_activity >= 300_000)
+                .map(|_| state.generation)
         };
-        if should_lock {
-            let _ = self.lock(None).await;
+        if let Some(generation) = should_lock {
+            let _ = self.lock(Some(generation)).await;
         }
         self.status()
     }
@@ -279,6 +284,7 @@ impl Broker {
         let (generation, token) = self.snapshot(false, false, expected)?;
         {
             let mut state = self.state()?;
+            Self::generation(&state, Some(generation))?;
             if let Some(s) = state.session.as_mut() {
                 s.locked = true;
                 s.revalidating = false;
@@ -297,6 +303,7 @@ impl Broker {
         let (generation, token) = self.snapshot(false, false, expected)?;
         {
             let mut state = self.state()?;
+            Self::generation(&state, Some(generation))?;
             if let Some(s) = state.session.as_mut() {
                 s.revalidating = !s.online;
             }
@@ -316,7 +323,13 @@ impl Broker {
             }
             Ok(profile) => {
                 let now = self.clock.now();
-                let (offline, absolute) = Session::validate_profile(&profile, now)?;
+                let (offline, absolute) = match Session::validate_profile(&profile, now) {
+                    Ok(deadlines) => deadlines,
+                    Err(error) => {
+                        self.fail(generation, &error)?;
+                        return Err(error);
+                    }
+                };
                 let mut state = self.state()?;
                 if state.generation != generation {
                     return Err(Error::SessionChanged);
@@ -330,10 +343,7 @@ impl Broker {
                     state.clear("SERVER_IDENTITY_INVALID");
                     return Err(Error::Identity);
                 }
-                if profile.permissions != session.profile.permissions
-                    || profile.cash_registers != session.profile.cash_registers
-                    || profile.agencies != session.profile.agencies
-                {
+                if !profile.same_scope(&session.profile) {
                     session.balances = None;
                     session.drafts.clear();
                 }
@@ -373,11 +383,22 @@ impl Broker {
                     .await;
                 match response {
                     Ok(value) => {
-                        let response: LoginResponse =
-                            serde_json::from_value(value).map_err(|_| Error::InvalidResponse)?;
+                        let response: LoginResponse = match serde_json::from_value(value) {
+                            Ok(response) => response,
+                            Err(_) => {
+                                self.fail(generation, &Error::InvalidResponse)?;
+                                return Err(Error::InvalidResponse);
+                            }
+                        };
                         let now = self.clock.now();
                         let (offline, absolute) =
-                            Session::validate_profile(&response.profile, now)?;
+                            match Session::validate_profile(&response.profile, now) {
+                                Ok(deadlines) => deadlines,
+                                Err(error) => {
+                                    self.fail(generation, &error)?;
+                                    return Err(error);
+                                }
+                            };
                         let mut state = self.state()?;
                         if state.generation != generation {
                             return Err(Error::SessionChanged);
@@ -386,16 +407,21 @@ impl Broker {
                         if response.profile.session_id != s.profile.session_id
                             || response.profile.device_id != self.device
                             || response.profile.user.id != s.profile.user.id
+                            || response.profile.company.id != s.profile.company.id
                         {
+                            state.clear("SERVER_IDENTITY_INVALID");
                             return Err(Error::Identity);
                         }
-                        if response.access_token.len() != 43 {
+                        if response.access_token.len() != 43
+                            || !response
+                                .access_token
+                                .bytes()
+                                .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+                        {
+                            state.clear("SERVER_RESPONSE_INVALID");
                             return Err(Error::InvalidResponse);
                         }
-                        if response.profile.permissions != s.profile.permissions
-                            || response.profile.cash_registers != s.profile.cash_registers
-                            || response.profile.agencies != s.profile.agencies
-                        {
+                        if !response.profile.same_scope(&s.profile) {
                             s.balances = None;
                             s.drafts.clear();
                         }
@@ -407,6 +433,9 @@ impl Broker {
                         s.online = true;
                         s.failures = 0;
                         s.last_activity = now;
+                        // Les réponses en vol avec l'ancien jeton ne doivent
+                        // pas révoquer ou réexposer la nouvelle session locale.
+                        state.generation += 1;
                         state.reason = None;
                         Ok(state.view(now))
                     }
@@ -438,6 +467,7 @@ impl Broker {
                 }
             }
             Err(Error::Unavailable) => {
+                self.fail(generation, &Error::Unavailable)?;
                 let state_arc = self.state.clone();
                 let now = self.clock.now();
                 let secret = password;

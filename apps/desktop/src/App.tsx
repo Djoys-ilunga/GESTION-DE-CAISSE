@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore, type FormEvent } from 'react';
 import {
   Wallet,
   ShieldCheck,
@@ -62,7 +62,6 @@ export function App({
   const view = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   const [network, setNetwork] = useState<boolean | null>(null);
   const [notice, setNotice] = useState('');
-  const checking = useRef(false);
   useEffect(() => {
     controller.start();
     const timer = setInterval(() => {
@@ -75,9 +74,10 @@ export function App({
   }, [controller]);
   useEffect(() => {
     let active = true;
+    let checking = false;
     async function check() {
-      if (checking.current) return;
-      checking.current = true;
+      if (!active || checking) return;
+      checking = true;
       try {
         let online = false;
         if (gateway.available) online = await gateway.health();
@@ -102,7 +102,7 @@ export function App({
           }
         }
       } finally {
-        checking.current = false;
+        checking = false;
       }
     }
     void check();
@@ -176,6 +176,10 @@ export function App({
     view.profile.user.id,
     view.profile.authorizationVersion,
     view.profile.permissions.join(','),
+    view.profile.agencies
+      .map((a) => a.id)
+      .sort()
+      .join(','),
     view.profile.cashRegisters.map((r) => r.id).join(','),
   ].join(':');
   return (
@@ -484,6 +488,10 @@ function ChangePassword({
     [busy, setBusy] = useState(false);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (current === next) {
+      setError('Choisissez un mot de passe différent du précédent.');
+      return;
+    }
     if (next !== confirmation) {
       setError('Les mots de passe ne correspondent pas.');
       return;
@@ -1398,7 +1406,8 @@ function Logs({ gateway, online }: { gateway: AuthGateway; online: boolean }) {
               <tr>
                 <th>Date</th>
                 <th>Événement</th>
-                <th>Référence utilisateur</th>
+                <th>Utilisateur concerné</th>
+                <th>Effectué par</th>
               </tr>
             </thead>
             <tbody>
@@ -1406,7 +1415,8 @@ function Logs({ gateway, online }: { gateway: AuthGateway; online: boolean }) {
                 <tr key={row.id}>
                   <td>{new Date(row.createdAt).toLocaleString('fr-FR')}</td>
                   <td>{labels[row.code] ?? row.code}</td>
-                  <td>{row.subjectId?.slice(0, 8) ?? row.actorId?.slice(0, 8) ?? '—'}</td>
+                  <td>{row.subjectName ?? row.actorName ?? '—'}</td>
+                  <td>{row.actorName ?? 'Système'}</td>
                 </tr>
               ))}
             </tbody>

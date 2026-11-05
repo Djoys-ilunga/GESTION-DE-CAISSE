@@ -1,0 +1,90 @@
+import { vi } from 'vitest';
+import type { NativeSessionView, SessionProfile } from '@caissepro/shared';
+import type { AuthGateway } from './gateway';
+import { anonymous } from './controller';
+export function profile(name = 'Alice', role = 'CASHIER'): SessionProfile {
+  const now = Date.now();
+  return {
+    sessionId: crypto.randomUUID(),
+    deviceId: crypto.randomUUID(),
+    user: {
+      id: crypto.randomUUID(),
+      displayName: name,
+      email: `${name.toLowerCase()}@example.test`,
+      mustChangePassword: false,
+    },
+    company: { id: crypto.randomUUID(), code: 'TEST', name: 'Entreprise test' },
+    roles: [role],
+    permissions: ['ledger:read', 'offline:access', 'draft:write_own', 'draft:read_own'],
+    agencies: [{ id: crypto.randomUUID(), code: 'A', name: 'Agence A' }],
+    cashRegisters: [],
+    expiresAt: new Date(now + 3600000).toISOString(),
+    idleExpiresAt: new Date(now + 900000).toISOString(),
+    offlineUntil: new Date(now + 900000).toISOString(),
+    validatedAt: new Date(now).toISOString(),
+    authorizationVersion: 1,
+    locked: false,
+  };
+}
+export function view(p = profile()): NativeSessionView {
+  return {
+    state: 'online',
+    profile: p,
+    displayName: p.user.displayName,
+    offlineUntil: p.offlineUntil,
+    reason: null,
+    generation: 1,
+  };
+}
+export function fakeGateway(initial: NativeSessionView = anonymous) {
+  let current = structuredClone(initial);
+  const gateway: AuthGateway = {
+    available: true,
+    health: vi.fn(async () => true),
+    status: vi.fn(async () => structuredClone(current)),
+    login: vi.fn(async () => {
+      current = view();
+      return structuredClone(current);
+    }),
+    logout: vi.fn(async () => {
+      current = { ...anonymous, generation: current.generation + 1 };
+      return current;
+    }),
+    lock: vi.fn(async () => {
+      current = { ...current, state: 'locked', profile: null };
+      return current;
+    }),
+    unlock: vi.fn(async () => {
+      current = view();
+      return current;
+    }),
+    revalidate: vi.fn(async () => current),
+    activity: vi.fn(async () => current),
+    changePassword: vi.fn(async () => {
+      current = { ...anonymous, reason: 'PASSWORD_CHANGED' };
+      return current;
+    }),
+    balances: vi.fn(async () => ({
+      data: {
+        synchronizedAt: new Date().toISOString(),
+        expiresAt: current.offlineUntil,
+        balances: [],
+      },
+      stale: current.state === 'offline',
+    })),
+    drafts: vi.fn(async () => []),
+    saveDraft: vi.fn(),
+    synchronize: vi.fn(async () => []),
+    users: vi.fn(async () => []),
+    catalog: vi.fn(),
+    createUser: vi.fn(),
+    assignUser: vi.fn(),
+    logs: vi.fn(async () => []),
+  };
+  return {
+    gateway,
+    set: (value: NativeSessionView) => {
+      current = structuredClone(value);
+    },
+  };
+}

@@ -10,7 +10,7 @@ export class HealthController {
   @Header('Cache-Control', 'no-store')
   async ready(): Promise<ApiHealth> {
     try {
-      await this.db.installation.count();
+      await this.db.ready();
     } catch {
       throw new ServiceUnavailableException('Service temporairement indisponible.');
     }

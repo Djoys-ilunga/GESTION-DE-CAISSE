@@ -32,7 +32,10 @@
     "check:rust": "node scripts/check-rust.mjs",
     "test:e2e": "playwright test",
     "test:api:live": "node --test --test-concurrency=1 tests/smoke/api.test.mjs",
-    "test:native:linux": "bash tests/native/smoke-linux.sh"
+    "test:native:linux": "bash tests/native/smoke-linux.sh",
+    "setup:admin": "pnpm --filter @caissepro/shared build && pnpm --filter @caissepro/api build && node scripts/bootstrap-admin.mjs",
+    "test:session": "node scripts/check-session.mjs",
+    "test:auth:desktop": "pnpm --filter @caissepro/shared build && pnpm --filter @caissepro/api build && node scripts/test-auth-desktop.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

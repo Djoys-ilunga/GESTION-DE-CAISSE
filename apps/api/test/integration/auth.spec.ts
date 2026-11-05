@@ -4,6 +4,10 @@ import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { randomUUID } from 'node:crypto';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { AppModule } from '../../src/app.module';
 import { configureApp } from '../../src/app';
 import { PrismaService } from '../../src/prisma.service';
@@ -11,6 +15,7 @@ import { PasswordService } from '../../src/auth/password.service';
 import { AuthService } from '../../src/auth/auth.service';
 import { installRoles } from '../../src/auth/admin.service';
 import { CentralAccess } from '../../src/data/central-access';
+import { LedgerService } from '../../src/data/ledger.service';
 import { fixture } from './fixture';
 describe('Authentification HTTP et PostgreSQL réels', () => {
   let app: INestApplication,
@@ -76,6 +81,67 @@ describe('Authentification HTTP et PostgreSQL réels', () => {
   const headers = (session: { token: string; deviceId: string }) => ({
     Authorization: `Bearer ${session.token}`,
     'X-CaissePro-Device': session.deviceId,
+  });
+  it('provisionne un premier administrateur sans mot de passe sur disque ni mouvement financier', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'caissepro-bootstrap-'));
+    const code = 'BOOT-' + randomUUID().slice(0, 8).toUpperCase(),
+      email = `${randomUUID()}@example.test`,
+      configuration = join(directory, 'initialisation.json');
+    try {
+      writeFileSync(
+        configuration,
+        JSON.stringify({
+          companyCode: code,
+          companyName: 'Entreprise initiale test',
+          adminEmail: email,
+          adminName: 'Administrateur test',
+        }),
+        { mode: 0o600 },
+      );
+      const result = spawnSync(
+        process.execPath,
+        ['scripts/bootstrap-admin.mjs', '--config', configuration, '--password-stdin'],
+        {
+          cwd: resolve(__dirname, '../../../..'),
+          env: process.env,
+          input: password + '\n',
+          encoding: 'utf8',
+          timeout: 20000,
+        },
+      );
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stdout).not.toContain(password);
+      const company = await db.company.findUniqueOrThrow({ where: { code } });
+      expect(await db.financialOperation.count({ where: { companyId: company.id } })).toBe(0);
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({ email, companyCode: code, password, deviceId: randomUUID() })
+        .expect(201);
+      expect(response.body.profile.user.mustChangePassword).toBe(true);
+      expect(response.body.profile.roles).toEqual(['ADMINISTRATOR']);
+      const again = spawnSync(
+        process.execPath,
+        ['scripts/bootstrap-admin.mjs', '--config', configuration, '--password-stdin'],
+        {
+          cwd: resolve(__dirname, '../../../..'),
+          env: process.env,
+          input: password + '\n',
+          encoding: 'utf8',
+          timeout: 20000,
+        },
+      );
+      expect(again.status).toBe(1);
+      expect(again.stderr).not.toContain(password);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+  it('refuse un jeton présenté pour un autre appareil', async () => {
+    const session = await login();
+    await request(app.getHttpServer())
+      .get('/api/v1/auth/session')
+      .set({ Authorization: `Bearer ${session.token}`, 'X-CaissePro-Device': randomUUID() })
+      .expect(401);
   });
   it('ouvre une session valide sans stocker le jeton ou le mot de passe en clair', async () => {
     const session = await login();
@@ -254,6 +320,19 @@ describe('Authentification HTTP et PostgreSQL réels', () => {
         access.requireCash(tx, f.ctx, f.otherRegisterId, 'ledger:read'),
       ),
     ).rejects.toThrow('CAISSEPRO_CASH_ACCESS_DENIED');
+    await expect(
+      new LedgerService(access).requestExpense(
+        { ...f.ctx, sessionId: session.profile.sessionId },
+        {
+          agencyId: f.otherAgencyId,
+          accountId: f.otherUsd,
+          currency: 'USD',
+          amount: '10.00',
+          description: 'Caisse non affectée',
+        },
+      ),
+    ).rejects.toThrow('CAISSEPRO_CASH_ACCESS_DENIED');
+    expect(await db.expenseRequest.count({ where: { companyId: f.companyId } })).toBe(0);
   });
   it('crée un utilisateur avec renouvellement obligatoire du mot de passe', async () => {
     const admin = await login(f.approverId),

@@ -199,12 +199,29 @@ export class AdminService {
   async logs(p: Principal) {
     return this.auth.store.run(async (tx) => {
       await this.auth.require(tx, p, 'auth:logs:read');
-      return tx.authEvent.findMany({
+      const events = await tx.authEvent.findMany({
         where: { companyId: p.companyId },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: 100,
         select: { id: true, code: true, createdAt: true, actorId: true, subjectId: true },
       });
+      const ids = [
+        ...new Set(
+          events
+            .flatMap((event) => [event.actorId, event.subjectId])
+            .filter((id): id is string => id !== null),
+        ),
+      ];
+      const users = await tx.user.findMany({
+        where: { id: { in: ids }, members: { some: { companyId: p.companyId } } },
+        select: { id: true, displayName: true },
+      });
+      const names = new Map(users.map((user) => [user.id, user.displayName]));
+      return events.map((event) => ({
+        ...event,
+        actorName: event.actorId ? (names.get(event.actorId) ?? null) : null,
+        subjectName: event.subjectId ? (names.get(event.subjectId) ?? null) : null,
+      }));
     });
   }
 }
