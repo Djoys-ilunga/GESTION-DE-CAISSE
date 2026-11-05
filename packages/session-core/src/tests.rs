@@ -302,3 +302,243 @@ fn expense_draft_rejects_forged_or_excessive_evidence_before_storage() {
     assert!(matches!(s.save_draft(input, now), Err(Error::InvalidInput)));
     assert!(s.drafts.is_empty());
 }
+
+fn sync_ack(pending: &PendingSync, now: i64) -> SyncResult {
+    let mut value = SyncResult::failure(
+        pending.record.draft.id,
+        "accepted-as-draft",
+        "draft-received",
+    );
+    value.server_id = Some(Uuid::new_v4());
+    value.server_version = Some(pending.record.version);
+    value.synchronized_at = Some(iso(now));
+    value.source_state = Some("draft".into());
+    value
+}
+#[test]
+fn synchronization_keeps_acknowledgement_when_user_edits_during_transmission() {
+    let now = wall_now();
+    let mut s = session(now);
+    let mut input = draft(&s, now);
+    let id = input.draft.id;
+    s.save_draft(input.clone(), now).unwrap();
+    let pending = s.prepare_sync(id, now).unwrap().unwrap();
+    input.expected_version = Some(1);
+    input.draft.description = "Correction pendant la transmission".into();
+    s.save_draft(input, now + 10).unwrap();
+    let response = sync_ack(&pending, now + 20);
+    let server = response.server_id;
+    s.finish_sync(&pending, response, now + 20).unwrap();
+    let current = s.drafts.get(&id).unwrap();
+    assert_eq!(current.version, 2);
+    assert_eq!(current.server_version, Some(1));
+    assert_eq!(current.server_id, server);
+    assert_eq!(current.state, "queued");
+    let next = s.prepare_sync(id, now + 30).unwrap().unwrap();
+    assert_eq!(next.record.version, 2);
+    assert_eq!(next.record.server_version, Some(1));
+    assert_eq!(
+        next.record.draft.description,
+        "Correction pendant la transmission"
+    );
+}
+#[test]
+fn lost_reply_preserves_the_exact_pending_payload_before_a_newer_local_revision() {
+    let now = wall_now();
+    let mut s = session(now);
+    let mut input = draft(&s, now);
+    let id = input.draft.id;
+    s.save_draft(input.clone(), now).unwrap();
+    let first = s.prepare_sync(id, now).unwrap().unwrap();
+    s.finish_sync(
+        &first,
+        SyncResult::failure(id, "deferred", "transport-error"),
+        now,
+    )
+    .unwrap();
+    input.expected_version = Some(1);
+    input.draft.amount = "99.99".into();
+    s.save_draft(input, now + 100).unwrap();
+    assert!(s.prepare_sync(id, now + 200).unwrap().is_none());
+    let retried = s.prepare_sync(id, now + 5000).unwrap().unwrap();
+    assert!(retried.record.draft == first.record.draft);
+    assert_eq!(retried.record.version, first.record.version);
+    assert_eq!(retried.record.updated_at, first.record.updated_at);
+    assert_eq!(retried.record.server_version, first.record.server_version);
+}
+#[test]
+fn attempts_are_bounded_and_throttling_waits_at_least_one_minute() {
+    let now = wall_now();
+    let mut s = session(now);
+    let input = draft(&s, now);
+    let id = input.draft.id;
+    s.save_draft(input, now).unwrap();
+    let mut at = now;
+    for attempt in 1..=5 {
+        let pending = s.prepare_sync(id, at).unwrap().unwrap();
+        s.finish_sync(
+            &pending,
+            SyncResult::failure(id, "deferred", "rate-limited"),
+            at,
+        )
+        .unwrap();
+        let record = s.drafts.get(&id).unwrap();
+        assert_eq!(record.attempts, attempt);
+        let next = crate::state::millis(record.next_attempt_at.as_ref().unwrap()).unwrap();
+        assert!(next - at >= 60000);
+        at = next;
+        s.last_activity = at;
+    }
+    assert_eq!(s.drafts.get(&id).unwrap().state, "error");
+    assert!(s.prepare_sync(id, at).unwrap().is_none());
+}
+#[test]
+fn conflicts_stop_automatic_sending_without_modifying_any_financial_cache() {
+    let now = wall_now();
+    let mut s = session(now);
+    let input = draft(&s, now);
+    let id = input.draft.id;
+    s.save_draft(input, now).unwrap();
+    s.balances = Some(json!({"marker":"official-cache-unchanged"}));
+    let pending = s.prepare_sync(id, now).unwrap().unwrap();
+    s.finish_sync(
+        &pending,
+        SyncResult::failure(id, "conflict", "conflict"),
+        now,
+    )
+    .unwrap();
+    assert_eq!(s.drafts.get(&id).unwrap().state, "conflict");
+    assert!(s.prepare_sync(id, now + 1000).unwrap().is_none());
+    assert_eq!(
+        s.balances,
+        Some(json!({"marker":"official-cache-unchanged"}))
+    );
+}
+#[test]
+fn canceling_a_transmission_can_resume_the_same_pending_snapshot() {
+    let now = wall_now();
+    let mut s = session(now);
+    let input = draft(&s, now);
+    let id = input.draft.id;
+    s.save_draft(input, now).unwrap();
+    let abandoned = s.prepare_sync(id, now).unwrap().unwrap();
+    assert_eq!(s.drafts.get(&id).unwrap().state, "syncing");
+    let resumed = s.prepare_sync(id, now + 1).unwrap().unwrap();
+    assert!(resumed.record.draft == abandoned.record.draft);
+    s.finish_sync(&resumed, sync_ack(&resumed, now + 2), now + 2)
+        .unwrap();
+    assert!(s.prepare_sync(id, now + 3).unwrap().is_none());
+}
+#[test]
+fn expiry_removes_pending_sensitive_snapshots_and_a_new_session_has_no_unsent_data() {
+    let now = wall_now();
+    let mut s = session(now);
+    let input = draft(&s, now);
+    let id = input.draft.id;
+    s.save_draft(input, now).unwrap();
+    s.prepare_sync(id, now).unwrap();
+    assert!(session(now).drafts.is_empty());
+    assert!(session(now).pending_sync.is_empty());
+    s.last_activity = now + 600001;
+    s.list_drafts(now + 600001).unwrap();
+    assert!(s.drafts.is_empty());
+    assert!(s.pending_sync.is_empty());
+}
+#[test]
+fn a_finalized_source_never_discards_a_newer_local_correction_or_becomes_a_payment() {
+    let now = wall_now();
+    let mut s = session(now);
+    let mut input = draft(&s, now);
+    let id = input.draft.id;
+    s.save_draft(input.clone(), now).unwrap();
+    let pending = s.prepare_sync(id, now).unwrap().unwrap();
+    input.expected_version = Some(1);
+    input.draft.amount = "99.99".into();
+    s.save_draft(input.clone(), now + 1).unwrap();
+    let mut response = sync_ack(&pending, now + 2);
+    response.source_state = Some("submitted".into());
+    response.expense_request_id = Some(Uuid::new_v4());
+    s.finish_sync(&pending, response, now + 2).unwrap();
+    assert_eq!(s.drafts.get(&id).unwrap().state, "conflict");
+    assert_eq!(s.drafts.get(&id).unwrap().draft.amount, "99.99");
+    input.expected_version = Some(2);
+    assert!(matches!(s.save_draft(input, now + 3), Err(Error::Conflict)));
+    assert!(s.balances.is_none());
+}
+
+fn input_buffer(s: &Session) -> FormBufferInput {
+    FormBufferInput {
+        id: Uuid::new_v4(),
+        kind: "expense-request".into(),
+        agency_id: s.profile.agencies[0].id,
+        cash_register_id: None,
+        expected_local_version: None,
+        fields: std::collections::HashMap::from([
+            ("amount".into(), "12,".into()),
+            ("beneficiary".into(), "Bénéficiaire privé".into()),
+        ]),
+    }
+}
+#[test]
+fn interrupted_incomplete_input_is_isolated_locked_and_never_a_transmittable_draft() {
+    let now = wall_now();
+    let mut s = session(now);
+    let input = input_buffer(&s);
+    let captured = s.save_form_buffer(input.clone(), now).unwrap();
+    assert!(s.list_drafts(now).unwrap().is_empty());
+    assert!(s.balances.is_none());
+    assert_eq!(s.list_form_buffers(now).unwrap()[0].fields["amount"], "12,");
+    s.locked = true;
+    assert!(matches!(s.list_form_buffers(now), Err(Error::Locked)));
+    s.locked = false;
+    assert_eq!(s.list_form_buffers(now).unwrap()[0].id, captured.id);
+    assert!(session(now).list_form_buffers(now).unwrap().is_empty());
+    assert!(matches!(
+        s.save_form_buffer(
+            FormBufferInput {
+                agency_id: Uuid::new_v4(),
+                ..input
+            },
+            now
+        ),
+        Err(Error::Forbidden)
+    ));
+}
+#[test]
+fn incomplete_input_cannot_extend_its_lease_or_survive_source_expiration() {
+    let now = wall_now();
+    let mut s = session(now);
+    let mut input = input_buffer(&s);
+    let mut d = draft(&s, now);
+    d.draft.expires_at = iso(now + 10000);
+    input.id = d.draft.id;
+    s.save_draft(d, now).unwrap();
+    input.expected_local_version = Some(1);
+    let first = s.save_form_buffer(input.clone(), now).unwrap();
+    assert_eq!(first.expires_at, iso(now + 10000));
+    assert_eq!(
+        s.save_form_buffer(input, now + 1000).unwrap().expires_at,
+        first.expires_at
+    );
+    assert!(s.list_form_buffers(now + 10001).unwrap().is_empty());
+}
+#[test]
+fn validated_save_consumes_its_input_buffer_and_bounds_private_fields() {
+    let now = wall_now();
+    let mut s = session(now);
+    let mut input = input_buffer(&s);
+    input
+        .fields
+        .insert("accessToken".into(), "forbidden".into());
+    assert!(matches!(
+        s.save_form_buffer(input.clone(), now),
+        Err(Error::InvalidInput)
+    ));
+    input.fields.remove("accessToken");
+    let mut d = draft(&s, now);
+    d.draft.id = input.id;
+    s.save_form_buffer(input, now).unwrap();
+    s.save_draft(d, now).unwrap();
+    assert!(s.form_buffers.is_empty());
+    assert_eq!(s.list_drafts(now).unwrap().len(), 1);
+}

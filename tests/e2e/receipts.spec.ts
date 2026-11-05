@@ -1,5 +1,11 @@
 import { test, expect, type Page } from '@playwright/test';
-import type { SessionProfile, NativeSessionView, ConfirmedReceipt } from '@caissepro/shared';
+import type {
+  SessionProfile,
+  NativeSessionView,
+  ConfirmedReceipt,
+  FormBuffer,
+  FormBufferInput,
+} from '@caissepro/shared';
 import type { DraftInput, SessionDraft } from '../../apps/desktop/src/auth/gateway';
 
 // Double explicite du transport IPC. Les véritables finances sont testées séparément sur PostgreSQL.
@@ -44,6 +50,7 @@ async function installNativeDouble(page: Page) {
       generation = 0,
       financialCalls = 0,
       snapshotTime = now;
+    const buffers = new Map<string, FormBuffer>();
     const records: { row: SessionDraft; sourceId: string }[] = [],
       receipts: ConfirmedReceipt[] = [];
     const status = (): NativeSessionView => ({
@@ -131,9 +138,74 @@ async function installNativeDouble(page: Page) {
             data: { synchronizedAt: snapshotTime, expiresAt: p.offlineUntil, balances: [] },
             stale: offline,
           };
+        if (command === 'workspace_sync_action') {
+          const payload = (args.payload ?? {}) as Record<string, unknown>;
+          switch (args.action) {
+            case 'buffers':
+              return [...buffers.values()];
+            case 'buffer-save': {
+              const b = payload as FormBufferInput;
+              const old = buffers.get(b.id);
+              const v = {
+                ...b,
+                createdAt: old?.createdAt ?? now,
+                updatedAt: new Date().toISOString(),
+                expiresAt: old?.expiresAt ?? p.offlineUntil!,
+              };
+              buffers.set(b.id, v);
+              return v;
+            }
+            case 'buffer-remove':
+              buffers.delete(String(payload.id));
+              return { removed: true };
+            case 'status': {
+              const counts = { local: 0, queued: 0, syncing: 0, synced: 0, conflict: 0, error: 0 };
+              for (const { row } of records) {
+                if (row.state === 'confirmed') counts.synced++;
+                else if (row.state in counts) counts[row.state as keyof typeof counts]++;
+              }
+              return {
+                running: false,
+                apiOnline: !offline,
+                lastSuccessfulAt: records.some((r) => r.row.serverVersion !== null)
+                  ? snapshotTime
+                  : null,
+                cacheUpdatedAt: snapshotTime,
+                counts,
+                persistence: 'memory-only',
+                events: [],
+              };
+            }
+            case 'manifest':
+              return {
+                items: records
+                  .filter((r) => r.row.serverVersion !== null)
+                  .map(({ row, sourceId }) => ({
+                    serverId: sourceId,
+                    clientDraftId: row.draft.id,
+                    agencyId: agency,
+                    cashRegisterId: cash,
+                    kind: row.draft.kind,
+                    version: row.serverVersion,
+                    createdAt: row.draft.createdAt,
+                    updatedAt: row.updatedAt,
+                    receivedAt: row.updatedAt,
+                    sourceState: row.state === 'confirmed' ? 'confirmed' : 'draft',
+                    receiptId: row.confirmedReceiptId ?? null,
+                    expenseRequestId: null,
+                  })),
+                total: records.filter((r) => r.row.serverVersion !== null).length,
+                page: 1,
+                pageSize: 50,
+              };
+            case 'events':
+              return { items: [], lastSuccessfulAt: null };
+          }
+        }
         if (command === 'workspace_drafts') return structuredClone(records.map((r) => r.row));
         if (command === 'workspace_save_draft') {
           const input = args.input as DraftInput;
+          buffers.delete(input.draft.id);
           const previous = records.find((r) => r.row.draft.id === input.draft.id);
           const row: SessionDraft = {
             draft: input.draft,
@@ -156,6 +228,8 @@ async function installNativeDouble(page: Page) {
             .map((r) => {
               r.row.state = 'synced';
               r.row.serverVersion = r.row.version;
+              r.row.serverId = r.sourceId;
+              r.row.synchronizedAt = new Date().toISOString();
               return {
                 draftId: r.row.draft.id,
                 outcome: 'accepted-as-draft',
@@ -329,4 +403,29 @@ test('préparation hors connexion sans appel de confirmation avec double IPC exp
       ).receiptDouble.financialCalls(),
     ),
   ).toBe(0);
+});
+
+test('centre de synchronisation sans confirmation financière avec double IPC explicite', async ({
+  page,
+}) => {
+  await installNativeDouble(page);
+  await login(page);
+  await prepare(page);
+  await page.getByRole('button', { name: 'Synchronisation', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Centre de synchronisation' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Brouillons de cette session (1)' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Synchroniser maintenant' }).click();
+  await expect(page.getByText(/1 brouillon\(s\) reçu/)).toBeVisible();
+  await expect(page.getByText('Brouillon reçu, non confirmé', { exact: true })).toBeVisible();
+  await page.screenshot({ path: 'test-results/caissepro-synchronisation.png', fullPage: true });
+  expect(
+    await page.evaluate(() =>
+      (
+        window as unknown as { receiptDouble: { financialCalls(): number } }
+      ).receiptDouble.financialCalls(),
+    ),
+  ).toBe(0);
+  expect(await page.evaluate(() => localStorage.length + sessionStorage.length)).toBe(0);
 });

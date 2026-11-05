@@ -13,7 +13,19 @@ use std::{
 };
 use uuid::Uuid;
 use zeroize::Zeroizing;
+#[derive(Default)]
+struct SyncControl {
+    delay_ms: AtomicUsize,
+    drop_reply: AtomicBool,
+    fail_before: AtomicBool,
+    invalid_reply: AtomicBool,
+    conflict_next: AtomicBool,
+    requests: Mutex<Vec<Value>>,
+    stored: Mutex<Option<Value>>,
+    financial: AtomicUsize,
+}
 struct Api {
+    sync: Arc<SyncControl>,
     base: String,
     profile: Arc<Mutex<Profile>>,
     revoked: Arc<AtomicBool>,
@@ -37,6 +49,8 @@ impl Api {
         let writes = Arc::new(AtomicUsize::new(0));
         let logins = Arc::new(AtomicUsize::new(0));
         let deployment = Arc::new(Mutex::new("test".to_string()));
+        let sync = Arc::new(SyncControl::default());
+        let control = sync.clone();
         let offline_flag = offline.clone();
         let (p, r, s, w, l, d) = (
             profile.clone(),
@@ -49,12 +63,15 @@ impl Api {
         let worker = thread::spawn(move || {
             while !s.load(Ordering::SeqCst) {
                 match listener.accept() {
-                    Ok((stream, _)) => Self::reply(stream, &p, &r, &w, &l, &d, &offline_flag),
+                    Ok((stream, _)) => {
+                        Self::reply(stream, &p, (&r, &offline_flag), &w, &l, &d, &control)
+                    }
                     Err(_) => thread::sleep(Duration::from_millis(5)),
                 }
             }
         });
         Self {
+            sync,
             base,
             profile,
             revoked,
@@ -69,12 +86,13 @@ impl Api {
     fn reply(
         mut stream: TcpStream,
         p: &Mutex<Profile>,
-        revoked: &AtomicBool,
+        flags: (&AtomicBool, &AtomicBool),
         writes: &AtomicUsize,
         logins: &AtomicUsize,
         deployment: &Mutex<String>,
-        offline: &AtomicBool,
+        sync: &SyncControl,
     ) {
+        let (revoked, offline) = flags;
         stream
             .set_read_timeout(Some(Duration::from_secs(2)))
             .unwrap();
@@ -136,6 +154,7 @@ impl Api {
             }
             path if path.starts_with("/api/v1/cash/drafts/") && path.ends_with("/confirm") => {
                 writes.fetch_add(1, Ordering::SeqCst);
+                sync.financial.fetch_add(1, Ordering::SeqCst);
                 (201, json!({"ok":true}))
             }
             path if path.starts_with("/api/v1/expenses/")
@@ -144,18 +163,59 @@ impl Api {
                     || path.ends_with("/pay")) =>
             {
                 writes.fetch_add(1, Ordering::SeqCst);
+                sync.financial.fetch_add(1, Ordering::SeqCst);
                 (201, json!({"ok":true}))
             }
             "/api/v1/auth/unlock" => (
                 201,
                 json!({"accessToken":"b".repeat(43),"profile":*p.lock().unwrap()}),
             ),
+            path if path.starts_with("/api/v1/workspace/sync/drafts/") => {
+                let stored = sync.stored.lock().unwrap();
+                let b = stored.as_ref().unwrap();
+                (
+                    200,
+                    json!({"serverId":b["draft"]["id"],"clientDraftId":b["draft"]["id"],"agencyId":b["agencyId"],"cashRegisterId":b["cashRegisterId"],"kind":b["draft"]["kind"],"version":b["version"],"createdAt":b["originalCreatedAt"],"updatedAt":b["updatedAt"],"receivedAt":iso(wall_now()),"sourceState":"draft","receiptId":null,"expenseRequestId":null,"currency":b["draft"]["currency"],"amount":b["draft"]["amount"],"description":b["draft"]["description"],"receiptDetails":b["draft"].get("receiptDetails"),"expenseDetails":b["draft"].get("expenseDetails")}),
+                )
+            }
             "/api/v1/workspace/drafts/sync" => {
-                writes.fetch_add(1, Ordering::SeqCst);
                 let body: Value = serde_json::from_slice(&bytes[header_end..]).unwrap();
+                sync.requests.lock().unwrap().push(body.clone());
+
+                if sync.conflict_next.swap(false, Ordering::SeqCst) {
+                    let body = "{}";
+                    let _ = write!(
+                        stream,
+                        "HTTP/1.1 409 Test\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                    return;
+                }
+                if sync.fail_before.load(Ordering::SeqCst) {
+                    return;
+                }
+                writes.fetch_add(1, Ordering::SeqCst);
+                *sync.stored.lock().unwrap() = Some(body.clone());
+                thread::sleep(Duration::from_millis(
+                    sync.delay_ms.load(Ordering::SeqCst) as u64
+                ));
+                if sync.drop_reply.swap(false, Ordering::SeqCst) {
+                    return;
+                }
+                if sync.invalid_reply.load(Ordering::SeqCst) {
+                    let body = "{}";
+                    let _ = write!(
+                        stream,
+                        "HTTP/1.1 201 Test\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                    return;
+                }
                 (
                     201,
-                    json!({"draftId":body["draft"]["id"],"outcome":"accepted-as-draft","code":"draft-received"}),
+                    json!({"draftId":body["draft"]["id"],"outcome":"accepted-as-draft","code":"draft-received","serverId":body["draft"]["id"],"serverVersion":body["version"],"synchronizedAt":iso(wall_now()),"sourceState":"draft","receiptId":null,"expenseRequestId":null}),
                 )
             }
             _ => (201, json!({"ok":true})),
@@ -495,4 +555,260 @@ async fn expense_payment_checks_attestation_permission_and_server_identity_befor
     ));
     assert_eq!(api.writes.load(Ordering::SeqCst), 0);
     assert_eq!(broker.status().unwrap().state, "anonymous");
+}
+
+async fn login_for_sync(broker: &Broker) -> u64 {
+    broker
+        .login(
+            "TEST".into(),
+            "alice@example.test".into(),
+            Zeroizing::new("password-test".into()),
+        )
+        .await
+        .unwrap()
+        .generation
+}
+async fn wait_for_sync(api: &Api) {
+    for _ in 0..200 {
+        if !api.sync.requests.lock().unwrap().is_empty() {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    panic!("transmission did not start");
+}
+#[tokio::test]
+async fn simultaneous_sends_use_one_worker_and_keep_newer_edits_after_the_ack() {
+    let api = Api::new();
+    let broker = Arc::new(api.broker());
+    let generation = login_for_sync(&broker).await;
+    let mut input = api.draft();
+    let id = input.draft.id;
+    broker.save_draft(input.clone(), Some(generation)).unwrap();
+    api.sync.delay_ms.store(100, Ordering::SeqCst);
+    let worker = broker.clone();
+    let task = tokio::spawn(async move { worker.synchronize(Some(generation)).await });
+    wait_for_sync(&api).await;
+    assert!(matches!(
+        broker.synchronize(Some(generation)).await,
+        Err(Error::SyncBusy)
+    ));
+    input.expected_version = Some(1);
+    input.draft.amount = "20.00".into();
+    broker.save_draft(input, Some(generation)).unwrap();
+    task.await.unwrap().unwrap();
+    let r = broker.drafts(Some(generation)).unwrap().remove(0);
+    assert_eq!(r.state, "queued");
+    assert_eq!(r.server_version, Some(1));
+    assert_eq!(r.version, 2);
+    broker.synchronize(Some(generation)).await.unwrap();
+    let requests = api.sync.requests.lock().unwrap();
+    assert_eq!(requests.len(), 2);
+    assert_eq!(requests[0]["draft"]["id"], id.to_string());
+    assert_eq!(requests[1]["expectedServerVersion"], 1);
+    assert_eq!(api.sync.financial.load(Ordering::SeqCst), 0);
+}
+#[tokio::test]
+async fn losing_the_reply_retries_the_exact_payload_only_after_explicit_unlock() {
+    let api = Api::new();
+    {
+        let mut p = api.profile.lock().unwrap();
+        p.permissions.push("offline:access".into());
+        p.offline_until = Some(iso(wall_now() + 120000));
+    }
+
+    let broker = api.broker();
+    let generation = login_for_sync(&broker).await;
+    let input = api.draft();
+    let id = input.draft.id;
+    broker.save_draft(input, Some(generation)).unwrap();
+    api.sync.drop_reply.store(true, Ordering::SeqCst);
+    assert!(matches!(
+        broker.synchronize(Some(generation)).await,
+        Err(Error::Unavailable)
+    ));
+    assert_eq!(broker.status().unwrap().state, "locked");
+    let next = broker
+        .unlock(Zeroizing::new("password-test".into()), Some(generation))
+        .await
+        .unwrap()
+        .generation;
+    broker
+        .synchronization_action(
+            "retry",
+            Some(json!({"id":id,"expectedVersion":1})),
+            Some(next),
+        )
+        .await
+        .unwrap();
+    broker.synchronize(Some(next)).await.unwrap();
+    let requests = api.sync.requests.lock().unwrap();
+    assert_eq!(requests.len(), 2);
+    assert_eq!(requests[0], requests[1]);
+    assert_eq!(broker.drafts(Some(next)).unwrap()[0].state, "synced");
+    assert_eq!(api.sync.financial.load(Ordering::SeqCst), 0);
+}
+#[tokio::test]
+async fn app_closure_has_no_plaintext_recovery_but_received_source_is_restorable() {
+    let api = Api::new();
+    let broker = Arc::new(api.broker());
+    let generation = login_for_sync(&broker).await;
+    let input = api.draft();
+    let id = input.draft.id;
+    let origin = input.draft.created_at.clone();
+    broker.save_draft(input, Some(generation)).unwrap();
+    api.sync.delay_ms.store(120, Ordering::SeqCst);
+    let worker = broker.clone();
+    let task = tokio::spawn(async move { worker.synchronize(Some(generation)).await });
+    wait_for_sync(&api).await;
+    task.abort();
+    let _ = task.await;
+    drop(broker);
+    let next = api.broker();
+    let generation = login_for_sync(&next).await;
+    assert!(next.drafts(Some(generation)).unwrap().is_empty());
+    let restored = next
+        .synchronization_action("restore", Some(json!({"id":id})), Some(generation))
+        .await
+        .unwrap();
+    assert_eq!(restored["draft"]["id"], id.to_string());
+    assert_eq!(restored["originalCreatedAt"], origin);
+    assert_eq!(restored["state"], "synced");
+    next.synchronize(Some(generation)).await.unwrap();
+    assert_eq!(api.sync.requests.lock().unwrap().len(), 1);
+    assert_eq!(api.sync.financial.load(Ordering::SeqCst), 0);
+}
+#[tokio::test]
+async fn a_role_change_purges_scope_and_fences_pending_commands_before_sending() {
+    let api = Api::new();
+    let broker = api.broker();
+    let generation = login_for_sync(&broker).await;
+    broker.save_draft(api.draft(), Some(generation)).unwrap();
+    {
+        let mut p = api.profile.lock().unwrap();
+        p.roles = vec!["AUDITOR".into()];
+        p.authorization_version += 1;
+    }
+    assert!(matches!(
+        broker.synchronize(Some(generation)).await,
+        Err(Error::SessionChanged)
+    ));
+    let next = broker.status().unwrap().generation;
+    assert!(next > generation);
+    assert!(broker.drafts(Some(next)).unwrap().is_empty());
+    assert_eq!(api.writes.load(Ordering::SeqCst), 0);
+}
+#[tokio::test]
+async fn malformed_acknowledgement_purges_the_session_without_any_financial_replay() {
+    let api = Api::new();
+    let broker = api.broker();
+    let generation = login_for_sync(&broker).await;
+    broker.save_draft(api.draft(), Some(generation)).unwrap();
+    api.sync.invalid_reply.store(true, Ordering::SeqCst);
+    assert!(matches!(
+        broker.synchronize(Some(generation)).await,
+        Err(Error::InvalidResponse)
+    ));
+    assert_eq!(broker.status().unwrap().state, "anonymous");
+    assert_eq!(api.sync.financial.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn a_cut_before_server_storage_preserves_the_same_draft_for_reconnection() {
+    let api = Api::new();
+    {
+        let mut p = api.profile.lock().unwrap();
+        p.permissions.push("offline:access".into());
+        p.offline_until = Some(iso(wall_now() + 120000));
+    }
+    let broker = api.broker();
+    let generation = login_for_sync(&broker).await;
+    let input = api.draft();
+    let id = input.draft.id;
+    broker.save_draft(input, Some(generation)).unwrap();
+    api.sync.fail_before.store(true, Ordering::SeqCst);
+    assert!(matches!(
+        broker.synchronize(Some(generation)).await,
+        Err(Error::Unavailable)
+    ));
+    assert!(api.sync.stored.lock().unwrap().is_none());
+    assert_eq!(api.writes.load(Ordering::SeqCst), 0);
+    api.sync.fail_before.store(false, Ordering::SeqCst);
+    let next = broker
+        .unlock(Zeroizing::new("password-test".into()), Some(generation))
+        .await
+        .unwrap()
+        .generation;
+    broker
+        .synchronization_action(
+            "retry",
+            Some(json!({"id":id,"expectedVersion":1})),
+            Some(next),
+        )
+        .await
+        .unwrap();
+    broker.synchronize(Some(next)).await.unwrap();
+    let requests = api.sync.requests.lock().unwrap();
+    assert_eq!(requests[0], requests[1]);
+    assert_eq!(api.sync.financial.load(Ordering::SeqCst), 0);
+}
+#[tokio::test]
+async fn native_conflict_resolution_rebases_explicitly_without_confirming_or_paying() {
+    let api = Api::new();
+    let broker = api.broker();
+    let generation = login_for_sync(&broker).await;
+    let mut input = api.draft();
+    let id = input.draft.id;
+    broker.save_draft(input.clone(), Some(generation)).unwrap();
+    broker.synchronize(Some(generation)).await.unwrap();
+    input.expected_version = Some(1);
+    input.draft.amount = "20.00".into();
+    broker.save_draft(input, Some(generation)).unwrap();
+    {
+        let mut stored = api.sync.stored.lock().unwrap();
+        let v = stored.as_mut().unwrap();
+        v["version"] = json!(2);
+        v["draft"]["description"] = json!("Autre appareil");
+    }
+    api.sync.conflict_next.store(true, Ordering::SeqCst);
+    let result = broker.synchronize(Some(generation)).await.unwrap();
+    assert_eq!(result[0].outcome, "conflict");
+    assert!(broker
+        .synchronize(Some(generation))
+        .await
+        .unwrap()
+        .is_empty());
+    let revised = broker
+        .synchronization_action(
+            "resolve",
+            Some(json!({"id":id,"expectedVersion":2,"choice":"local"})),
+            Some(generation),
+        )
+        .await
+        .unwrap();
+    assert_eq!(revised["version"], 3);
+    assert_eq!(revised["serverVersion"], 2);
+    assert_eq!(revised["draft"]["amount"], "20.00");
+    broker.synchronize(Some(generation)).await.unwrap();
+    let requests = api.sync.requests.lock().unwrap();
+    assert_eq!(requests.len(), 3);
+    assert_eq!(requests[2]["expectedServerVersion"], 2);
+    assert_eq!(requests[2]["draft"]["id"], id.to_string());
+    assert_eq!(api.sync.financial.load(Ordering::SeqCst), 0);
+}
+#[tokio::test]
+async fn a_late_ack_cannot_repopulate_data_after_logout() {
+    let api = Api::new();
+    let broker = Arc::new(api.broker());
+    let generation = login_for_sync(&broker).await;
+    broker.save_draft(api.draft(), Some(generation)).unwrap();
+    api.sync.delay_ms.store(100, Ordering::SeqCst);
+    let worker = broker.clone();
+    let task = tokio::spawn(async move { worker.synchronize(Some(generation)).await });
+    wait_for_sync(&api).await;
+    broker.logout(Some(generation)).await.unwrap();
+    assert!(matches!(task.await.unwrap(), Err(Error::SessionChanged)));
+    assert_eq!(broker.status().unwrap().state, "anonymous");
+    assert!(broker.drafts(None).is_err());
+    assert_eq!(api.sync.financial.load(Ordering::SeqCst), 0);
 }

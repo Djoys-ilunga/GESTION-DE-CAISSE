@@ -30,14 +30,20 @@ export class DataErrorFilter implements ExceptionFilter {
       'EVIDENCE_INVALID',
       'POLICY_INVALID',
       'POLICY_CONFLICT',
+      'SYNC_RATE_LIMIT',
+      'DRAFT_DATES_INVALID',
+      'DRAFT_EXPIRED',
+      'DRAFT_CASH_REQUIRED',
     ];
-    const status = error.code.includes('SESSION_REVOKED')
-      ? 401
-      : error.code.includes('ACCESS_DENIED')
-        ? 403
-        : error.code.includes('NOT_FOUND')
-          ? 404
-          : 409;
+    const status = error.code.includes('SYNC_RATE_LIMIT')
+      ? 429
+      : error.code.includes('SESSION_REVOKED')
+        ? 401
+        : error.code.includes('ACCESS_DENIED')
+          ? 403
+          : error.code.includes('NOT_FOUND')
+            ? 404
+            : 409;
     host
       .switchToHttp()
       .getResponse<{ status(n: number): { json(value: unknown): void } }>()

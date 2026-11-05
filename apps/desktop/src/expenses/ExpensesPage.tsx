@@ -289,11 +289,15 @@ export function ExpensesPage({
                             ? 'Demande soumise'
                             : !online
                               ? 'Non soumis / Hors connexion'
-                              : r.state === 'synced'
-                                ? 'Synchronisé / Non soumis'
-                                : r.state === 'conflict'
-                                  ? 'Conflit à résoudre'
-                                  : 'Non soumis'}
+                              : r.state === 'queued'
+                                ? 'En attente de synchronisation'
+                                : r.state === 'syncing'
+                                  ? 'En cours de transmission'
+                                  : r.state === 'synced'
+                                    ? 'Synchronisé / Non soumis'
+                                    : r.state === 'conflict'
+                                      ? 'Conflit à résoudre'
+                                      : 'Non soumis'}
                         </td>
                         <td>
                           {r.state !== 'submitted' && can('draft:write_own') && (

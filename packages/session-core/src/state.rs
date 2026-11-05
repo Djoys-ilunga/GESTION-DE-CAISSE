@@ -90,6 +90,11 @@ pub struct Session {
     pub balances: Option<serde_json::Value>,
     pub cash_catalog: Option<serde_json::Value>,
     pub revalidating: bool,
+    pub form_buffers: HashMap<uuid::Uuid, FormBuffer>,
+    pub pending_sync: HashMap<uuid::Uuid, PendingSync>,
+    pub sync_events: Vec<SyncNote>,
+    pub last_sync_success: Option<String>,
+    pub sync_cache_updated: Option<String>,
 }
 impl Session {
     pub fn validate_profile(profile: &Profile, now: i64) -> Result<(i64, i64)> {
@@ -147,6 +152,11 @@ impl Session {
             balances: None,
             cash_catalog: None,
             revalidating: false,
+            pending_sync: HashMap::new(),
+            form_buffers: HashMap::new(),
+            sync_events: Vec::new(),
+            last_sync_success: None,
+            sync_cache_updated: None,
         })
     }
     pub fn permission(&self, p: &str) -> Result<()> {
@@ -251,7 +261,9 @@ impl Session {
         self.drafts
             .retain(|_, r| millis(&r.draft.expires_at).is_ok_and(|expiry| expiry > now));
         if let Some(old) = self.drafts.get(&draft.id) {
-            if old.state == "confirmed"
+            if old.confirmed_receipt_id.is_some()
+                || old.submitted_expense_id.is_some()
+                || old.state == "confirmed"
                 || old.state == "submitted"
                 || input.expected_version != Some(old.version)
                 || old.agency_id != input.agency_id
@@ -265,10 +277,25 @@ impl Session {
         } else if input.expected_version.is_some() {
             return Err(Error::Conflict);
         }
+        self.pending_sync
+            .retain(|id, _| self.drafts.contains_key(id));
         let old = self.drafts.get(&draft.id);
         let record = DraftRecord {
             version: old.map_or(1, |v| v.version + 1),
             server_version: old.and_then(|v| v.server_version),
+            server_id: old.and_then(|v| v.server_id),
+            original_created_at: Some(
+                old.and_then(|v| v.original_created_at.clone())
+                    .unwrap_or_else(|| draft.created_at.clone()),
+            ),
+            synchronized_at: old.and_then(|v| v.synchronized_at.clone()),
+            last_attempt_at: old.and_then(|v| v.last_attempt_at.clone()),
+            next_attempt_at: old.and_then(|v| v.next_attempt_at.clone()),
+            attempts: if self.pending_sync.contains_key(&draft.id) {
+                old.map_or(0, |r| r.attempts)
+            } else {
+                0
+            },
             draft,
             agency_id: input.agency_id,
             cash_register_id: input.cash_register_id,
@@ -279,6 +306,7 @@ impl Session {
             receipt_number: None,
             submitted_expense_id: None,
         };
+        self.form_buffers.remove(&record.draft.id);
         self.drafts.insert(record.draft.id, record.clone());
         Ok(record)
     }
@@ -287,6 +315,8 @@ impl Session {
         self.permission("draft:read_own")?;
         self.drafts
             .retain(|_, r| millis(&r.draft.expires_at).is_ok_and(|e| e > now));
+        self.pending_sync
+            .retain(|id, _| self.drafts.contains_key(id));
         let mut drafts = self.drafts.values().cloned().collect::<Vec<_>>();
         drafts.sort_by_key(|r| r.draft.id);
         Ok(drafts)
@@ -305,6 +335,13 @@ impl State {
         self.reason = Some(reason.into());
     }
     pub fn view(&mut self, now: i64) -> SessionView {
+        if let Some(s) = self.session.as_mut() {
+            s.form_buffers
+                .retain(|_, b| millis(&b.expires_at).is_ok_and(|t| t > now));
+            s.drafts
+                .retain(|_, r| millis(&r.draft.expires_at).is_ok_and(|t| t > now));
+            s.pending_sync.retain(|id, _| s.drafts.contains_key(id));
+        }
         let expired = self
             .session
             .as_ref()

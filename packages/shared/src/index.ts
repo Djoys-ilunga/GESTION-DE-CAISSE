@@ -6,6 +6,7 @@ export * from './auth.js';
 export * from './money.js';
 export * from './receipts.js';
 export * from './expenses.js';
+export * from './synchronization.js';
 export const API_PROTOCOL_VERSION = 1 as const;
 export const apiHealthSchema = z
   .object({
@@ -43,6 +44,12 @@ export const draftSyncResultSchema = z.discriminatedUnion('outcome', [
       draftId: z.uuid(),
       outcome: z.literal('accepted-as-draft'),
       code: z.literal('draft-received'),
+      serverId: z.uuid().optional(),
+      serverVersion: z.number().int().positive().optional(),
+      synchronizedAt: z.iso.datetime().optional(),
+      sourceState: z.enum(['draft', 'confirmed', 'submitted']).optional(),
+      receiptId: z.uuid().nullable().optional(),
+      expenseRequestId: z.uuid().nullable().optional(),
     })
     .strict(),
   z
@@ -66,6 +73,7 @@ export const draftSyncResultSchema = z.discriminatedUnion('outcome', [
         'session-changed',
         'draft-expired',
         'local-version-conflict',
+        'rate-limited',
       ]),
     })
     .strict(),

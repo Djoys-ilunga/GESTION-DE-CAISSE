@@ -287,3 +287,14 @@ describe('Synchronisation de brouillons', () => {
     await a;
   });
 });
+
+it('ne réessaie pas automatiquement un conflit déjà présenté', async () => {
+  const s = store(),
+    d = draft();
+  s.saveDraft(d);
+  const send = vi.fn(async () => ({ draftId: d.id, outcome: 'conflict', code: 'conflict' }));
+  const sync = new SyncCoordinator(s, { isOnline: () => true }, { sendDraft: send });
+  await sync.synchronize();
+  await sync.synchronize();
+  expect(send).toHaveBeenCalledTimes(1);
+});

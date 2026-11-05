@@ -27,6 +27,7 @@ pub fn run() {
             commands::workspace_drafts,
             commands::workspace_save_draft,
             commands::workspace_sync,
+            commands::workspace_sync_action,
             commands::admin_request
         ])
         .run(tauri::generate_context!())

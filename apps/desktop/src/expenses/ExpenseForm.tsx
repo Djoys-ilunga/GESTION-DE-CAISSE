@@ -1,8 +1,10 @@
+import { useFormBuffer, bufferedFields } from '../hybrid/use-form-buffer';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   expenseDetailsSchema,
   MAX_EVIDENCE_BYTES,
   type CashView,
+  type FormBuffer,
   type SessionProfile,
 } from '@caissepro/shared';
 import { createLocalDraft } from '../hybrid/local-store';
@@ -14,6 +16,7 @@ export function ExpenseForm({
   profile,
   cashes,
   source,
+  buffer,
   copy,
   onSaved,
   onCancel,
@@ -22,22 +25,47 @@ export function ExpenseForm({
   profile: SessionProfile;
   cashes: CashView[];
   source: SessionDraft | null;
+  buffer?: FormBuffer;
   copy: boolean;
   onSaved(): void;
   onCancel(): void;
 }) {
   const editing = copy ? null : source;
-  const [agency, setAgency] = useState(source?.agencyId ?? profile.agencies[0]?.id ?? ''),
-    [cash, setCash] = useState(source?.cashRegisterId ?? ''),
-    [currency, setCurrency] = useState<'USD' | 'CDF'>(source?.draft.currency ?? 'USD'),
-    [amount, setAmount] = useState(source?.draft.amount ?? ''),
-    [description, setDescription] = useState(source?.draft.description ?? ''),
-    [beneficiary, setBeneficiary] = useState(source?.draft.expenseDetails?.beneficiary ?? ''),
-    [reference, setReference] = useState(source?.draft.expenseDetails?.reference ?? ''),
+  const fields = bufferedFields(buffer);
+  const [formId] = useState(editing?.draft.id ?? buffer?.id ?? crypto.randomUUID());
+  const [agency, setAgency] = useState(
+      source?.agencyId ?? buffer?.agencyId ?? profile.agencies[0]?.id ?? '',
+    ),
+    [cash, setCash] = useState(source?.cashRegisterId ?? buffer?.cashRegisterId ?? ''),
+    [currency, setCurrency] = useState<'USD' | 'CDF'>(
+      (fields.currency === 'USD' || fields.currency === 'CDF'
+        ? fields.currency
+        : source?.draft.currency) ?? 'USD',
+    ),
+    [amount, setAmount] = useState(fields.amount ?? source?.draft.amount ?? ''),
+    [description, setDescription] = useState(fields.description ?? source?.draft.description ?? ''),
+    [beneficiary, setBeneficiary] = useState(
+      fields.beneficiary ?? source?.draft.expenseDetails?.beneficiary ?? '',
+    ),
+    [reference, setReference] = useState(
+      fields.reference ?? source?.draft.expenseDetails?.reference ?? '',
+    ),
     [documents, setDocuments] = useState(source?.draft.expenseDetails?.documents ?? []),
     [files, setFiles] = useState<File[]>([]),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
+  const capture = useFormBuffer(
+    gateway,
+    {
+      id: formId,
+      kind: 'expense-request',
+      agencyId: agency,
+      cashRegisterId: cash || null,
+      expectedLocalVersion: editing?.version ?? null,
+      fields: { amount, currency, description, beneficiary, reference },
+    },
+    !busy && Boolean(agency),
+  );
   const mounted = useRef(false);
   useEffect(() => {
     mounted.current = true;
@@ -65,9 +93,10 @@ export function ExpenseForm({
       };
       const draft = editing
         ? { ...editing.draft, ...base, expenseDetails: details }
-        : { ...createLocalDraft(base), expenseDetails: details };
+        : { ...createLocalDraft(base), id: formId, expenseDetails: details };
       if (cash && !cashes.some((c) => c.id === cash && c.active && c.agency.id === agency))
         throw new Error('PERMISSION_DENIED');
+      if (!editing && buffer) draft.expiresAt = buffer.expiresAt;
       await gateway.saveDraft({
         draft,
         agencyId: agency,
@@ -92,6 +121,13 @@ export function ExpenseForm({
       </h2>
       <p className="auth-notice">
         Non soumis. Enregistrer et synchroniser ce brouillon ne vaut ni approbation ni paiement.
+      </p>
+      <p className="section-description">
+        {capture.state === 'captured'
+          ? 'Saisie capturée temporairement dans votre session. Les fichiers doivent être enregistrés avec le brouillon.'
+          : capture.state === 'unavailable'
+            ? 'Saisie non capturée. Enregistrez le brouillon avant de quitter cet écran.'
+            : 'Capture temporaire de la saisie…'}
       </p>
       <fieldset disabled={busy} className="expense-fields">
         <div className="form-grid">
@@ -217,7 +253,14 @@ export function ExpenseForm({
           <button className="primary-button">
             {busy ? 'Enregistrement…' : 'Enregistrer le brouillon'}
           </button>
-          <button type="button" className="secondary-button" onClick={onCancel}>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => {
+              capture.discard();
+              onCancel();
+            }}
+          >
             Annuler
           </button>
         </div>

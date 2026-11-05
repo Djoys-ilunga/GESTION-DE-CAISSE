@@ -1,6 +1,16 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import {
   nativeSessionViewSchema,
+  formBufferSchema,
+  formBufferInputSchema,
+  type FormBuffer,
+  type FormBufferInput,
+  syncStatusSchema,
+  syncManifestSchema,
+  syncEventsSchema,
+  type SyncStatus,
+  type SyncManifest,
+  type SyncEvents,
   expensePoliciesSchema,
   expensePolicySchema,
   expenseDraftListSchema,
@@ -51,6 +61,12 @@ export type SessionDraft = {
   confirmedReceiptId?: string | null;
   receiptNumber?: string | null;
   submittedExpenseId?: string | null;
+  serverId?: string | null;
+  originalCreatedAt?: string | null;
+  synchronizedAt?: string | null;
+  lastAttemptAt?: string | null;
+  nextAttemptAt?: string | null;
+  attempts?: number;
 };
 export type DraftInput = {
   draft: Draft;
@@ -79,6 +95,19 @@ export type AccessCatalog = {
   cashRegisters: { id: string; agencyId: string; name: string; code: string }[];
 };
 export interface AuthGateway {
+  formBuffers(): Promise<FormBuffer[]>;
+  saveFormBuffer(input: FormBufferInput): Promise<FormBuffer>;
+  removeFormBuffer(id: string): Promise<void>;
+  syncStatus(): Promise<SyncStatus>;
+  syncManifest(page?: number): Promise<SyncManifest>;
+  syncEvents(): Promise<SyncEvents>;
+  restoreSynchronizedDraft(id: string): Promise<SessionDraft>;
+  resolveSyncConflict(
+    id: string,
+    expectedVersion: number,
+    choice: 'local' | 'server',
+  ): Promise<SessionDraft>;
+  retrySyncDraft(id: string, expectedVersion: number): Promise<SessionDraft>;
   expensePolicies(): Promise<{ items: ExpensePolicy[] }>;
   configureExpensePolicy(
     currency: 'CDF' | 'USD',
@@ -135,6 +164,40 @@ export interface AuthGateway {
   logs(): Promise<AuthLog[]>;
 }
 export class NativeAuthGateway implements AuthGateway {
+  async formBuffers() {
+    const value = await this.syncCall('buffers');
+    if (!Array.isArray(value)) throw new Error('SERVER_RESPONSE_INVALID');
+    return value.map((r) => formBufferSchema.parse(r));
+  }
+  async saveFormBuffer(input: FormBufferInput) {
+    return formBufferSchema.parse(
+      await this.syncCall('buffer-save', formBufferInputSchema.parse(input)),
+    );
+  }
+  async removeFormBuffer(id: string) {
+    await this.syncCall('buffer-remove', { id });
+  }
+  private syncCall(action: string, payload?: unknown) {
+    return this.call('workspace_sync_action', { action, payload });
+  }
+  async syncStatus() {
+    return syncStatusSchema.parse(await this.syncCall('status'));
+  }
+  async syncManifest(page = 1) {
+    return syncManifestSchema.parse(await this.syncCall('manifest', { page }));
+  }
+  async syncEvents() {
+    return syncEventsSchema.parse(await this.syncCall('events'));
+  }
+  restoreSynchronizedDraft(id: string) {
+    return this.syncCall('restore', { id }) as Promise<SessionDraft>;
+  }
+  resolveSyncConflict(id: string, expectedVersion: number, choice: 'local' | 'server') {
+    return this.syncCall('resolve', { id, expectedVersion, choice }) as Promise<SessionDraft>;
+  }
+  retrySyncDraft(id: string, expectedVersion: number) {
+    return this.syncCall('retry', { id, expectedVersion }) as Promise<SessionDraft>;
+  }
   private expenseCall(action: string, payload?: unknown) {
     return this.call('expense_action', { action, payload });
   }
@@ -303,6 +366,7 @@ export class NativeAuthGateway implements AuthGateway {
 export function message(error: unknown) {
   const code = error instanceof Error ? error.message : String(error);
   const labels: Record<string, string> = {
+    SYNC_BUSY: 'Une synchronisation est déjà en cours. Patientez avant de réessayer.',
     EXPENSE_CONFLICT:
       'La demande ou les règles ont changé. Actualisez les demandes et réessayez sur la même demande.',
     EXPENSE_POLICY_REQUIRED:

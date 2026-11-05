@@ -24,7 +24,7 @@ export class SyncCoordinator {
   }
   private async execute() {
     const generation = this.store.generation;
-    const records = this.store.listDrafts().filter((r) => r.state !== 'synced');
+    const records = this.store.listDrafts().filter((r) => r.state === 'local');
     const results: DraftSyncResult[] = [];
     for (const record of records) {
       const deferred = (

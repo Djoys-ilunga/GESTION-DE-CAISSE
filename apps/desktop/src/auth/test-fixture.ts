@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import type { NativeSessionView, SessionProfile } from '@caissepro/shared';
+import type { NativeSessionView, SessionProfile, FormBufferInput } from '@caissepro/shared';
 import type { AuthGateway } from './gateway';
 import { anonymous } from './controller';
 export function profile(name = 'Alice', role = 'CASHIER'): SessionProfile {
@@ -39,6 +39,28 @@ export function view(p = profile()): NativeSessionView {
 export function fakeGateway(initial: NativeSessionView = anonymous) {
   let current = structuredClone(initial);
   const gateway: AuthGateway = {
+    formBuffers: vi.fn(async () => []),
+    saveFormBuffer: vi.fn(async (input: FormBufferInput) => ({
+      ...input,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 900000).toISOString(),
+    })),
+    removeFormBuffer: vi.fn(),
+    syncStatus: vi.fn(async () => ({
+      running: false,
+      apiOnline: current.state === 'online',
+      lastSuccessfulAt: null,
+      cacheUpdatedAt: null,
+      counts: { local: 0, queued: 0, syncing: 0, synced: 0, conflict: 0, error: 0 },
+      persistence: 'memory-only' as const,
+      events: [],
+    })),
+    syncManifest: vi.fn(async () => ({ items: [], total: 0, page: 1, pageSize: 50 as const })),
+    syncEvents: vi.fn(async () => ({ items: [], lastSuccessfulAt: null })),
+    restoreSynchronizedDraft: vi.fn(),
+    resolveSyncConflict: vi.fn(),
+    retrySyncDraft: vi.fn(),
     expensePolicies: vi.fn(async () => ({ items: [] })),
     configureExpensePolicy: vi.fn(),
     expenseDrafts: vi.fn(async () => ({ items: [], total: 0, page: 1, pageSize: 25 })),

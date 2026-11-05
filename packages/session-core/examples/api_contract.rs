@@ -157,6 +157,13 @@ async fn run(input: Input) -> Result<(), Box<dyn std::error::Error>> {
     let results = cashier.synchronize(generation).await?;
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].outcome, "accepted-as-draft");
+    assert!(results[0].server_id.is_some());
+    assert_eq!(results[0].server_version, Some(1));
+    assert_eq!(results[0].source_state.as_deref(), Some("draft"));
+    let sync_status = cashier.synchronization_status(generation)?;
+    assert_eq!(sync_status["counts"]["synced"], 1);
+    assert!(sync_status["lastSuccessfulAt"].is_string());
+    assert!(sync_status["cacheUpdatedAt"].is_string());
     assert!(cashier.synchronize(generation).await?.is_empty());
     let before = cashier.cash_catalog(generation).await?;
     assert!(before["data"]["items"][0]["funds"]
@@ -180,6 +187,34 @@ async fn run(input: Input) -> Result<(), Box<dyn std::error::Error>> {
         )
         .await?;
     let recovery_generation = Some(recovery.generation);
+    assert!(recovered.drafts(recovery_generation)?.is_empty());
+    let manifest = recovered
+        .synchronization_action("manifest", None, recovery_generation)
+        .await?;
+    assert_eq!(manifest["total"], 1);
+    assert_eq!(manifest["items"][0]["serverId"], source["id"]);
+    let resumed = recovered
+        .synchronization_action(
+            "restore",
+            Some(json!({"id":source["clientDraftId"]})),
+            recovery_generation,
+        )
+        .await?;
+    assert_eq!(resumed["serverId"], source["id"]);
+    assert_eq!(
+        resumed["originalCreatedAt"],
+        manifest["items"][0]["createdAt"]
+    );
+    assert_eq!(resumed["state"], "synced");
+    assert!(recovered.synchronize(recovery_generation).await?.is_empty());
+    let journal = recovered
+        .synchronization_action("events", None, recovery_generation)
+        .await?;
+    assert!(journal["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|e| e["stage"] == "SUCCESS"));
     let restored = recovered
         .cash_action(
             "restore",

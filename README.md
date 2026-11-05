@@ -1,6 +1,8 @@
 # CaissePro
 
-Gestion de caisse d’entreprise : Tauri 2/Rust/React, NestJS, PostgreSQL et Prisma. Étapes 1 à 5 : socle technique, données centrales, authentification, autorisations, caisses, encaissements et dépenses. Les encaissements produisent des reçus après confirmation explicite. Les dépenses disposent d’un circuit de soumission, approbation ou rejet motivé, réservation, paiement explicite et bon de sortie ; les transferts et autres confirmations restent des services internes.
+Gestion de caisse d’entreprise : Tauri 2/Rust/React, NestJS, PostgreSQL et Prisma. Étapes 1 à 6 : socle technique, données centrales, authentification, autorisations, caisses, encaissements, dépenses et synchronisation sécurisée. Les encaissements produisent des reçus après confirmation explicite. Les dépenses disposent d’un circuit de soumission, approbation ou rejet motivé, réservation, paiement explicite et bon de sortie ; les transferts et autres confirmations restent des services internes.
+
+Le [centre de synchronisation](docs/synchronisation.md) suit les brouillons, reprises, conflits et copies serveur sans déclencher de traitement financier. Les brouillons non transmis restent temporaires en mémoire et sont perdus à la fermeture ; les copies reçues sont restaurables après connexion.
 
 Cette version est **reconstruite à partir des spécifications et traces de la conversation** après l’absence des fichiers dans une nouvelle instance cloud. Elle ne doit pas être présentée comme une restauration identique de l’ancienne copie. Les résultats de validation de cette reconstruction seront consignés dans `docs/validation.md`.
 

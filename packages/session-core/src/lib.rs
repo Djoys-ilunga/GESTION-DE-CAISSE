@@ -1,11 +1,14 @@
 mod broker;
 mod model;
 mod state;
+mod synchronization;
 pub use broker::Broker;
 pub use model::*;
 type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("SYNC_BUSY")]
+    SyncBusy,
     #[error("EXPENSE_CONFLICT")]
     ExpenseConflict,
     #[error("EXPENSE_POLICY_REQUIRED")]

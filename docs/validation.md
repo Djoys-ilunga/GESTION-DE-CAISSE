@@ -1,6 +1,38 @@
 # Validation de CaissePro — 5 novembre 2026
 
-## Étape 5 : demandes de dépenses et approbations — validation courante
+## Étape 6 : moteur de synchronisation sécurisée — validation courante
+
+**221 tests automatisés distincts ont réussi**, plus un parcours du courtier Rust contre NestJS/PostgreSQL réels et un contrôle de la vraie fenêtre Tauri Linux. Les répétitions ciblées après correction ne sont pas additionnées. L’étape 7 n’est pas commencée.
+
+| Contrôle                             | Résultat observé                                                                                                                             |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Contrats partagés                    | 13 tests réussis, dont refus de faux résultats financiers, captures bornées et métadonnées strictes                                          |
+| API HTTP avec double de base         | 4 tests réussis                                                                                                                              |
+| Interface et adaptateur mémoire      | 66 tests réussis, dont centre, conflit explicite, lecture seule, interruption de saisie et retrait des champs au verrouillage                |
+| PostgreSQL réel sur bases jetables   | 76 tests réussis ; les 12 migrations sont rejouées sur bases vierges et les bases supprimées ensuite                                         |
+| Courtier natif Rust                  | 44 tests réussis, format et Clippy sans avertissement                                                                                        |
+| Adaptateur SQLCipher Linux           | 9 tests réussis ; la porte de qualification Windows/macOS reste fermée                                                                       |
+| API compilée avec PostgreSQL         | 2 tests réussis : disponibilité, CORS, arrêt et échec fermé                                                                                  |
+| Chromium                             | 7 tests réussis ; transport IPC explicitement simulé, dont centre sans confirmation financière ; reçu et bon restent chacun sur une page PDF |
+| Parcours intégré Rust/API/PostgreSQL | Réussi avec un LOGIN restreint NOINHERIT/NOBYPASSRLS ; copie restaurée après nouvelle connexion et consultations actualisées                 |
+| Tauri Linux réel                     | Compilation `custom-protocol`, Clippy et ouverture de la fenêtre de connexion 1280 × 900 sous Xvfb réussis                                   |
+| Outils                               | Prisma validé, types, ESLint, format, builds NestJS et Vite réussis                                                                          |
+
+Les scénarios natifs couvrent la coupure avant stockage serveur, la perte de l’accusé après stockage, le retour de connexion après déverrouillage, le verrou d’envoi unique, la modification pendant la transmission, la reprise du même instantané, les cinq tentatives bornées, les quotas, le conflit et sa résolution explicite, la clôture du processus pendant une transmission, la restauration de la copie centrale, le changement de rôle, la révocation et les réponses tardives après déconnexion. Des assertions vérifient qu’aucun appel de confirmation, de soumission, d’approbation ou de paiement n’est émis par le moteur.
+
+Les sept tests PostgreSQL propres à la synchronisation vérifient six transmissions concurrentes dédupliquées, les identifiants et dates conservés, l’absence de toute écriture financière, l’isolation des auteurs et périmètres, les droits révoqués sur les routes nouvelles et historiques, les conflits/reprises versionnées, les quotas de trente tentatives par minute y compris pour l’ancien protocole, les journaux immuables et les sessions révoquées. Les tests existants de réservations, paiements concurrents, soldes et déduplication financière restent dans la suite complète.
+
+Le parcours intégré utilise les vrais composants et une base temporaire. Il vérifie le manifeste, le journal, la restauration via le moteur après nouvelle authentification et l’actualisation du cache sans modifier de solde. Il rejoue ensuite le circuit existant d’encaissement et de dépense avec actions explicites et approbateur distinct. SQL final inchangé : **2 opérations, 4 écritures, 1 reçu, 1 dépense payée, 1 bon, 1 justificatif de dépense et 2 brouillons** ; solde final `10.00 USD` et `0.00 CDF`. Base et rôle de test sont supprimés.
+
+Corrections issues des vérifications : un accusé perdu conserve désormais la version exacte envoyée ; un accusé concernant une ancienne révision conserve la correction locale ; une confirmation centrale ne supprime plus silencieusement une correction locale plus récente. Les réponses malformées ferment la session. Les anciennes routes de consultation appliquent aussi le périmètre courant. La suite complète atteignait le plafond de connexions partagé entre fichiers de test : une clé de namespace propre à chaque fichier de test isole les compteurs, exclusivement sur les bases jetables, sans relever les plafonds réels ni désactiver leurs tests. Les sockets initialement bloqués par le bac à sable ont été rejoués avec l’accès local nécessaire.
+
+La migration additive `20261105000600_secure_synchronization` ajoute les dates de brouillons et `SyncEvent` avec RLS forcée, garde de contexte, immutabilité et unicité d’un résultat final par tentative. Les onze migrations antérieures sont préservées. Les douze migrations sont appliquées sur la base de développement. Les empreintes des onze migrations historiques ont été vérifiées avant application ; les nombres de lignes et empreintes SHA-256 des onze tables financières et de préparation contrôlées sont identiques avant/après, en excluant uniquement les deux nouvelles colonnes nullables du calcul pour `ImportedDraft`. RLS forcée est vérifiée sur `SyncEvent`. La base de développement ne contenait pas d’opérations financières lors de ce contrôle ; les scénarios avec mouvements sont validés séparément sur les bases jetables.
+
+**Limites conservées :** données sensibles uniquement en mémoire native, expiration au plus quinze minutes, aucune persistance en clair. Fermer l’application efface les brouillons non reçus et les captures ; seules les copies serveur sont restaurables après une nouvelle connexion en ligne. Les fichiers non encore enregistrés ne sont pas capturés et les derniers caractères pendant les 100 ms de temporisation peuvent être perdus. La reprise durable hors connexion reste indisponible tant que SQLCipher et les magasins de clés ne sont pas qualifiés sur Windows/macOS. Les installateurs, l’impression physique et un pilotage graphique natif complet Windows/macOS ne sont pas validés depuis cette machine. Le rendu du centre est vérifié dans Chromium avec double IPC ; le contrôle graphique Linux porte sur le lancement et la connexion.
+
+Commandes exécutées : `pnpm check`, `pnpm test:db`, `pnpm test:db synchronization.spec.ts`, `pnpm test:session`, `pnpm test:auth:desktop`, `pnpm test:local`, `pnpm test:api:live`, `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium pnpm test:e2e`, `pnpm format:check`, `pnpm db:validate`, compilation/Clippy Tauri et `tests/native/smoke-linux.sh` dans le conteneur local sans réseau. Voir [synchronisation.md](synchronisation.md) pour l’utilisation et les garanties.
+
+## Historique — étape 5 : demandes de dépenses et approbations
 
 **183 tests automatisés distincts réussis**, plus un parcours intégré Rust/API/PostgreSQL réel et un contrôle de la fenêtre Tauri Linux. Le circuit distingue préparation, transmission du brouillon, soumission explicite, approbation ou rejet motivé, réservation et paiement confirmé avec bon de sortie. Les configurations monocaisse et multicaisse restent couvertes.
 

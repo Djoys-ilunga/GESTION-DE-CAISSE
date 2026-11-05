@@ -20,6 +20,7 @@
     "allow-workspace-drafts",
     "allow-workspace-save-draft",
     "allow-workspace-sync",
+    "allow-workspace-sync-action",
     "allow-admin-request"
   ]
 }

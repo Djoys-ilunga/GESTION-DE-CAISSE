@@ -1,10 +1,20 @@
-import { Controller, Get, Post, Body, Req, Param, Inject, NotFoundException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Req,
+  Param,
+  Inject,
+  NotFoundException,
+  Query,
+} from '@nestjs/common';
 import { z } from 'zod';
 import { draftSchema } from '@caissepro/shared';
 import { Permission, type AuthRequest } from './auth.guard';
 import { CentralAccess, type DataContext } from '../data/central-access';
 import { LedgerService } from '../data/ledger.service';
-import { DraftInboxService } from '../data/draft-inbox.service';
+import { SynchronizationService } from '../data/synchronization.service';
 const ctx = (r: AuthRequest): DataContext => ({
   companyId: r.principal.companyId,
   userId: r.principal.userId,
@@ -15,7 +25,7 @@ export class WorkspaceController {
   constructor(
     @Inject(CentralAccess) private readonly access: CentralAccess,
     @Inject(LedgerService) private readonly ledger: LedgerService,
-    @Inject(DraftInboxService) private readonly inbox: DraftInboxService,
+    @Inject(SynchronizationService) private readonly synchronization: SynchronizationService,
   ) {}
   @Permission('ledger:read') @Get('balances') async balances(@Req() req: AuthRequest) {
     const context = ctx(req);
@@ -47,9 +57,9 @@ export class WorkspaceController {
   }
   @Permission('draft:read_own') @Get('drafts') drafts(@Req() req: AuthRequest) {
     const context = ctx(req);
-    return this.access.run(context, (tx) =>
+    return this.access.run(context, async (tx) =>
       tx.importedDraft.findMany({
-        where: { companyId: context.companyId, authorId: context.userId },
+        where: await this.synchronization.authorizedScope(tx, context),
         select: {
           clientDraftId: true,
           agencyId: true,
@@ -72,9 +82,9 @@ export class WorkspaceController {
   ) {
     const context = ctx(req);
     z.uuid().parse(id);
-    const row = await this.access.run(context, (tx) =>
+    const row = await this.access.run(context, async (tx) =>
       tx.importedDraft.findFirst({
-        where: { companyId: context.companyId, authorId: context.userId, clientDraftId: id },
+        where: { ...(await this.synchronization.authorizedScope(tx, context)), clientDraftId: id },
         select: {
           clientDraftId: true,
           version: true,
@@ -94,6 +104,9 @@ export class WorkspaceController {
   ) {
     const value = z
       .object({
+        syncProtocol: z.literal(2).optional(),
+        originalCreatedAt: z.iso.datetime().optional(),
+        updatedAt: z.iso.datetime().optional(),
         draft: draftSchema,
         agencyId: z.uuid(),
         cashRegisterId: z.uuid().nullable(),
@@ -102,13 +115,25 @@ export class WorkspaceController {
       })
       .strict()
       .parse(body);
-    return this.inbox.receive(
-      ctx(req),
-      value.agencyId,
-      value.draft,
-      value.version,
-      value.expectedServerVersion,
-      value.cashRegisterId,
-    );
+    return this.synchronization.receive(ctx(req), value);
+  }
+  @Permission('draft:read_own') @Get('sync/manifest') manifest(
+    @Req() req: AuthRequest,
+    @Query() query: unknown,
+  ) {
+    const q = z
+      .object({ page: z.coerce.number().int().min(1).max(10000).default(1) })
+      .strict()
+      .parse(query);
+    return this.synchronization.manifest(ctx(req), q.page);
+  }
+  @Permission('draft:read_own') @Get('sync/events') events(@Req() req: AuthRequest) {
+    return this.synchronization.events(ctx(req));
+  }
+  @Permission('draft:read_own') @Get('sync/drafts/:id') syncSource(
+    @Req() req: AuthRequest,
+    @Param('id') id: string,
+  ) {
+    return this.synchronization.source(ctx(req), z.uuid().parse(id));
   }
 }

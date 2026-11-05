@@ -68,6 +68,7 @@ model Installation {
 }
 
 model Company {
+  syncEvents      SyncEvent[]
   code            String           @unique @default(dbgenerated("('CP-'::text || upper(substr((gen_random_uuid())::text, 1, 12)))")) @db.VarChar(32)
   id              String           @id @default(uuid()) @db.Uuid
   name            String           @db.VarChar(160)
@@ -101,6 +102,7 @@ model Agency {
 }
 
 model User {
+  syncEvents         SyncEvent[]
   securityVersion    Int                  @default(1)
   mustChangePassword Boolean              @default(false)
   credential         UserCredential?
@@ -428,6 +430,9 @@ model AuditEvent {
 }
 
 model ImportedDraft {
+  syncEvents        SyncEvent[]
+  clientCreatedAt   DateTime?       @db.Timestamptz(3)
+  clientUpdatedAt   DateTime?       @db.Timestamptz(3)
   expenseDetails    Json?
   expense           ExpenseRequest?
   receiptProvenance String?         @db.VarChar(160)
@@ -641,4 +646,23 @@ model PaymentVoucher {
   @@unique([companyId, operationId])
   @@unique([companyId, year, sequence])
   @@unique([companyId, number])
+}
+
+model SyncEvent {
+  company       Company        @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  author        User           @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  source        ImportedDraft? @relation(fields: [companyId, serverId], references: [companyId, id], onDelete: Restrict)
+  id            String         @id @default(uuid()) @db.Uuid
+  companyId     String         @db.Uuid
+  authorId      String         @db.Uuid
+  attemptId     String         @db.Uuid
+  clientDraftId String         @db.Uuid
+  version       Int
+  stage         String         @db.VarChar(20)
+  code          String         @db.VarChar(60)
+  serverId      String?        @db.Uuid
+  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
+
+  @@unique([companyId, authorId, attemptId, stage])
+  @@index([companyId, authorId, createdAt])
 }

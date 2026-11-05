@@ -25,6 +25,7 @@ pub struct Broker {
     device: Uuid,
     state: Arc<Mutex<State>>,
     clock: Clock,
+    sync_lock: tokio::sync::Mutex<()>,
 }
 impl Broker {
     pub async fn expense_action(
@@ -183,6 +184,9 @@ impl Broker {
             #[derive(Deserialize)]
             #[serde(rename_all = "camelCase", deny_unknown_fields)]
             struct Remote {
+                server_id: Uuid,
+                original_created_at: Option<String>,
+                updated_at: Option<String>,
                 client_draft_id: Uuid,
                 agency_id: Uuid,
                 cash_register_id: Option<Uuid>,
@@ -226,6 +230,11 @@ impl Broker {
             )?;
             record.version = remote.version;
             record.server_version = Some(remote.version);
+            record.server_id = Some(remote.server_id);
+            record.original_created_at = remote.original_created_at.or(record.original_created_at);
+            if let Some(updated) = remote.updated_at {
+                record.updated_at = updated;
+            }
             record.state = "synced".into();
             s.drafts.insert(record.draft.id, record.clone());
             return serde_json::to_value(record).map_err(|_| Error::InvalidResponse);
@@ -333,13 +342,14 @@ impl Broker {
         if let Some(record) = s.drafts.get_mut(&client) {
             changed = record.state != "confirmed" || record.confirmed_receipt_id != Some(id);
             if u64::from(record.version) != version {
-                s.drafts.remove(&client);
+                record.state = "conflict".into();
             } else {
                 record.state = "confirmed".into();
-                record.confirmed_receipt_id = Some(id);
-                record.receipt_number = Some(number.into());
-                record.result = None;
             }
+            record.confirmed_receipt_id = Some(id);
+            record.receipt_number = Some(number.into());
+            record.result = None;
+            s.pending_sync.remove(&client);
         }
         if changed {
             s.balances = None;
@@ -477,6 +487,9 @@ impl Broker {
             #[derive(Deserialize)]
             #[serde(rename_all = "camelCase", deny_unknown_fields)]
             struct Remote {
+                server_id: Uuid,
+                original_created_at: Option<String>,
+                updated_at: Option<String>,
                 client_draft_id: Uuid,
                 agency_id: Uuid,
                 cash_register_id: Uuid,
@@ -519,6 +532,11 @@ impl Broker {
             }
             record.version = remote.version;
             record.server_version = Some(remote.version);
+            record.server_id = Some(remote.server_id);
+            record.original_created_at = remote.original_created_at.or(record.original_created_at);
+            if let Some(updated) = remote.updated_at {
+                record.updated_at = updated;
+            }
             record.state = "synced".into();
             s.drafts.insert(record.draft.id, record.clone());
             return serde_json::to_value(record).map_err(|_| Error::InvalidResponse);
@@ -557,6 +575,7 @@ impl Broker {
             device,
             state: Arc::new(Mutex::new(State::default())),
             clock: Clock::default(),
+            sync_lock: tokio::sync::Mutex::new(()),
         })
     }
     fn generation(state: &State, expected: Option<u64>) -> Result<()> {
@@ -612,6 +631,25 @@ impl Broker {
                 Some("EXPENSE_EVIDENCE_REQUIRED") => Error::ExpenseEvidence,
                 _ if forbidden => Error::Forbidden,
                 _ => Error::ExpenseConflict,
+            });
+        }
+        if path == "workspace/drafts/sync" && response.status().as_u16() == 409 {
+            let mut bytes = Vec::new();
+            while let Some(chunk) = response.chunk().await.map_err(|_| Error::Unavailable)? {
+                if bytes.len().saturating_add(chunk.len()) > 4096 {
+                    return Err(Error::InvalidResponse);
+                }
+                bytes.extend_from_slice(&chunk);
+            }
+            let body: Value = serde_json::from_slice(&bytes).map_err(|_| Error::InvalidResponse)?;
+            return Err(match body.get("code").and_then(Value::as_str) {
+                Some(
+                    "DRAFT_DATES_INVALID"
+                    | "DRAFT_EXPIRED"
+                    | "DRAFT_CASH_REQUIRED"
+                    | "EVIDENCE_INVALID",
+                ) => Error::InvalidInput,
+                _ => Error::Conflict,
             });
         }
         match response.status().as_u16() {
@@ -860,10 +898,16 @@ impl Broker {
                     state.clear("SERVER_IDENTITY_INVALID");
                     return Err(Error::Identity);
                 }
-                if !profile.same_scope(&session.profile) {
+                let scope_changed = !profile.same_scope(&session.profile);
+                if scope_changed {
                     session.balances = None;
                     session.cash_catalog = None;
                     session.drafts.clear();
+                    session.pending_sync.clear();
+                    session.form_buffers.clear();
+                    session.sync_events.clear();
+                    session.last_sync_success = None;
+                    session.sync_cache_updated = None;
                 }
                 session.locked = session.locked || profile.locked;
                 session.profile = profile;
@@ -875,6 +919,9 @@ impl Broker {
                 session.absolute_until = absolute;
                 session.online = true;
                 session.revalidating = false;
+                if scope_changed {
+                    state.generation += 1;
+                }
                 state.reason = None;
                 Ok(state.view(now))
             }
@@ -943,6 +990,11 @@ impl Broker {
                             s.balances = None;
                             s.cash_catalog = None;
                             s.drafts.clear();
+                            s.pending_sync.clear();
+                            s.form_buffers.clear();
+                            s.sync_events.clear();
+                            s.last_sync_success = None;
+                            s.sync_cache_updated = None;
                         }
                         s.token = Zeroizing::new(response.access_token);
                         s.profile = response.profile;
@@ -1218,62 +1270,347 @@ impl Broker {
         }
         Ok(json!({"data":value,"stale":true}))
     }
+    pub fn synchronization_status(&self, expected: Option<u64>) -> Result<Value> {
+        let (generation, _) = self.snapshot(true, false, expected)?;
+        let mut state = self.state()?;
+        Self::generation(&state, Some(generation))?;
+        let s = state.session.as_mut().ok_or(Error::AuthRequired)?;
+        let records = s.list_drafts(self.clock.now())?;
+        let mut counts =
+            json!({"local":0,"queued":0,"syncing":0,"synced":0,"conflict":0,"error":0});
+        for r in records {
+            let key = if ["confirmed", "submitted"].contains(&r.state.as_str()) {
+                "synced"
+            } else {
+                r.state.as_str()
+            };
+            if let Some(value) = counts.get_mut(key) {
+                *value = json!(value.as_u64().unwrap_or(0) + 1);
+            }
+        }
+        Ok(
+            json!({"running":self.sync_lock.try_lock().is_err(),"apiOnline":s.online,"lastSuccessfulAt":s.last_sync_success,"cacheUpdatedAt":s.sync_cache_updated,"counts":counts,"persistence":"memory-only","events":s.sync_events}),
+        )
+    }
+    pub async fn synchronization_action(
+        &self,
+        action: &str,
+        payload: Option<Value>,
+        expected: Option<u64>,
+    ) -> Result<Value> {
+        if action == "status" {
+            return self.synchronization_status(expected);
+        }
+        let (generation, _) = self.snapshot(true, false, expected)?;
+        let payload = payload.unwrap_or_else(|| json!({}));
+        let id = || -> Result<Uuid> {
+            Uuid::parse_str(
+                payload
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .ok_or(Error::InvalidInput)?,
+            )
+            .map_err(|_| Error::InvalidInput)
+        };
+        if action == "retry" {
+            let _worker = self.sync_lock.try_lock().map_err(|_| Error::SyncBusy)?;
+            let id = id()?;
+            let mut state = self.state()?;
+            Self::generation(&state, Some(generation))?;
+            let s = state.session.as_mut().ok_or(Error::AuthRequired)?;
+            s.permission("draft:write_own")?;
+            let r = s.drafts.get_mut(&id).ok_or(Error::InvalidInput)?;
+            if r.state == "conflict"
+                || r.confirmed_receipt_id.is_some()
+                || r.submitted_expense_id.is_some()
+                || r.state == "synced"
+            {
+                return Err(Error::Conflict);
+            }
+            if payload.get("expectedVersion").and_then(Value::as_u64) != Some(u64::from(r.version))
+            {
+                return Err(Error::Conflict);
+            }
+            r.attempts = 0;
+            r.next_attempt_at = None;
+            r.state = "queued".into();
+            r.result = None;
+            return serde_json::to_value(r).map_err(|_| Error::InvalidResponse);
+        }
+        if ["buffers", "buffer-save", "buffer-remove"].contains(&action) {
+            let now = self.clock.now();
+            let mut state = self.state()?;
+            Self::generation(&state, Some(generation))?;
+            let s = state.session.as_mut().ok_or(Error::AuthRequired)?;
+            if action == "buffers" {
+                return serde_json::to_value(s.list_form_buffers(now)?)
+                    .map_err(|_| Error::InvalidResponse);
+            }
+            if action == "buffer-save" {
+                let input: FormBufferInput =
+                    serde_json::from_value(payload).map_err(|_| Error::InvalidInput)?;
+                return serde_json::to_value(s.save_form_buffer(input, now)?)
+                    .map_err(|_| Error::InvalidResponse);
+            }
+            s.permission("draft:write_own")?;
+            s.form_buffers.remove(&id()?);
+            return Ok(json!({"removed":true}));
+        }
+        self.snapshot(true, true, Some(generation))?;
+        self.state()?
+            .session
+            .as_ref()
+            .ok_or(Error::AuthRequired)?
+            .permission("draft:read_own")?;
+        if ["resolve", "restore"].contains(&action) {
+            let _worker = self.sync_lock.try_lock().map_err(|_| Error::SyncBusy)?;
+            self.revalidate(Some(generation)).await?;
+            let client = id()?;
+            let raw = self
+                .protected(
+                    Method::GET,
+                    &format!("workspace/sync/drafts/{client}"),
+                    None,
+                    Some(generation),
+                )
+                .await?;
+            #[derive(Deserialize)]
+            #[serde(rename_all = "camelCase", deny_unknown_fields)]
+            struct Remote {
+                server_id: Uuid,
+                client_draft_id: Uuid,
+                agency_id: Uuid,
+                cash_register_id: Option<Uuid>,
+                kind: String,
+                version: u32,
+                created_at: String,
+                updated_at: String,
+                received_at: String,
+                source_state: String,
+                receipt_id: Option<Uuid>,
+                expense_request_id: Option<Uuid>,
+                currency: String,
+                amount: String,
+                description: String,
+                receipt_details: Option<ReceiptDetails>,
+                expense_details: Option<ExpenseDetails>,
+            }
+            let remote: Remote = serde_json::from_value(raw).map_err(|_| Error::InvalidResponse)?;
+            if remote.client_draft_id != client
+                || remote.version == 0
+                || remote.version > i32::MAX as u32
+                || millis(&remote.updated_at)? < millis(&remote.created_at)?
+                || millis(&remote.received_at)? > self.clock.now() + 30000
+                || !["draft", "confirmed", "submitted"].contains(&remote.source_state.as_str())
+                || (remote.source_state == "confirmed"
+                    && (remote.receipt_id.is_none() || remote.kind != "receipt"))
+                || (remote.source_state == "submitted"
+                    && (remote.expense_request_id.is_none() || remote.kind != "expense-request"))
+            {
+                return Err(Error::InvalidResponse);
+            }
+            let choice = if action == "restore" {
+                "server"
+            } else {
+                payload
+                    .get("choice")
+                    .and_then(Value::as_str)
+                    .filter(|s| ["local", "server"].contains(s))
+                    .ok_or(Error::InvalidInput)?
+            };
+            let now = self.clock.now();
+            let mut state = self.state()?;
+            Self::generation(&state, Some(generation))?;
+            let s = state.session.as_mut().ok_or(Error::AuthRequired)?;
+            s.guard(now)?;
+            s.permission("draft:write_own")?;
+            s.scope(remote.agency_id, remote.cash_register_id)?;
+            if let Some(local) = s.drafts.get(&client) {
+                if action == "restore"
+                    || payload.get("expectedVersion").and_then(Value::as_u64)
+                        != Some(u64::from(local.version))
+                    || local.agency_id != remote.agency_id
+                    || local.cash_register_id != remote.cash_register_id
+                    || local.draft.kind != remote.kind
+                {
+                    return Err(Error::Conflict);
+                }
+            } else if action == "resolve" {
+                return Err(Error::Conflict);
+            }
+            if choice == "local" {
+                let r = s.drafts.get_mut(&client).ok_or(Error::Conflict)?;
+                if remote.source_state != "draft" {
+                    r.state = "conflict".into();
+                    r.confirmed_receipt_id = remote.receipt_id;
+                    r.submitted_expense_id = remote.expense_request_id;
+                    return Err(Error::Conflict);
+                }
+                r.version = r
+                    .version
+                    .max(remote.version)
+                    .checked_add(1)
+                    .filter(|v| *v <= i32::MAX as u32)
+                    .ok_or(Error::Conflict)?;
+                r.server_id = Some(remote.server_id);
+                r.server_version = Some(remote.version);
+                r.updated_at = crate::state::iso(now.max(millis(&remote.updated_at)?));
+                r.original_created_at = Some(remote.created_at);
+                r.attempts = 0;
+                r.next_attempt_at = None;
+                r.state = "queued".into();
+                r.result = None;
+                s.pending_sync.remove(&client);
+                return serde_json::to_value(r).map_err(|_| Error::InvalidResponse);
+            }
+            let old = s.drafts.remove(&client);
+            let input = SaveDraft {
+                draft: Draft {
+                    id: client,
+                    kind: remote.kind,
+                    currency: remote.currency,
+                    amount: remote.amount,
+                    description: remote.description,
+                    created_at: crate::state::iso(now),
+                    expires_at: crate::state::iso((now + 900000).min(s.absolute_until)),
+                    receipt_details: remote.receipt_details,
+                    expense_details: remote.expense_details,
+                },
+                agency_id: remote.agency_id,
+                cash_register_id: remote.cash_register_id,
+                expected_version: None,
+            };
+            let mut record = match s.save_draft(input, now) {
+                Ok(r) => r,
+                Err(error) => {
+                    if let Some(old) = old {
+                        s.drafts.insert(client, old);
+                    }
+                    return Err(error);
+                }
+            };
+            record.version = remote.version;
+            record.server_version = Some(remote.version);
+            record.server_id = Some(remote.server_id);
+            record.original_created_at = Some(remote.created_at);
+            record.updated_at = remote.updated_at;
+            record.synchronized_at = Some(crate::state::iso(now));
+            record.state = match remote.source_state.as_str() {
+                "confirmed" => "confirmed",
+                "submitted" => "submitted",
+                _ => "synced",
+            }
+            .into();
+            record.confirmed_receipt_id = remote.receipt_id;
+            record.submitted_expense_id = remote.expense_request_id;
+            s.pending_sync.remove(&client);
+            s.drafts.insert(client, record.clone());
+            return serde_json::to_value(record).map_err(|_| Error::InvalidResponse);
+        }
+        let path = match action {
+            "manifest" => Self::query_path("workspace/sync/manifest", &payload, &["page"])?,
+            "events" => "workspace/sync/events".into(),
+            _ => return Err(Error::Forbidden),
+        };
+        self.protected(Method::GET, &path, None, Some(generation))
+            .await
+    }
     pub async fn synchronize(&self, expected: Option<u64>) -> Result<Vec<SyncResult>> {
+        let _worker = self.sync_lock.try_lock().map_err(|_| Error::SyncBusy)?;
         let (generation, _) = self.snapshot(true, false, expected)?;
         self.revalidate(Some(generation)).await?;
         let records = self.drafts(Some(generation))?;
         let mut results = Vec::new();
-        for record in records
-            .into_iter()
-            .filter(|r| r.state != "synced" && r.state != "confirmed" && r.state != "submitted")
-        {
-            let _ = self.snapshot(true, true, Some(generation))?;
-            let result=self.protected(Method::POST,"workspace/drafts/sync",Some(json!({"draft":record.draft,"agencyId":record.agency_id,"cashRegisterId":record.cash_register_id,"version":record.version,"expectedServerVersion":record.server_version})),Some(generation)).await;
+        for record in records {
+            let pending = {
+                let mut state = self.state()?;
+                Self::generation(&state, Some(generation))?;
+                state
+                    .session
+                    .as_mut()
+                    .ok_or(Error::AuthRequired)?
+                    .prepare_sync(record.draft.id, self.clock.now())?
+            };
+            let Some(pending) = pending else {
+                continue;
+            };
+            let r = &pending.record;
+            let result=self.protected(Method::POST,"workspace/drafts/sync",Some(json!({"syncProtocol":2,"draft":r.draft,"agencyId":r.agency_id,"cashRegisterId":r.cash_register_id,"version":r.version,"expectedServerVersion":r.server_version,"originalCreatedAt":r.original_created_at.as_ref().unwrap_or(&r.draft.created_at),"updatedAt":r.updated_at})),Some(generation)).await;
+            let mut transport_error = None;
             let response = match result {
-                Ok(value) => {
-                    let value: SyncResult =
-                        serde_json::from_value(value).map_err(|_| Error::InvalidResponse)?;
-                    if value.draft_id != record.draft.id
-                        || value.outcome != "accepted-as-draft"
-                        || value.code != "draft-received"
-                    {
+                Ok(value) => match serde_json::from_value::<SyncResult>(value) {
+                    Ok(response) => response,
+                    Err(_) => {
+                        self.fail(generation, &Error::InvalidResponse)?;
                         return Err(Error::InvalidResponse);
                     }
-                    value
+                },
+                Err(Error::Conflict) => SyncResult::failure(r.draft.id, "conflict", "conflict"),
+                Err(Error::Forbidden | Error::InvalidInput) => {
+                    SyncResult::failure(r.draft.id, "rejected", "validation-failed")
                 }
-                Err(Error::Conflict) => SyncResult {
-                    draft_id: record.draft.id,
-                    outcome: "conflict".into(),
-                    code: "conflict".into(),
-                },
-                Err(Error::Forbidden | Error::InvalidInput) => SyncResult {
-                    draft_id: record.draft.id,
-                    outcome: "rejected".into(),
-                    code: "validation-failed".into(),
-                },
+                Err(error @ (Error::Unavailable | Error::Throttled)) => {
+                    let code = if matches!(error, Error::Throttled) {
+                        "rate-limited"
+                    } else {
+                        "transport-error"
+                    };
+                    transport_error = Some(error);
+                    SyncResult::failure(r.draft.id, "deferred", code)
+                }
                 Err(error) => return Err(error),
             };
-            let mut state = self.state()?;
-            if state.generation != generation {
-                return Err(Error::SessionChanged);
+            let applied = {
+                let mut state = self.state()?;
+                Self::generation(&state, Some(generation))?;
+                state
+                    .session
+                    .as_mut()
+                    .ok_or(Error::AuthRequired)?
+                    .finish_sync(&pending, response.clone(), self.clock.now())
+            };
+            if let Err(error) = applied {
+                self.fail(generation, &error)?;
+                return Err(error);
             }
-            let s = state.session.as_mut().ok_or(Error::AuthRequired)?;
-            s.guard(self.clock.now())?;
-            let current = s.drafts.get_mut(&record.draft.id).ok_or(Error::Conflict)?;
-            if current.version != record.version {
-                return Err(Error::Conflict);
-            }
-            current.state = if response.outcome == "accepted-as-draft" {
-                current.server_version = Some(record.version);
-                "synced"
-            } else if response.outcome == "conflict" {
-                "conflict"
-            } else {
-                "error"
-            }
-            .into();
-            current.result = Some(response.clone());
             results.push(response);
+            if let Some(error) = transport_error {
+                return Err(error);
+            }
+        }
+        if results.iter().any(|r| r.outcome == "accepted-as-draft") {
+            let allowed = self
+                .state()?
+                .session
+                .as_ref()
+                .is_some_and(|s| s.profile.permissions.iter().any(|p| p == "ledger:read"));
+            if allowed {
+                let refreshed = self.balances(Some(generation)).await.is_ok()
+                    && self.cash_catalog(Some(generation)).await.is_ok();
+                let mut state = self.state()?;
+                Self::generation(&state, Some(generation))?;
+                if !refreshed {
+                    if let Some(last) = results.last() {
+                        state
+                            .session
+                            .as_mut()
+                            .ok_or(Error::AuthRequired)?
+                            .sync_note(
+                                last.draft_id,
+                                last.server_version.unwrap_or(1),
+                                "cache-refresh-failed",
+                                self.clock.now(),
+                            );
+                    }
+                }
+                if refreshed {
+                    state
+                        .session
+                        .as_mut()
+                        .ok_or(Error::AuthRequired)?
+                        .sync_cache_updated = Some(crate::state::iso(self.clock.now()));
+                }
+            }
         }
         Ok(results)
     }

@@ -40,6 +40,7 @@ fn main() {
         "workspace_drafts",
         "workspace_save_draft",
         "workspace_sync",
+        "workspace_sync_action",
         "admin_request",
     ]);
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(manifest))

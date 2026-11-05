@@ -1,9 +1,11 @@
+import { useFormBuffer, bufferedFields } from '../hybrid/use-form-buffer';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { FilePlus2, Paperclip } from 'lucide-react';
 import {
   MAX_EVIDENCE_BYTES,
   receiptDetailsSchema,
   type CashView,
+  type FormBuffer,
   type SupportingDocument,
 } from '@caissepro/shared';
 import { createLocalDraft } from '../hybrid/local-store';
@@ -31,24 +33,40 @@ export function ReceiptForm({
   gateway,
   cashes,
   editing,
+  buffer,
   onSaved,
   onCancel,
 }: {
   gateway: AuthGateway;
   cashes: CashView[];
   editing: SessionDraft | null;
+  buffer?: FormBuffer;
   onSaved(): void;
   onCancel(): void;
 }) {
+  const fields = bufferedFields(buffer);
+  const [formId] = useState(editing?.draft.id ?? buffer?.id ?? crypto.randomUUID());
   const [cash, setCash] = useState(
-      editing?.cashRegisterId ?? cashes.find((c) => c.active)?.id ?? '',
+      editing?.cashRegisterId ?? buffer?.cashRegisterId ?? cashes.find((c) => c.active)?.id ?? '',
     ),
-    [currency, setCurrency] = useState<'CDF' | 'USD'>(editing?.draft.currency ?? 'CDF'),
-    [amount, setAmount] = useState(editing?.draft.amount ?? ''),
-    [provenance, setProvenance] = useState(editing?.draft.receiptDetails?.provenance ?? ''),
-    [category, setCategory] = useState(editing?.draft.receiptDetails?.category ?? ''),
-    [description, setDescription] = useState(editing?.draft.description ?? ''),
-    [reference, setReference] = useState(editing?.draft.receiptDetails?.reference ?? '');
+    [currency, setCurrency] = useState<'CDF' | 'USD'>(
+      (fields.currency === 'USD' || fields.currency === 'CDF'
+        ? fields.currency
+        : editing?.draft.currency) ?? 'CDF',
+    ),
+    [amount, setAmount] = useState(fields.amount ?? editing?.draft.amount ?? ''),
+    [provenance, setProvenance] = useState(
+      fields.provenance ?? editing?.draft.receiptDetails?.provenance ?? '',
+    ),
+    [category, setCategory] = useState(
+      fields.category ?? editing?.draft.receiptDetails?.category ?? '',
+    ),
+    [description, setDescription] = useState(
+      fields.description ?? editing?.draft.description ?? '',
+    ),
+    [reference, setReference] = useState(
+      fields.reference ?? editing?.draft.receiptDetails?.reference ?? '',
+    );
   const [file, setFile] = useState<File | null>(null),
     [retained, setRetained] = useState(editing?.draft.receiptDetails?.supportingDocument ?? null),
     [busy, setBusy] = useState(false),
@@ -61,6 +79,19 @@ export function ReceiptForm({
   useEffect(() => {
     if (!cash && !editing && onlyCashId) setCash(onlyCashId);
   }, [cash, editing, onlyCashId]);
+  const selectedAgency = cashes.find((c) => c.id === cash)?.agency.id ?? buffer?.agencyId;
+  const capture = useFormBuffer(
+    gateway,
+    {
+      id: formId,
+      kind: 'receipt',
+      agencyId: selectedAgency ?? '00000000-0000-4000-8000-000000000000',
+      cashRegisterId: cash || null,
+      expectedLocalVersion: editing?.version ?? null,
+      fields: { amount, currency, description, provenance, category, reference },
+    },
+    !busy && Boolean(selectedAgency),
+  );
   const mounted = useRef(false);
   useEffect(() => {
     mounted.current = true;
@@ -92,7 +123,8 @@ export function ReceiptForm({
       };
       const draft = editing
         ? { ...editing.draft, ...base, receiptDetails }
-        : { ...createLocalDraft(base), receiptDetails };
+        : { ...createLocalDraft(base), id: formId, receiptDetails };
+      if (!editing && buffer) draft.expiresAt = buffer.expiresAt;
       await gateway.saveDraft({
         draft,
         agencyId: selected.agency.id,
@@ -119,6 +151,13 @@ export function ReceiptForm({
         </h2>
         <span className="receipt-status pending">Brouillon non comptabilisé</span>
       </div>
+      <p className="section-description">
+        {capture.state === 'captured'
+          ? 'Saisie capturée temporairement dans votre session. Les fichiers doivent être enregistrés avec le brouillon.'
+          : capture.state === 'unavailable'
+            ? 'Saisie non capturée. Enregistrez le brouillon avant de quitter cet écran.'
+            : 'Capture temporaire de la saisie…'}
+      </p>
       <div className="form-grid">
         {onlyCash && cash === onlyCash.id ? (
           <div className="cash-choice" role="group" aria-label="Caisse d’encaissement">
@@ -249,7 +288,15 @@ export function ReceiptForm({
         <button className="primary-button" disabled={busy}>
           {busy ? 'Enregistrement…' : 'Enregistrer le brouillon'}
         </button>
-        <button className="secondary-button" type="button" disabled={busy} onClick={onCancel}>
+        <button
+          className="secondary-button"
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            capture.discard();
+            onCancel();
+          }}
+        >
           Annuler
         </button>
       </div>

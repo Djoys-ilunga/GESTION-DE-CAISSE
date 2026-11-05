@@ -383,6 +383,9 @@ export class CashService {
       await this.access.requireCashRead(tx, ctx, r.cashRegisterId, 'receipt:read');
       if (r.receipt) throw new DataError('DRAFT_ALREADY_CONFIRMED');
       return {
+        serverId: r.id,
+        originalCreatedAt: (r.clientCreatedAt ?? r.receivedAt).toISOString(),
+        updatedAt: (r.clientUpdatedAt ?? r.receivedAt).toISOString(),
         clientDraftId: r.clientDraftId,
         agencyId: r.agencyId,
         cashRegisterId: r.cashRegisterId,

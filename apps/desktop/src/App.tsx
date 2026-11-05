@@ -32,6 +32,7 @@ import {
 } from '@caissepro/shared';
 import type { ConnectionService } from './hybrid/connection';
 import { ExpensesPage } from './expenses/ExpensesPage';
+import { SyncCenter } from './hybrid/SyncCenter';
 import { AuthController } from './auth/controller';
 import {
   NativeAuthGateway,
@@ -111,7 +112,16 @@ export function App({
     const timer = setInterval(() => {
       void check();
     }, 15000);
+    const onNetwork = () => {
+      void check();
+    };
+    window.addEventListener('online', onNetwork);
+    window.addEventListener('offline', onNetwork);
+    window.addEventListener('focus', onNetwork);
     return () => {
+      window.removeEventListener('online', onNetwork);
+      window.removeEventListener('offline', onNetwork);
+      window.removeEventListener('focus', onNetwork);
       active = false;
       clearInterval(timer);
     };
@@ -591,6 +601,7 @@ function Workspace({
     { id: 'expenses', label: 'Dépenses', icon: FilePenLine, permission: 'ledger:read' },
     { id: 'users', label: 'Utilisateurs', icon: Users, permission: 'users:manage' },
     { id: 'logs', label: 'Journal des connexions', icon: ScrollText, permission: 'auth:logs:read' },
+    { id: 'sync', label: 'Synchronisation', icon: RefreshCw, permission: 'draft:read_own' },
     { id: 'security', label: 'Sécurité', icon: ShieldCheck },
   ].filter((item) => !item.permission || permission(item.permission));
   return (
@@ -679,6 +690,8 @@ function Workspace({
             <ReceiptsPage profile={profile} gateway={gateway} online={online} />
           ) : page === 'expenses' ? (
             <ExpensesPage profile={profile} gateway={gateway} online={online} />
+          ) : page === 'sync' ? (
+            <SyncCenter profile={profile} gateway={gateway} online={online} />
           ) : page === 'users' ? (
             <UsersPage gateway={gateway} online={online} />
           ) : page === 'logs' ? (

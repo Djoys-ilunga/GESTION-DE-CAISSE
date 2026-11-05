@@ -16,19 +16,37 @@ export class DraftInboxService {
     version: number,
     expectedServerVersion: number | null = null,
     cashRegisterId: string | null = null,
+    metadata?: { createdAt: string; updatedAt: string },
   ) {
     const draft = draftSchema.parse(value);
     if (draft.kind === 'receipt' && !cashRegisterId) throw new DataError('DRAFT_CASH_REQUIRED');
     z.number().int().positive().parse(version);
     z.number().int().positive().nullable().parse(expectedServerVersion);
     if (Date.parse(draft.expiresAt) <= Date.now()) throw new DataError('DRAFT_EXPIRED');
+    if (metadata) {
+      const created = Date.parse(metadata.createdAt),
+        updated = Date.parse(metadata.updatedAt);
+      if (
+        !Number.isFinite(created) ||
+        !Number.isFinite(updated) ||
+        updated < created ||
+        updated > Date.now() + 1000
+      )
+        throw new DataError('DRAFT_DATES_INVALID');
+    }
     return this.access.run(ctx, async (tx) => {
       await this.access.require(tx, ctx, agencyId, 'draft:receive');
       if (cashRegisterId) await this.access.requireCash(tx, ctx, cashRegisterId, 'draft:receive');
       const previous = await tx.importedDraft.findFirst({
         where: { companyId: ctx.companyId, authorId: ctx.userId, clientDraftId: draft.id },
       });
-      const payloadHash = fingerprint({ draft, cashRegisterId });
+      const payloadHash = fingerprint({ draft, cashRegisterId, ...(metadata ? { metadata } : {}) });
+      if (
+        metadata &&
+        previous?.clientCreatedAt &&
+        previous.clientCreatedAt.toISOString() !== new Date(metadata.createdAt).toISOString()
+      )
+        throw new DataError('DRAFT_CONFLICT');
       if (
         previous?.version === version &&
         previous.payloadHash === payloadHash &&
@@ -77,6 +95,12 @@ export class DraftInboxService {
       }
       const details = draft.kind === 'receipt' ? draft.receiptDetails : undefined;
       const data = {
+        ...(metadata
+          ? {
+              clientCreatedAt: new Date(metadata.createdAt),
+              clientUpdatedAt: new Date(metadata.updatedAt),
+            }
+          : {}),
         expenseDetails: expenseDetails ? expenseDetails : Prisma.DbNull,
         currency: draft.currency,
         amount: draft.amount,

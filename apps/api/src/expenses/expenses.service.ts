@@ -245,6 +245,9 @@ export class ExpensesService {
         await this.access.requireCashRead(tx, ctx, r.cashRegisterId, 'ledger:read');
       if (r.expense) throw new DataError('DRAFT_ALREADY_SUBMITTED');
       return {
+        serverId: r.id,
+        originalCreatedAt: (r.clientCreatedAt ?? r.receivedAt).toISOString(),
+        updatedAt: (r.clientUpdatedAt ?? r.receivedAt).toISOString(),
         clientDraftId: r.clientDraftId,
         agencyId: r.agencyId,
         cashRegisterId: r.cashRegisterId,

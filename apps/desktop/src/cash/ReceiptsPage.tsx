@@ -378,15 +378,19 @@ export function ReceiptsPage({
                               : 'Brouillon non comptabilisé'}
                           </span>
                           <small className="block">
-                            {row.state === 'synced'
-                              ? 'Transmis au serveur'
-                              : row.state === 'conflict'
-                                ? 'Conflit de version'
-                                : row.state === 'error'
-                                  ? 'Transmission refusée'
-                                  : row.state === 'confirmed'
-                                    ? 'Reçu émis par le serveur'
-                                    : 'En mémoire locale'}
+                            {row.state === 'queued'
+                              ? 'En attente de synchronisation'
+                              : row.state === 'syncing'
+                                ? 'En cours de transmission'
+                                : row.state === 'synced'
+                                  ? 'Transmis au serveur'
+                                  : row.state === 'conflict'
+                                    ? 'Conflit de version'
+                                    : row.state === 'error'
+                                      ? 'Transmission refusée'
+                                      : row.state === 'confirmed'
+                                        ? 'Reçu émis par le serveur'
+                                        : 'En mémoire locale'}
                           </small>
                         </td>
                         <td>
