@@ -49,11 +49,26 @@ async fn run(input: Input) -> Result<(), Box<dyn std::error::Error>> {
     let cash = profile.cash_registers[0].id;
     let email = format!("{}@example.test", Uuid::new_v4());
     let created = admin.admin("create", Some(json!({"email":email,"displayName":"Caissier synthétique","initialPassword":input.password,"access":{"roles":["CASHIER"],"agencyIds":[agency],"cashRegisterIds":[cash],"active":true}})), Some(administrator.generation)).await?;
-    let new_agency=Uuid::new_v4();let new_cash=Uuid::new_v4();
-    admin.cash_action("create-agency",Some(json!({"id":new_agency,"code":"ANNEXE","name":"Agence annexe synthétique"})),Some(administrator.generation)).await?;
+    let new_agency = Uuid::new_v4();
+    let new_cash = Uuid::new_v4();
+    admin
+        .cash_action(
+            "create-agency",
+            Some(json!({"id":new_agency,"code":"ANNEXE","name":"Agence annexe synthétique"})),
+            Some(administrator.generation),
+        )
+        .await?;
     admin.cash_action("create",Some(json!({"id":new_cash,"agencyId":new_agency,"code":"ANNEXE","name":"Caisse annexe synthétique","authorizedUserIds":[]})),Some(administrator.generation)).await?;
     admin.cash_action("update",Some(json!({"id":new_cash,"data":{"expectedVersion":1,"name":"Caisse annexe inactive","active":false}})),Some(administrator.generation)).await?;
-    assert_eq!(admin.cash_action("configuration",None,Some(administrator.generation)).await?["registers"].as_array().unwrap().len(),2);
+    assert_eq!(
+        admin
+            .cash_action("configuration", None, Some(administrator.generation))
+            .await?["registers"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
     let cashier = Broker::new(&input.base, &input.deployment, Uuid::new_v4(), true)?;
     let first = cashier
         .login(
@@ -126,13 +141,25 @@ async fn run(input: Input) -> Result<(), Box<dyn std::error::Error>> {
         .await?;
     let pending = cashier.cash_action("pending", None, generation).await?;
     let source = &pending["items"][0];
-    let recovered=Broker::new(&input.base,&input.deployment,Uuid::new_v4(),true)?;
-    assert_eq!(recovered.status()?.state,"anonymous");
-    let current_profile=session.profile.as_ref().unwrap();
-    let recovery=recovered.login(current_profile.company.code.clone(),current_profile.user.email.clone(),Zeroizing::new(input.renewed_password.clone())).await?;
-    let recovery_generation=Some(recovery.generation);
-    let restored=recovered.cash_action("restore",Some(json!({"id":source["id"]})),recovery_generation).await?;
-    assert_eq!(restored["draft"]["id"],source["clientDraftId"]);
+    let recovered = Broker::new(&input.base, &input.deployment, Uuid::new_v4(), true)?;
+    assert_eq!(recovered.status()?.state, "anonymous");
+    let current_profile = session.profile.as_ref().unwrap();
+    let recovery = recovered
+        .login(
+            current_profile.company.code.clone(),
+            current_profile.user.email.clone(),
+            Zeroizing::new(input.renewed_password.clone()),
+        )
+        .await?;
+    let recovery_generation = Some(recovery.generation);
+    let restored = recovered
+        .cash_action(
+            "restore",
+            Some(json!({"id":source["id"]})),
+            recovery_generation,
+        )
+        .await?;
+    assert_eq!(restored["draft"]["id"], source["clientDraftId"]);
     assert!(matches!(
         cashier
             .cash_action(
@@ -162,7 +189,7 @@ async fn run(input: Input) -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(receipt["id"], replay["id"]);
     assert_eq!(receipt["amount"], "12.34");
     assert!(receipt["number"].as_str().unwrap().starts_with("REC-"));
-    cashier.cash_action("pending",None,generation).await?;
+    cashier.cash_action("pending", None, generation).await?;
     assert_eq!(cashier.drafts(generation)?[0].state, "confirmed");
     assert!(cashier.synchronize(generation).await?.is_empty());
     let after = cashier.cash_catalog(generation).await?;
@@ -182,6 +209,7 @@ async fn run(input: Input) -> Result<(), Box<dyn std::error::Error>> {
         1
     );
     let locked = cashier.lock(generation).await?;
+    // Cette requête ne s'exécute qu'après déverrouillage ci-dessous.
     assert_eq!(locked.state, "locked");
     assert!(matches!(cashier.drafts(generation), Err(Error::Locked)));
     let unlocked = cashier
@@ -189,6 +217,16 @@ async fn run(input: Input) -> Result<(), Box<dyn std::error::Error>> {
         .await?;
     assert_eq!(unlocked.state, "online");
     let generation = Some(unlocked.generation);
+    assert_eq!(
+        cashier
+            .cash_action(
+                "history",
+                Some(json!({"search":"é".repeat(160)})),
+                generation
+            )
+            .await?["total"],
+        0
+    );
     assert_eq!(cashier.drafts(generation)?.len(), 1);
     recovered.logout(recovery_generation).await?;
     admin.admin("access", Some(json!({"userId":created["id"],"expectedVersion":created["version"],"access":{"roles":["AUDITOR"],"agencyIds":[agency],"cashRegisterIds":[cash],"active":true}})), Some(administrator.generation)).await?;

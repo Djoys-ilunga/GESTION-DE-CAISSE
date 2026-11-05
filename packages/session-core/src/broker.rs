@@ -89,7 +89,7 @@ impl Broker {
                     Value::Number(n) => n.to_string(),
                     _ => return Err(Error::InvalidInput),
                 };
-                if value.len() > 300 {
+                if value.len() > 600 {
                     return Err(Error::InvalidInput);
                 }
                 if !value.is_empty() {

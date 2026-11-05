@@ -1,6 +1,6 @@
 # CaissePro — frontières des données
 
-Cette reconstruction couvre les fondations des étapes 1 et 2, complétées par l’authentification et les autorisations de l’étape 3. La saisie desktop prépare uniquement des brouillons privés. Les opérations financières confirmées restent des services internes, sans parcours public de confirmation.
+Cette reconstruction couvre les fondations des étapes 1 et 2, l’authentification de l’étape 3 et les caisses/encaissements de l’étape 4. Le desktop prépare des brouillons privés puis permet une confirmation explicite d’encaissement en ligne. Les autres opérations financières restent des services internes.
 
 | Élément                        | PostgreSQL central                      | Stockage local                          |
 | ------------------------------ | --------------------------------------- | --------------------------------------- |
@@ -16,6 +16,8 @@ Le modèle Prisma relie entreprises, agences, utilisateurs, appartenances, rôle
 Une opération comporte au moins deux écritures et doit être équilibrée par devise. Un débit augmente un compte de trésorerie ; un crédit le diminue. Les comptes CLEARING/EQUITY servent de contreparties techniques : cette fondation de trésorerie n’est pas un plan comptable réglementaire complet. Les conversions comportent quatre écritures équilibrées séparément en USD et CDF. L’arrondi cible est au centime, à mi-chemin en s’éloignant de zéro (`ROUND_HALF_UP`), avec un taux immuable, daté et traçable.
 
 Le produit montant × taux utilise 60 chiffres de précision pour couvrir les 18 chiffres du montant et les 24 chiffres du taux sans arrondi intermédiaire. PostgreSQL recalcule le produit exact et vérifie le résultat au commit. Le test de grande conversion protège notamment `9007199254740993.01 × 0.500000000255 = 4503599629667332.31` après arrondi au centime.
+
+L’étape 4 ajoute `CashReceipt` et `ReceiptCounter`. La confirmation transforme explicitement un brouillon importé en mouvement, deux écritures et reçu immuable dans une même transaction. Le compteur est par entreprise/année UTC et l’idempotence utilise l’UUID du brouillon central, sans dépendre d’une session de connexion particulière. Les noms et métadonnées du reçu sont des instantanés ; les justificatifs sont bornés à 1 Mio, conservés en PostgreSQL et vérifiés par empreinte et en-tête. Le brouillon confirmé est figé. La lecture des caisses désactivées reste permise aux utilisateurs affectés, tandis que les nouveaux mouvements sont refusés. Voir [encaissements.md](encaissements.md).
 
 `AccountBalance` calcule le solde à partir du grand livre. `AvailableFunds` soustrait les réservations actives. Une approbation réserve des fonds sans changer le solde ; le paiement consomme la réservation et comptabilise un mouvement dans la même transaction. Une seconde personne disposant de la permission requise doit approuver la demande. Il n’existe pas de champ de solde à mettre à jour.
 

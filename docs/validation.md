@@ -1,8 +1,37 @@
 # Validation de CaissePro — 5 novembre 2026
 
-## Étape 3 : authentification et autorisations
+## Étape 4 : caisses et encaissements — validation courante
 
-Résultats observés sur Linux : **109 tests automatisés réussis**, plus **un parcours intégré du courtier Rust contre NestJS et PostgreSQL réels**, et un contrôle graphique de la vraie fenêtre Tauri. Aucune étape 4 n’est commencée. Les vérifications Windows/macOS restent reportées conformément à l’instruction de poursuivre ; le stockage sensible sur disque reste interdit.
+**141 tests automatisés réussis**, plus un parcours intégré du courtier Rust contre NestJS/PostgreSQL réels et un contrôle de la vraie fenêtre Tauri Linux. Les neuf migrations sont appliquées sur une base temporaire vierge et sur la base de développement. Aucun développement de l’étape 5 n’est commencé.
+
+| Contrôle                                | Résultat observé                                                                                                                               |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Contrats partagés                       | 7 tests réussis, dont confirmation explicite, justificatifs et grands soldes agrégés                                                           |
+| API avec double de base                 | 4 tests réussis                                                                                                                                |
+| React et fondations hybrides            | 40 tests réussis, dont 7 scénarios d’encaissement avec courtier simulé                                                                         |
+| PostgreSQL 17 réel                      | 53 tests réussis : 19 financiers, 18 d’authentification et 16 de caisses/encaissements                                                         |
+| Courtier de session Rust                | 22 tests réussis ; en particulier, confirmation/ouverture interdites hors connexion, cache daté et identité serveur avant confirmation         |
+| SQLCipher Linux                         | 9 tests réussis sur données synthétiques ; porte publique toujours fermée                                                                      |
+| API compilée et PostgreSQL              | 2 tests réussis                                                                                                                                |
+| Chromium/Playwright                     | 4 tests réussis ; les deux parcours d’encaissement utilisent un double IPC explicite                                                           |
+| Rust → API compilée → PostgreSQL        | Parcours intégré réussi avec LOGIN restreint NOINHERIT/NOBYPASSRLS, sans privilèges d’administration dans l’API                                |
+| Impression du reçu                      | Reçu synthétique A4 d’une page produit par Chromium, contrôlé avec `pdfinfo` et rendu inspecté ; aucune impression physique native revendiquée |
+| Prisma, TypeScript, ESLint, NestJS/Vite | Validation, génération, types, lint et builds réussis                                                                                          |
+| Tauri Linux                             | Compilation et Clippy sans avertissement, fenêtre réelle affichée sous Xvfb ; WebView configuré en mode privé                                  |
+
+Les nouveaux tests PostgreSQL couvrent la création idempotente d’agence/caisse et les affectations, les droits de configuration, la séparation CDF/USD, le caractère non financier de la transmission, l’attestation obligatoire, six confirmations concurrentes et une reprise après reconnexion, les numéros uniques sur plusieurs encaissements concurrents, les montants exacts, le rollback après préparation des écritures, les justificatifs et leur cohérence SQL, l’immuabilité du reçu et du brouillon confirmé, les filtres, RLS, la révocation, l’ouverture concurrente d’une session de caisse, la consultation après désactivation, les versions de configuration et la concurrence entre modification et confirmation.
+
+Le parcours intégré utilise la véritable API et la véritable bibliothèque Rust. Il configure une agence/caisse via un compte API restreint, transmet un brouillon sans modifier les fonds, le reprend dans un **nouveau courtier authentifié** avec le même UUID, confirme explicitement, réessaie la confirmation, puis vérifie le reçu, l’historique et les soldes `12.34 USD` / `0.00 CDF`. Le contrôle SQL final compte **1 opération, 2 écritures, 1 reçu et 1 brouillon**, sans doublon. Le test termine par les contrôles de verrouillage et de révocation. Base et rôle de test sont supprimés ensuite.
+
+Les tests React vérifient aussi qu’une lecture de justificatif encore en cours est annulée au changement d’utilisateur, qu’aucun reçu n’est inventé après un résultat réseau inconnu et qu’un auditeur ne peut pas confirmer. Les tests navigateur examinent l’enchaînement visuel et le rendu imprimable avec un transport simulé ; ils ne sont pas comptés comme une confirmation financière réelle. Les captures/PDF de ce contrôle sont synthétiques et ignorés par Git.
+
+Les essais ont corrigé un droit SQL d’exécution manquant pour la configuration et une mauvaise extraction de code d’erreur dans les messages enrichis de Prisma. Une migration supplémentaire ferme le cas SQL où un type de justificatif nul pourrait satisfaire un CHECK nullable ; le test direct du rôle de données vérifie le refus. L’idempotence comptable ne dépend plus de l’identifiant d’une session de connexion. Aucune erreur identifiée n’a été convertie en résultat positif et les assertions financières ont été conservées.
+
+La persistance sensible reste **en mémoire uniquement**, avec expiration et isolation de session. Les installateurs, magasins de clés, impression physique et qualifications Windows/macOS restent reportés. Un reçu numéroté n’est pas présenté comme une signature numérique ou certification fiscale. Le guide [encaissements.md](encaissements.md) détaille les commandes, le workflow, les limites de fichiers et les actions manuelles.
+
+## Historique — étape 3 : authentification et autorisations
+
+À la validation de l’étape 3, avant le développement de l’étape 4 : **109 tests automatisés avaient réussi**, avec un parcours intégré Rust/NestJS/PostgreSQL et un contrôle graphique Tauri Linux. Les vérifications Windows/macOS restent reportées conformément à l’instruction de poursuivre ; le stockage sensible sur disque reste interdit.
 
 | Contrôle                                                     | Résultat constaté                                                                                                                      |
 | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |

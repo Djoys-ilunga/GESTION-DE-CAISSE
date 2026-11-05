@@ -3,7 +3,7 @@ import { beforeAll, afterAll, beforeEach, describe, it, expect, vi } from 'vites
 import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { AppModule } from '../../src/app.module';
 import { configureApp } from '../../src/app';
 import { PrismaService } from '../../src/prisma.service';
@@ -338,6 +338,40 @@ describe('Caisses et encaissements HTTP / PostgreSQL réels', () => {
       ),
     ).rejects.toThrow('CAISSEPRO_DRAFT_ALREADY_CONFIRMED');
     expect((await app.get(LedgerService).balance(f.ctx, f.usd)).balance).toBe('12.34');
+  });
+  it('refuse aussi en SQL un justificatif sans type ou avec un faux en-tête', async () => {
+    const bytes = Buffer.from(png, 'base64');
+    const data = {
+      id: randomUUID(),
+      companyId: f.companyId,
+      agencyId: f.agencyId,
+      cashRegisterId: f.registerId,
+      authorId: f.userId,
+      clientDraftId: randomUUID(),
+      kind: 'RECEIPT' as const,
+      currency: 'USD' as const,
+      amount: '1.00',
+      description: 'Essai de contrainte',
+      version: 1,
+      payloadHash: '0'.repeat(64),
+      receiptProvenance: 'Payeur',
+      receiptCategory: 'Ventes',
+      receiptReference: '',
+      evidenceName: 'preuve.png',
+      evidenceBytes: bytes,
+      evidenceSha: createHash('sha256').update(bytes).digest('hex'),
+    };
+    const access = new CentralAccess(db);
+    await expect(
+      access.run(f.ctx, (tx) => tx.importedDraft.create({ data: { ...data, evidenceMime: null } })),
+    ).rejects.toThrow();
+    await expect(
+      access.run(f.ctx, (tx) =>
+        tx.importedDraft.create({ data: { ...data, evidenceMime: 'application/pdf' } }),
+      ),
+    ).rejects.toThrow();
+    expect(await db.importedDraft.count({ where: { companyId: f.companyId } })).toBe(0);
+    expect(await operations()).toBe(0);
   });
   it('filtre l’historique et protège les caisses non affectées', async () => {
     const headers = await login();

@@ -2,7 +2,7 @@
 
 ## Ce qui est livré
 
-La fenêtre Tauri comporte une connexion en français, le renouvellement obligatoire du mot de passe initial, le verrouillage, la déconnexion, les soldes autorisés, les brouillons privés, les affectations des utilisateurs et le journal des accès. NestJS authentifie chaque route privée et revalide les permissions. Les services financiers restent internes : cette étape n’ajoute aucun bouton ou route de confirmation d’un mouvement financier.
+La fenêtre Tauri comporte une connexion en français, le renouvellement obligatoire du mot de passe initial, le verrouillage, la déconnexion, les soldes autorisés, les brouillons privés, les affectations des utilisateurs et le journal des accès. NestJS authentifie chaque route privée et revalide les permissions. L’étape 3 ne créait pas de confirmation financière ; l’étape 4 ajoute le parcours d’encaissement décrit dans [encaissements.md](encaissements.md), avec permissions de lecture des reçus et configuration des caisses par administrateur.
 
 L’aperçu `pnpm dev:web` permet d’examiner la présentation ; sa connexion est désactivée. L’authentification exige `pnpm dev` ou `pnpm dev:desktop` et le courtier natif Rust. Les tests React utilisent un double explicite de ce courtier. `pnpm test:auth:desktop` utilise réellement Rust, NestJS et PostgreSQL, sans piloter la fenêtre graphique.
 
@@ -91,7 +91,7 @@ pnpm test:e2e
 pnpm check:rust
 ```
 
-`test:db` et `test:auth:desktop` créent puis suppriment leur propre base PostgreSQL locale `caissepro_test_…`. Ils exigent un compte de développement autorisé à créer des bases, jamais un serveur de production. Le second exige également la création d’un rôle PostgreSQL temporaire et Rust/Cargo : il utilise un LOGIN API NOINHERIT/NOBYPASSRLS distinct du provisionneur. L’outil synthétique reçoit le mot de passe sur stdin et vérifie l’API réelle, les affectations et révocations, un brouillon importé, zéro opération et zéro écriture comptabilisée. Le rôle temporaire est supprimé après le test.
+`test:db` et `test:auth:desktop` créent puis suppriment leur propre base PostgreSQL locale `caissepro_test_…`. Ils exigent un compte de développement autorisé à créer des bases, jamais un serveur de production. Le second exige également la création d’un rôle PostgreSQL temporaire et Rust/Cargo : il utilise un LOGIN API NOINHERIT/NOBYPASSRLS distinct du provisionneur. L’outil synthétique reçoit le mot de passe sur stdin et vérifie l’API réelle, les affectations et révocations. Depuis l’étape 4, il vérifie aussi qu’un brouillon ne change pas le solde avant sa confirmation explicite, puis qu’un seul reçu et un seul mouvement sont créés après confirmation. Le rôle temporaire est supprimé après le test.
 
 Les migrations 003 à 006 ajoutent les sessions, identifiants dérivés, droits de caisse, journal immuable et contraintes de périmètre. En production, le LOGIN API doit être sans propriété de tables, SUPERUSER, BYPASSRLS, CREATEDB ou CREATEROLE, avec NOINHERIT et appartenance à **`caissepro_auth_runtime` et `caissepro_runtime`**. Les transactions sélectionnent le rôle requis ; l’authentification ne reçoit aucun droit de comptabilisation. Migrations et provisionnement utilisent un compte séparé. Vérifier ce compte réel avant déploiement.
 

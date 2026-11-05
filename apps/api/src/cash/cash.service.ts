@@ -464,6 +464,7 @@ export class CashService {
             kind: 'CLEARING',
             currency: draft.currency,
             active: true,
+            code: { in: ['CONTREPARTIE', 'CLEAR'] },
           },
           orderBy: { id: 'asc' },
         }));

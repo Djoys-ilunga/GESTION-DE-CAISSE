@@ -117,7 +117,7 @@ try {
             id: randomUUID(),
             companyId,
             agencyId,
-            code: 'CONTREPARTIE',
+            code: `RECETTES-${registerId}`,
             currency,
             kind: 'CLEARING',
           },
