@@ -1,7 +1,10 @@
 import { randomUUID as id } from 'node:crypto';
 import type { PrismaService } from '../../src/prisma.service';
 import { CentralAccess } from '../../src/data/central-access';
-export async function fixture(db: PrismaService) {
+export async function fixture(
+  db: PrismaService,
+  { singleCash = false }: { singleCash?: boolean } = {},
+) {
   const companyId = id(),
     agencyId = id(),
     otherAgencyId = id(),
@@ -21,7 +24,7 @@ export async function fixture(db: PrismaService) {
   await db.agency.createMany({
     data: [
       { id: agencyId, companyId, code: 'A', name: 'Agence A' },
-      { id: otherAgencyId, companyId, code: 'B', name: 'Agence B' },
+      ...(!singleCash ? [{ id: otherAgencyId, companyId, code: 'B', name: 'Agence B' }] : []),
     ],
   });
   const permissions = await db.permission.findMany();
@@ -38,13 +41,27 @@ export async function fixture(db: PrismaService) {
     await db.companyMember.create({ data: { id: memberId, companyId, userId: u } });
     if (u !== viewerId) await db.memberRole.create({ data: { companyId, memberId, roleId } });
     await db.agencyGrant.createMany({
-      data: [agencyId, otherAgencyId].map((agencyId) => ({ companyId, memberId, agencyId })),
+      data: (singleCash ? [agencyId] : [agencyId, otherAgencyId]).map((agencyId) => ({
+        companyId,
+        memberId,
+        agencyId,
+      })),
     });
   }
   await db.cashRegister.createMany({
     data: [
       { id: registerId, companyId, agencyId, code: 'C1', name: 'Caisse A' },
-      { id: otherRegisterId, companyId, agencyId: otherAgencyId, code: 'C2', name: 'Caisse B' },
+      ...(!singleCash
+        ? [
+            {
+              id: otherRegisterId,
+              companyId,
+              agencyId: otherAgencyId,
+              code: 'C2',
+              name: 'Caisse B',
+            },
+          ]
+        : []),
     ],
   });
   const members = await db.companyMember.findMany({
@@ -53,7 +70,16 @@ export async function fixture(db: PrismaService) {
   await db.cashRegisterGrant.createMany({
     data: members.flatMap((member) => [
       { companyId, memberId: member.id, agencyId, cashRegisterId: registerId },
-      { companyId, memberId: member.id, agencyId: otherAgencyId, cashRegisterId: otherRegisterId },
+      ...(!singleCash
+        ? [
+            {
+              companyId,
+              memberId: member.id,
+              agencyId: otherAgencyId,
+              cashRegisterId: otherRegisterId,
+            },
+          ]
+        : []),
     ]),
   });
   await db.treasuryAccount.createMany({
@@ -76,15 +102,19 @@ export async function fixture(db: PrismaService) {
         currency: 'CDF',
         kind: 'TREASURY',
       },
-      {
-        id: otherUsd,
-        companyId,
-        agencyId: otherAgencyId,
-        cashRegisterId: otherRegisterId,
-        code: 'CASH',
-        currency: 'USD',
-        kind: 'TREASURY',
-      },
+      ...(!singleCash
+        ? [
+            {
+              id: otherUsd,
+              companyId,
+              agencyId: otherAgencyId,
+              cashRegisterId: otherRegisterId,
+              code: 'CASH',
+              currency: 'USD' as const,
+              kind: 'TREASURY' as const,
+            },
+          ]
+        : []),
       { id: clearingUsd, companyId, agencyId, code: 'CLEAR', currency: 'USD', kind: 'CLEARING' },
       { id: clearingCdf, companyId, agencyId, code: 'CLEAR', currency: 'CDF', kind: 'CLEARING' },
     ],
@@ -95,13 +125,17 @@ export async function fixture(db: PrismaService) {
     await tx.cashSession.createMany({
       data: [
         { id: sessionId, companyId, agencyId, cashRegisterId: registerId, openedById: userId },
-        {
-          id: otherSessionId,
-          companyId,
-          agencyId: otherAgencyId,
-          cashRegisterId: otherRegisterId,
-          openedById: userId,
-        },
+        ...(!singleCash
+          ? [
+              {
+                id: otherSessionId,
+                companyId,
+                agencyId: otherAgencyId,
+                cashRegisterId: otherRegisterId,
+                openedById: userId,
+              },
+            ]
+          : []),
       ],
     });
   });

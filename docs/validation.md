@@ -1,8 +1,30 @@
 # Validation de CaissePro — 5 novembre 2026
 
-## Étape 4 : caisses et encaissements — validation courante
+## Adaptation monocaisse et multicaisse — validation courante
 
-**141 tests automatisés réussis**, plus un parcours intégré du courtier Rust contre NestJS/PostgreSQL réels et un contrôle de la vraie fenêtre Tauri Linux. Les neuf migrations sont appliquées sur une base temporaire vierge et sur la base de développement. Aucun développement de l’étape 5 n’est commencé.
+**119 tests automatisés exécutés et réussis pour cette adaptation**, plus une nouvelle compilation Tauri Linux et un contrôle de sa fenêtre réelle. Le modèle existant acceptait déjà une seule caisse : seules la présentation des choix et la documentation ont été adaptées. Aucun changement de schéma, migration, service financier, permission serveur ou stockage sensible n’est introduit. Aucune donnée financière de développement n’a été modifiée.
+
+| Contrôle                                  | Résultat observé                                                                                                              |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Contrats partagés                         | 7 tests réussis                                                                                                               |
+| API avec double de base                   | 4 tests réussis                                                                                                               |
+| React et fondations hybrides              | 48 tests réussis, dont 8 nouveaux scénarios de présentation monocaisse/multicaisse                                            |
+| PostgreSQL 17 réel                        | 56 tests réussis : 19 financiers, 18 d’authentification, 16 de caisses/encaissements et 3 nouveaux scénarios de configuration |
+| Chromium/Playwright                       | 4 tests réussis, avec assertions supplémentaires du choix unique ; transport IPC simulé explicitement                         |
+| TypeScript, ESLint, NestJS/Vite, Prettier | Types, lint, builds et format réussis                                                                                         |
+| Tauri Linux                               | Compilation avec `custom-protocol` réussie ; fenêtre réelle 1280 × 900 affichée sous Xvfb, capturée et inspectée              |
+
+Les nouveaux tests PostgreSQL exercent les encaissements CDF/USD, les soldes exacts, le refus de paiement sans approbation et d’auto-approbation, le paiement approuvé, ainsi que l’ouverture et la fermeture de session dans les deux configurations. L’ajout d’une deuxième caisse conserve exactement les opérations, écritures, reçus et compteurs existants ; ses nouveaux fonds commencent à zéro. Le périmètre d’un utilisateur restant affecté à une seule caisse ne s’élargit pas.
+
+Les tests React couvrent le catalogue différé, la réapparition des sélecteurs sans perte de saisie, les anciennes caisses consultables et l’absence de réaffectation silencieuse lorsqu’une caisse devient indisponible. L’ajout d’une caisse reste accessible depuis une configuration unique. Les tests hybrides existants et le parcours navigateur hors connexion restent réussis ; les essais navigateur utilisent un double et ne prouvent pas une comptabilisation native réelle.
+
+Commandes exécutées : `pnpm check`, `pnpm test:db`, `pnpm test:e2e`, `pnpm format:check`, puis compilation Tauri hors ligne avec les dépendances disponibles et `tests/native/smoke-linux.sh`. Les neuf migrations existantes sont rejouées uniquement sur une base de test temporaire supprimée ensuite. Les tests Rust de session, SQLCipher, API compilée en direct et le parcours intégré Rust/API n’ont pas été réexécutés pour cette adaptation de présentation ; leurs résultats précédents sont conservés dans l’historique ci-dessous.
+
+La capture native vérifie l’ouverture et le rendu de la fenêtre de connexion, pas tous les parcours graphiques. La qualification Windows/macOS, les installateurs, les magasins de clés et l’impression physique restent à effectuer. La persistance sensible sur disque reste interdite et les brouillons restent temporaires en mémoire. Aucun écran de transfert n’étant exposé à l’étape 4, aucun bouton de transfert n’a été ajouté. Voir [configuration-caisses.md](configuration-caisses.md) pour la configuration et les responsabilités inchangées.
+
+## Historique — étape 4 : caisses et encaissements
+
+À la validation de l’étape 4, avant l’adaptation de présentation décrite ci-dessus : **141 tests automatisés avaient réussi**, plus un parcours intégré du courtier Rust contre NestJS/PostgreSQL réels et un contrôle de la vraie fenêtre Tauri Linux. Les neuf migrations avaient été appliquées sur une base temporaire vierge et sur la base de développement. Aucun développement de l’étape 5 n’est commencé.
 
 | Contrôle                                | Résultat observé                                                                                                                               |
 | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -507,3 +507,22 @@
     margin: 8mm;
   }
 }
+.cash-choice {
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid #d8e3d9;
+  border-radius: 8px;
+  background: #f5f8f4;
+  color: #315441;
+  font-size: 13px;
+}
+.cash-choice > span {
+  font-size: 12px;
+  color: #657d6b;
+}
+.cash-choice small {
+  font-size: 11px;
+  color: #7b8d80;
+}

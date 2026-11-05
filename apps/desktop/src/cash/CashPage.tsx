@@ -61,7 +61,7 @@ export function CashPage({
       <div className="page-heading">
         <div>
           <p className="eyebrow">TRÉSORERIE PAR AGENCE</p>
-          <h1>Vos caisses</h1>
+          <h1>{snapshot?.data.items.length === 1 ? 'Votre caisse' : 'Vos caisses'}</h1>
           <p>Des fonds distincts en CDF et en USD, issus des seules écritures comptabilisées.</p>
         </div>
         <Wallet size={28} />
@@ -183,6 +183,10 @@ function CashConfigurationPanel({ gateway, online }: { gateway: AuthGateway; onl
   const [editing, setEditing] = useState<string | null>(null),
     [editName, setEditName] = useState(''),
     [editActive, setEditActive] = useState(true);
+  const firstAgencyId = catalog?.agencies[0]?.id;
+  useEffect(() => {
+    if (!agency && firstAgencyId) setAgency(firstAgencyId);
+  }, [agency, firstAgencyId]);
   useEffect(() => {
     let active = true;
     if (online)
@@ -294,20 +298,27 @@ function CashConfigurationPanel({ gateway, online }: { gateway: AuthGateway; onl
       <form className="panel editor-form" onSubmit={create}>
         <h2>Nouvelle caisse</h2>
         <div className="form-grid">
-          <label>
-            Agence de rattachement
-            <select
-              required
-              value={agency || catalog?.agencies[0]?.id || ''}
-              onChange={(e) => setAgency(e.target.value)}
-            >
-              {catalog?.agencies.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          {catalog?.agencies.length === 1 && (!agency || agency === catalog.agencies[0]!.id) ? (
+            <div className="cash-choice" role="group" aria-label="Agence de rattachement">
+              <span>Agence de rattachement</span>
+              <strong>{catalog.agencies[0]!.name}</strong>
+            </div>
+          ) : (
+            <label>
+              Agence de rattachement
+              <select
+                required
+                value={agency || catalog?.agencies[0]?.id || ''}
+                onChange={(e) => setAgency(e.target.value)}
+              >
+                {catalog?.agencies.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label>
             Code de caisse
             <input

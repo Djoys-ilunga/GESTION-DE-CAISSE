@@ -2,6 +2,8 @@
 
 ## Utiliser le module
 
+Une entreprise peut conserver une seule caisse ou en ajouter plusieurs, sans changement de modèle. Les choix uniques sont présentés automatiquement sans sélecteur superflu ; voir [la configuration monocaisse/multicaisse](configuration-caisses.md).
+
 Sur le serveur de développement, depuis la racine :
 
 ```sh

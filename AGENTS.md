@@ -2,6 +2,7 @@
 
 - Respecter l'étape demandée. Examiner l'existant, annoncer un plan court, développer, tester et présenter les résultats réels. Ne pas commencer une autre étape sans instruction.
 - Desktop Windows/macOS : Tauri 2, Rust, React, Vite, TypeScript, Tailwind. Backend NestJS, PostgreSQL et Prisma ; API HTTPS.
+- Le même modèle accepte une ou plusieurs caisses. Simplifier les choix selon les caisses autorisées sans modifier leurs identifiants ni confondre deux devises avec deux caisses ; un nouveau choix ne réaffecte jamais une saisie en cours.
 - PostgreSQL est l'unique vérité financière. Séparer strictement CDF et USD. Montants/taux décimaux exacts ; échanges sous forme de chaînes, jamais de calcul financier en flottants binaires.
 - Les opérations comptabilisées et journaux sont immuables. Corriger par contre-écriture liée et traçable. Les soldes proviennent des écritures, jamais d'un champ modifiable sur un compte.
 - Toutes les permissions et périmètres entreprise/agence/caisse sont vérifiés côté serveur. Le contexte utilisateur provient d'une session authentifiée, jamais d'une identité affirmée par le client ; revalider également dans les transactions sensibles.

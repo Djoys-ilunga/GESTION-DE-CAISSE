@@ -53,6 +53,14 @@ export function ReceiptForm({
     [retained, setRetained] = useState(editing?.draft.receiptDetails?.supportingDocument ?? null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
+  const availableCashes = cashes.filter((c) => c.active);
+  const onlyCash = availableCashes.length === 1 ? availableCashes[0] : undefined;
+  const onlyCashId = onlyCash?.id;
+  // Mémoriser le choix initial, même si le catalogue arrive après le formulaire.
+  // L'ajout d'une seconde caisse ne doit pas réaffecter le brouillon en cours.
+  useEffect(() => {
+    if (!cash && !editing && onlyCashId) setCash(onlyCashId);
+  }, [cash, editing, onlyCashId]);
   const mounted = useRef(false);
   useEffect(() => {
     mounted.current = true;
@@ -112,24 +120,30 @@ export function ReceiptForm({
         <span className="receipt-status pending">Brouillon non comptabilisé</span>
       </div>
       <div className="form-grid">
-        <label>
-          Caisse
-          <select
-            required
-            value={cash}
-            disabled={Boolean(editing)}
-            onChange={(e) => setCash(e.target.value)}
-          >
-            <option value="">Sélectionner une caisse</option>
-            {cashes
-              .filter((c) => c.active)
-              .map((c) => (
+        {onlyCash && cash === onlyCash.id ? (
+          <div className="cash-choice" role="group" aria-label="Caisse d’encaissement">
+            <span>Caisse</span>
+            <strong>{onlyCash.name}</strong>
+            <small>{onlyCash.agency.name}</small>
+          </div>
+        ) : (
+          <label>
+            Caisse
+            <select
+              required
+              value={cash}
+              disabled={Boolean(editing)}
+              onChange={(e) => setCash(e.target.value)}
+            >
+              <option value="">Sélectionner une caisse</option>
+              {availableCashes.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.agency.name} · {c.name}
                 </option>
               ))}
-          </select>
-        </label>
+            </select>
+          </label>
+        )}
         <label>
           Devise
           <select value={currency} onChange={(e) => setCurrency(e.target.value as typeof currency)}>

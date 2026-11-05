@@ -4,6 +4,8 @@ Gestion de caisse d’entreprise : Tauri 2/Rust/React, NestJS, PostgreSQL et Pri
 
 Cette version est **reconstruite à partir des spécifications et traces de la conversation** après l’absence des fichiers dans une nouvelle instance cloud. Elle ne doit pas être présentée comme une restauration identique de l’ancienne copie. Les résultats de validation de cette reconstruction seront consignés dans `docs/validation.md`.
 
+CaissePro fonctionne avec **une seule caisse ou plusieurs**, dans la même application et le même modèle de données. L’interface simplifie les choix uniques et conserve la possibilité d’ajouter des caisses. Voir [la configuration monocaisse/multicaisse](docs/configuration-caisses.md).
+
 ```text
 apps/desktop       Interface française et application Tauri
 apps/api           API, modèle Prisma, migrations et services internes

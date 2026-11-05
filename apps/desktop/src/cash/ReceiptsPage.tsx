@@ -204,6 +204,7 @@ export function ReceiptsPage({
   const selectedCash = selected
     ? cash?.data.items.find((c) => c.id === selected.cashRegisterId)
     : undefined;
+  const onlyHistoryCash = cash?.data.items.length === 1 ? cash.data.items[0] : undefined;
   return (
     <>
       <div className="page-heading">
@@ -549,18 +550,26 @@ export function ReceiptsPage({
           ) : (
             <>
               <form className="panel receipt-filters" onSubmit={filter}>
-                <label>
-                  Caisse
-                  <select value={filterCash} onChange={(e) => setFilterCash(e.target.value)}>
-                    <option value="">Toutes les caisses autorisées</option>
-                    {cash?.data.items.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                        {c.active ? '' : ' (désactivée)'}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                {onlyHistoryCash && (!filterCash || filterCash === onlyHistoryCash.id) ? (
+                  <div className="cash-choice" role="group" aria-label="Caisse de l’historique">
+                    <span>Caisse</span>
+                    <strong>{onlyHistoryCash.name}</strong>
+                    <small>{onlyHistoryCash.agency.name}</small>
+                  </div>
+                ) : (
+                  <label>
+                    Caisse
+                    <select value={filterCash} onChange={(e) => setFilterCash(e.target.value)}>
+                      <option value="">Toutes les caisses autorisées</option>
+                      {cash?.data.items.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                          {c.active ? '' : ' (désactivée)'}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 <label>
                   Devise
                   <select

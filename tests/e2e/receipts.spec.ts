@@ -257,6 +257,8 @@ async function login(page: Page) {
 }
 async function prepare(page: Page) {
   await page.getByRole('button', { name: 'Nouveau brouillon d’encaissement' }).click();
+  await expect(page.getByRole('group', { name: 'Caisse d’encaissement' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Caisse', exact: true })).toHaveCount(0);
   await page.getByRole('combobox', { name: 'Devise', exact: true }).selectOption('USD');
   await page.getByLabel('Montant', { exact: true }).fill('12,34');
   await page.getByLabel('Provenance / payeur').fill('Client synthétique');

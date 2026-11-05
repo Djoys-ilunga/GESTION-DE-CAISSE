@@ -95,6 +95,10 @@ describe('Encaissements desktop avec courtier simulé', () => {
     render(<ReceiptsPage gateway={gateway} profile={p} online={false} />);
     await screen.findByText(/Derniers soldes connus/);
     await userEvent.click(screen.getByRole('button', { name: 'Nouveau brouillon d’encaissement' }));
+    expect(screen.getByRole('group', { name: 'Caisse d’encaissement' })).toHaveTextContent(
+      'Caisse principale',
+    );
+    expect(screen.queryByRole('combobox', { name: 'Caisse' })).not.toBeInTheDocument();
     await fillForm();
     expect(screen.getByText(/Solde consulté dans cette devise/)).toHaveTextContent('10,00 USD');
     await userEvent.click(screen.getByRole('button', { name: 'Enregistrer le brouillon' }));
@@ -191,5 +195,180 @@ describe('Encaissements desktop avec courtier simulé', () => {
     expect(screen.getByText('CDF')).toBeInTheDocument();
     expect(screen.getByText('USD')).toBeInTheDocument();
     expect(gateway.openCashSession).not.toHaveBeenCalled();
+    expect(screen.getByRole('heading', { name: 'Votre caisse' })).toBeInTheDocument();
+  });
+});
+
+describe('Présentation monocaisse et multicaisse', () => {
+  it('conserve le rattachement initial lors de l’ajout d’une agence', async () => {
+    const { p, cash, gateway } = setup();
+    p.permissions.push('cash:configure');
+    const base = { agencies: [cash.agency], registers: [], users: [] },
+      second = { id: crypto.randomUUID(), code: '0-ANNEXE', name: 'Nouvelle agence' };
+    vi.mocked(gateway.cashConfiguration)
+      .mockResolvedValueOnce(base)
+      .mockResolvedValue({ ...base, agencies: [second, cash.agency] });
+    vi.mocked(gateway.createAgency).mockResolvedValue({ id: second.id });
+    render(<CashPage gateway={gateway} profile={p} online />);
+    await userEvent.click(screen.getByRole('button', { name: 'Configuration des caisses' }));
+    await screen.findByRole('group', { name: 'Agence de rattachement' });
+    await userEvent.type(screen.getByLabelText('Nom de la caisse'), 'Saisie conservée');
+    await userEvent.type(screen.getByLabelText('Code de l’agence'), '0-ANNEXE');
+    await userEvent.type(screen.getByLabelText('Nom de l’agence'), 'Nouvelle agence');
+    await userEvent.click(screen.getByRole('button', { name: 'Créer l’agence' }));
+    expect(await screen.findByRole('combobox', { name: 'Agence de rattachement' })).toHaveValue(
+      cash.agency.id,
+    );
+    expect(screen.getByLabelText('Nom de la caisse')).toHaveValue('Saisie conservée');
+  });
+  const otherCash = (cash: CashView): CashView => ({
+    ...cash,
+    id: crypto.randomUUID(),
+    code: 'C2',
+    name: 'Deuxième caisse',
+  });
+  it('permet de sélectionner explicitement une autre caisse sans changer les devises', async () => {
+    const { cash, gateway } = setup(),
+      second = otherCash(cash);
+    vi.mocked(gateway.saveDraft).mockResolvedValue({} as never);
+    render(
+      <ReceiptForm
+        gateway={gateway}
+        cashes={[cash, second]}
+        editing={null}
+        onSaved={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Caisse' }), second.id);
+    await fillForm();
+    await userEvent.click(screen.getByRole('button', { name: 'Enregistrer le brouillon' }));
+    await waitFor(() => expect(gateway.saveDraft).toHaveBeenCalledOnce());
+    expect(vi.mocked(gateway.saveDraft).mock.calls[0]![0]).toMatchObject({
+      cashRegisterId: second.id,
+      agencyId: second.agency.id,
+      draft: { amount: '12.34', currency: 'USD' },
+    });
+    expect(gateway.confirmReceipt).not.toHaveBeenCalled();
+  });
+  it('sélectionne la caisse unique lorsque le catalogue arrive après le formulaire', async () => {
+    const { cash, gateway } = setup();
+    vi.mocked(gateway.saveDraft).mockResolvedValue({} as never);
+    const props = { gateway, editing: null, onSaved: vi.fn(), onCancel: vi.fn() };
+    const component = render(<ReceiptForm {...props} cashes={[]} />);
+    expect(screen.queryByRole('group', { name: 'Caisse d’encaissement' })).not.toBeInTheDocument();
+    component.rerender(<ReceiptForm {...props} cashes={[cash]} />);
+    expect(await screen.findByRole('group', { name: 'Caisse d’encaissement' })).toHaveTextContent(
+      cash.name,
+    );
+    await fillForm();
+    await userEvent.click(screen.getByRole('button', { name: 'Enregistrer le brouillon' }));
+    await waitFor(() => expect(gateway.saveDraft).toHaveBeenCalledOnce());
+    expect(vi.mocked(gateway.saveDraft).mock.calls[0]![0].cashRegisterId).toBe(cash.id);
+  });
+  it('réaffiche le choix à l’ajout d’une caisse en conservant la saisie et la caisse initiale', async () => {
+    const { cash, gateway } = setup(),
+      second = otherCash(cash);
+    vi.mocked(gateway.saveDraft).mockResolvedValue({} as never);
+    const props = { gateway, editing: null, onSaved: vi.fn(), onCancel: vi.fn() };
+    const component = render(<ReceiptForm {...props} cashes={[cash]} />);
+    await fillForm();
+    component.rerender(<ReceiptForm {...props} cashes={[second, cash]} />);
+    expect(screen.getByRole('combobox', { name: 'Caisse' })).toHaveValue(cash.id);
+    expect(screen.getByLabelText('Montant')).toHaveValue('12,34');
+    expect(screen.getByLabelText('Provenance / payeur')).toHaveValue('Client Alpha');
+    await userEvent.click(screen.getByRole('button', { name: 'Enregistrer le brouillon' }));
+    await waitFor(() => expect(gateway.saveDraft).toHaveBeenCalledOnce());
+    expect(vi.mocked(gateway.saveDraft).mock.calls[0]![0].cashRegisterId).toBe(cash.id);
+  });
+  it('ne remplace pas silencieusement une caisse désactivée par l’unique autre caisse', async () => {
+    const { cash, gateway } = setup(),
+      second = otherCash(cash);
+    const props = { gateway, editing: null, onSaved: vi.fn(), onCancel: vi.fn() };
+    const component = render(<ReceiptForm {...props} cashes={[cash]} />);
+    await fillForm();
+    component.rerender(<ReceiptForm {...props} cashes={[{ ...cash, active: false }, second]} />);
+    expect(screen.queryByRole('group', { name: 'Caisse d’encaissement' })).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Caisse' })).toBeInTheDocument();
+    expect(gateway.saveDraft).not.toHaveBeenCalled();
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Caisse' }), second.id);
+    expect(await screen.findByRole('group', { name: 'Caisse d’encaissement' })).toHaveTextContent(
+      second.name,
+    );
+  });
+  it('masque le filtre de caisse unique tout en conservant les filtres de devise et de date', async () => {
+    const { p, gateway } = setup();
+    p.permissions = ['ledger:read', 'receipt:read'];
+    render(<ReceiptsPage gateway={gateway} profile={p} online />);
+    await screen.findByRole('group', { name: 'Caisse de l’historique' });
+    expect(screen.queryByRole('combobox', { name: 'Caisse' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Devise')).toBeInTheDocument();
+    expect(screen.getByLabelText('Du')).toBeInTheDocument();
+    expect(screen.getByLabelText('Au')).toBeInTheDocument();
+  });
+  it('conserve l’accès à l’historique d’une ancienne caisse désactivée', async () => {
+    const { p, cash, gateway } = setup(),
+      archived = { ...otherCash(cash), active: false };
+    p.permissions = ['ledger:read', 'receipt:read'];
+    vi.mocked(gateway.cashCatalog).mockResolvedValue({
+      data: {
+        items: [cash, archived],
+        synchronizedAt: new Date().toISOString(),
+        expiresAt: p.offlineUntil,
+      },
+      stale: false,
+    });
+    render(<ReceiptsPage gateway={gateway} profile={p} online />);
+    const select = await screen.findByRole('combobox', { name: 'Caisse' });
+    await waitFor(() =>
+      expect(
+        screen.getByRole('option', { name: 'Deuxième caisse (désactivée)' }),
+      ).toBeInTheDocument(),
+    );
+    await userEvent.selectOptions(select, archived.id);
+    await userEvent.click(screen.getByRole('button', { name: 'Filtrer l’historique' }));
+    await waitFor(() =>
+      expect(gateway.receiptHistory).toHaveBeenLastCalledWith({
+        cashRegisterId: archived.id,
+        page: 1,
+      }),
+    );
+  });
+  it('laisse créer une nouvelle caisse même lorsque la configuration est monocaisse', async () => {
+    const { p, cash, gateway } = setup();
+    p.permissions.push('cash:configure');
+    vi.mocked(gateway.cashConfiguration).mockResolvedValue({
+      agencies: [cash.agency],
+      registers: [
+        {
+          id: cash.id,
+          agencyId: cash.agency.id,
+          code: cash.code,
+          name: cash.name,
+          active: true,
+          version: 1,
+        },
+      ],
+      users: [],
+    });
+    vi.mocked(gateway.createCash).mockResolvedValue({ id: crypto.randomUUID() });
+    render(<CashPage gateway={gateway} profile={p} online />);
+    await userEvent.click(screen.getByRole('button', { name: 'Configuration des caisses' }));
+    expect(await screen.findByRole('group', { name: 'Agence de rattachement' })).toHaveTextContent(
+      cash.agency.name,
+    );
+    expect(
+      screen.queryByRole('combobox', { name: 'Agence de rattachement' }),
+    ).not.toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('Code de caisse'), 'C2');
+    await userEvent.type(screen.getByLabelText('Nom de la caisse'), 'Nouvelle caisse');
+    await userEvent.click(screen.getByRole('button', { name: 'Créer la caisse' }));
+    await waitFor(() => expect(gateway.createCash).toHaveBeenCalledOnce());
+    expect(vi.mocked(gateway.createCash).mock.calls[0]![0]).toMatchObject({
+      agencyId: cash.agency.id,
+      code: 'C2',
+      name: 'Nouvelle caisse',
+      authorizedUserIds: [],
+    });
   });
 });
