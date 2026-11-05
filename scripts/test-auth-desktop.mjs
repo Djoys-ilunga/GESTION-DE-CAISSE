@@ -150,12 +150,13 @@ try {
   await checks.connect();
   assert.equal(
     (await checks.query('SELECT count(*)::int AS n FROM "FinancialOperation"')).rows[0].n,
-    0,
+    1,
   );
-  assert.equal((await checks.query('SELECT count(*)::int AS n FROM "LedgerEntry"')).rows[0].n, 0);
+  assert.equal((await checks.query('SELECT count(*)::int AS n FROM "LedgerEntry"')).rows[0].n, 2);
   assert.equal((await checks.query('SELECT count(*)::int AS n FROM "ImportedDraft"')).rows[0].n, 1);
+  assert.equal((await checks.query('SELECT count(*)::int AS n FROM "CashReceipt"')).rows[0].n, 1);
   console.info(
-    '1 parcours Rust → API réelle → PostgreSQL réussi avec LOGIN restreint NOINHERIT/NOBYPASSRLS : mots de passe renouvelés, accès refusés, brouillon synchronisé une seule fois, verrouillage/déverrouillage, révocation et zéro mouvement financier.',
+    '1 parcours Rust → API réelle → PostgreSQL réussi avec LOGIN restreint NOINHERIT/NOBYPASSRLS : authentification, brouillon transmis sans solde modifié, confirmation explicite unique, reçu numéroté, historique, verrouillage et révocation. SQL final : 1 opération, 2 écritures, 1 reçu et 1 brouillon.',
   );
 } finally {
   if (server && server.exitCode === null && server.signalCode === null) {

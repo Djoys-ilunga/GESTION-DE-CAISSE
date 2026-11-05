@@ -4,6 +4,8 @@
   "description": "Commandes de session autorisées uniquement à la fenêtre locale CaissePro.",
   "windows": ["main"],
   "permissions": [
+    "allow-cash-catalog",
+    "allow-cash-action",
     "allow-auth-health",
     "allow-auth-login",
     "allow-auth-status",

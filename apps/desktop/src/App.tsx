@@ -17,7 +17,10 @@ import {
   Check,
   Eye,
   EyeOff,
+  ReceiptText,
 } from 'lucide-react';
+import { CashPage } from './cash/CashPage';
+import { ReceiptsPage } from './cash/ReceiptsPage';
 import {
   ROLE_LABELS,
   type NativeSessionView,
@@ -584,7 +587,9 @@ function Workspace({
   const permission = (p: string) => profile.permissions.includes(p);
   const items = [
     { id: 'overview', label: 'Vue d’ensemble', icon: LayoutDashboard },
-    { id: 'drafts', label: 'Brouillons', icon: FilePenLine, permission: 'draft:read_own' },
+    { id: 'cash', label: 'Caisses', icon: Wallet, permission: 'ledger:read' },
+    { id: 'receipts', label: 'Encaissements', icon: ReceiptText, permission: 'receipt:read' },
+    { id: 'drafts', label: 'Brouillons dépenses', icon: FilePenLine, permission: 'draft:read_own' },
     { id: 'users', label: 'Utilisateurs', icon: Users, permission: 'users:manage' },
     { id: 'logs', label: 'Journal des connexions', icon: ScrollText, permission: 'auth:logs:read' },
     { id: 'security', label: 'Sécurité', icon: ShieldCheck },
@@ -669,6 +674,10 @@ function Workspace({
           )}
           {page === 'overview' ? (
             <Overview profile={profile} gateway={gateway} online={online} />
+          ) : page === 'cash' ? (
+            <CashPage profile={profile} gateway={gateway} online={online} />
+          ) : page === 'receipts' ? (
+            <ReceiptsPage profile={profile} gateway={gateway} online={online} />
           ) : page === 'drafts' ? (
             <Drafts profile={profile} gateway={gateway} online={online} />
           ) : page === 'users' ? (
@@ -840,7 +849,8 @@ function Overview({
       </section>
       <p className="availability-note">
         <ShieldCheck size={16} />
-        Les confirmations financières ne sont pas proposées à cette étape.
+        Les encaissements se confirment dans « Encaissements », uniquement après réception effective
+        des fonds et validation du serveur.
       </p>
     </>
   );
@@ -859,13 +869,16 @@ function Drafts({
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
     [results, setResults] = useState<string[]>([]);
-  const refresh = () => gateway.drafts().then(setRows);
+  const refresh = () =>
+    gateway
+      .drafts()
+      .then((rows) => setRows(rows.filter((row) => row.draft.kind === 'expense-request')));
   useEffect(() => {
     let active = true;
     void gateway
       .drafts()
       .then((rows) => {
-        if (active) setRows(rows);
+        if (active) setRows(rows.filter((row) => row.draft.kind === 'expense-request'));
       })
       .catch((error) => {
         if (active) setError(message(error));
@@ -897,7 +910,7 @@ function Drafts({
       <div className="page-heading">
         <div>
           <p className="eyebrow">PRÉPARATION SANS COMPTABILISATION</p>
-          <h1>Vos brouillons</h1>
+          <h1>Brouillons de demandes de dépenses</h1>
           <p>Un brouillon ne confirme jamais un paiement et ne modifie aucun solde.</p>
         </div>
         <div className="action-buttons">
@@ -1003,7 +1016,7 @@ function DraftForm({
     expectedVersion: null;
   }): Promise<void>;
 }) {
-  const [kind, setKind] = useState<'receipt' | 'expense-request'>('receipt'),
+  const [kind, setKind] = useState<'receipt' | 'expense-request'>('expense-request'),
     [agency, setAgency] = useState(profile.agencies[0]?.id ?? ''),
     [cash, setCash] = useState(''),
     [currency, setCurrency] = useState<'CDF' | 'USD'>('USD'),
@@ -1035,7 +1048,6 @@ function DraftForm({
         <label>
           Type
           <select value={kind} onChange={(e) => setKind(e.target.value as typeof kind)}>
-            <option value="receipt">Encaissement</option>
             <option value="expense-request">Demande de dépense</option>
           </select>
         </label>

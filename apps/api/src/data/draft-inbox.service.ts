@@ -4,6 +4,7 @@ import { draftSchema } from '@caissepro/shared';
 import { z } from 'zod';
 import { CentralAccess, DataError, type DataContext } from './central-access';
 import { fingerprint } from './ledger.service';
+import { decodeEvidence } from './receipt-evidence';
 @Injectable()
 export class DraftInboxService {
   constructor(@Inject(CentralAccess) private readonly access: CentralAccess) {}
@@ -48,12 +49,24 @@ export class DraftInboxService {
       )
         throw new DataError('DRAFT_CONFLICT');
       if (!previous && expectedServerVersion !== null) throw new DataError('DRAFT_CONFLICT');
+      if (
+        previous &&
+        (await tx.cashReceipt.findFirst({
+          where: { companyId: ctx.companyId, sourceDraftId: previous.id },
+        }))
+      )
+        throw new DataError('DRAFT_ALREADY_CONFIRMED');
+      const details = draft.kind === 'receipt' ? draft.receiptDetails : undefined;
       const data = {
         currency: draft.currency,
         amount: draft.amount,
         description: draft.description,
         version,
         payloadHash,
+        receiptProvenance: details?.provenance ?? null,
+        receiptCategory: details?.category ?? null,
+        receiptReference: details?.reference ?? null,
+        ...decodeEvidence(details?.supportingDocument),
       };
       const row = previous
         ? await tx.importedDraft.update({ where: { id: previous.id }, data })

@@ -1,6 +1,6 @@
 //! Contrôle synthétique du courtier contre une API réelle sur loopback.
 //! Les identifiants de test arrivent uniquement sur stdin, jamais en arguments.
-use caissepro_session::{Broker, Draft, Error, SaveDraft};
+use caissepro_session::{Broker, Draft, Error, ReceiptDetails, SaveDraft};
 use chrono::Utc;
 use serde::Deserialize;
 use serde_json::json;
@@ -49,6 +49,11 @@ async fn run(input: Input) -> Result<(), Box<dyn std::error::Error>> {
     let cash = profile.cash_registers[0].id;
     let email = format!("{}@example.test", Uuid::new_v4());
     let created = admin.admin("create", Some(json!({"email":email,"displayName":"Caissier synthétique","initialPassword":input.password,"access":{"roles":["CASHIER"],"agencyIds":[agency],"cashRegisterIds":[cash],"active":true}})), Some(administrator.generation)).await?;
+    let new_agency=Uuid::new_v4();let new_cash=Uuid::new_v4();
+    admin.cash_action("create-agency",Some(json!({"id":new_agency,"code":"ANNEXE","name":"Agence annexe synthétique"})),Some(administrator.generation)).await?;
+    admin.cash_action("create",Some(json!({"id":new_cash,"agencyId":new_agency,"code":"ANNEXE","name":"Caisse annexe synthétique","authorizedUserIds":[]})),Some(administrator.generation)).await?;
+    admin.cash_action("update",Some(json!({"id":new_cash,"data":{"expectedVersion":1,"name":"Caisse annexe inactive","active":false}})),Some(administrator.generation)).await?;
+    assert_eq!(admin.cash_action("configuration",None,Some(administrator.generation)).await?["registers"].as_array().unwrap().len(),2);
     let cashier = Broker::new(&input.base, &input.deployment, Uuid::new_v4(), true)?;
     let first = cashier
         .login(
@@ -82,11 +87,17 @@ async fn run(input: Input) -> Result<(), Box<dyn std::error::Error>> {
     assert!(rows.iter().all(|row| row["balance"] == "0.00"));
     let now = Utc::now();
     let draft = Draft {
+        receipt_details: Some(ReceiptDetails {
+            provenance: "Client synthétique".into(),
+            category: "VENTE".into(),
+            reference: "TEST-INTEGRATION".into(),
+            supporting_document: None,
+        }),
         id: Uuid::new_v4(),
         kind: "receipt".into(),
         currency: "USD".into(),
         amount: "12.34".into(),
-        description: "Contrôle synthétique, aucun encaissement confirmé".into(),
+        description: "Encaissement synthétique en base de test isolée".into(),
         created_at: now.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
         expires_at: (now + chrono::Duration::minutes(10))
             .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
@@ -104,6 +115,72 @@ async fn run(input: Input) -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].outcome, "accepted-as-draft");
     assert!(cashier.synchronize(generation).await?.is_empty());
+    let before = cashier.cash_catalog(generation).await?;
+    assert!(before["data"]["items"][0]["funds"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|f| f["balance"] == "0.00"));
+    cashier
+        .cash_action("open", Some(json!({"id":cash})), generation)
+        .await?;
+    let pending = cashier.cash_action("pending", None, generation).await?;
+    let source = &pending["items"][0];
+    let recovered=Broker::new(&input.base,&input.deployment,Uuid::new_v4(),true)?;
+    assert_eq!(recovered.status()?.state,"anonymous");
+    let current_profile=session.profile.as_ref().unwrap();
+    let recovery=recovered.login(current_profile.company.code.clone(),current_profile.user.email.clone(),Zeroizing::new(input.renewed_password.clone())).await?;
+    let recovery_generation=Some(recovery.generation);
+    let restored=recovered.cash_action("restore",Some(json!({"id":source["id"]})),recovery_generation).await?;
+    assert_eq!(restored["draft"]["id"],source["clientDraftId"]);
+    assert!(matches!(
+        cashier
+            .cash_action(
+                "confirm",
+                Some(
+                    json!({"id":source["id"],"expectedVersion":source["version"],"received":false})
+                ),
+                generation
+            )
+            .await,
+        Err(Error::InvalidInput)
+    ));
+    let receipt = recovered
+        .cash_action(
+            "confirm",
+            Some(json!({"id":source["id"],"expectedVersion":source["version"],"received":true})),
+            recovery_generation,
+        )
+        .await?;
+    let replay = cashier
+        .cash_action(
+            "confirm",
+            Some(json!({"id":source["id"],"expectedVersion":source["version"],"received":true})),
+            generation,
+        )
+        .await?;
+    assert_eq!(receipt["id"], replay["id"]);
+    assert_eq!(receipt["amount"], "12.34");
+    assert!(receipt["number"].as_str().unwrap().starts_with("REC-"));
+    cashier.cash_action("pending",None,generation).await?;
+    assert_eq!(cashier.drafts(generation)?[0].state, "confirmed");
+    assert!(cashier.synchronize(generation).await?.is_empty());
+    let after = cashier.cash_catalog(generation).await?;
+    let funds = after["data"]["items"][0]["funds"].as_array().unwrap();
+    assert_eq!(
+        funds.iter().find(|f| f["currency"] == "USD").unwrap()["balance"],
+        "12.34"
+    );
+    assert_eq!(
+        funds.iter().find(|f| f["currency"] == "CDF").unwrap()["balance"],
+        "0.00"
+    );
+    assert_eq!(
+        cashier
+            .cash_action("history", Some(json!({"currency":"USD"})), generation)
+            .await?["total"],
+        1
+    );
     let locked = cashier.lock(generation).await?;
     assert_eq!(locked.state, "locked");
     assert!(matches!(cashier.drafts(generation), Err(Error::Locked)));
@@ -113,6 +190,7 @@ async fn run(input: Input) -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(unlocked.state, "online");
     let generation = Some(unlocked.generation);
     assert_eq!(cashier.drafts(generation)?.len(), 1);
+    recovered.logout(recovery_generation).await?;
     admin.admin("access", Some(json!({"userId":created["id"],"expectedVersion":created["version"],"access":{"roles":["AUDITOR"],"agencyIds":[agency],"cashRegisterIds":[cash],"active":true}})), Some(administrator.generation)).await?;
     assert!(matches!(
         cashier.synchronize(generation).await,

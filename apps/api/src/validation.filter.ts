@@ -14,11 +14,13 @@ export class ValidationFilter implements ExceptionFilter {
 @Catch(DataError)
 export class DataErrorFilter implements ExceptionFilter {
   catch(error: DataError, host: ArgumentsHost) {
-    const status = error.code.includes('SESSION')
+    const status = error.code.includes('SESSION_REVOKED')
       ? 401
       : error.code.includes('ACCESS_DENIED')
         ? 403
-        : 409;
+        : error.code.includes('NOT_FOUND')
+          ? 404
+          : 409;
     host
       .switchToHttp()
       .getResponse<{ status(n: number): { json(value: unknown): void } }>()

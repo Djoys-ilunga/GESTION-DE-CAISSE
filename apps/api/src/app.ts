@@ -1,7 +1,9 @@
 import type { INestApplication } from '@nestjs/common';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
 import { ValidationFilter, DataErrorFilter } from './validation.filter';
 export function configureApp(app: INestApplication, origins: string[]) {
+  (app as NestExpressApplication).useBodyParser('json', { limit: '2mb' });
   app.use(helmet());
   app.enableCors({ origin: origins, methods: ['GET', 'POST', 'PUT'], credentials: false });
   app.useGlobalFilters(new ValidationFilter(), new DataErrorFilter());

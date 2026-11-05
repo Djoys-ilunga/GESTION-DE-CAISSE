@@ -11,6 +11,8 @@ pub fn run() {
     tauri::Builder::default()
         .manage(broker)
         .invoke_handler(tauri::generate_handler![
+            commands::cash_catalog,
+            commands::cash_action,
             commands::auth_health,
             commands::auth_login,
             commands::auth_status,

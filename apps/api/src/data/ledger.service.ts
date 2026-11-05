@@ -137,7 +137,11 @@ export class LedgerService {
     payload: unknown,
     prepare: () => Promise<Prepared>,
   ) {
-    const requestHash = fingerprint({ ctx, kind, payload });
+    const requestHash = fingerprint({
+      ctx: { companyId: ctx.companyId, userId: ctx.userId },
+      kind,
+      payload,
+    });
     const previous = await tx.financialOperation.findFirst({
       where: { companyId: ctx.companyId, idempotencyKey: input.idempotencyKey },
     });
@@ -186,7 +190,7 @@ export class LedgerService {
       if (!account) throw new DataError('ACCOUNT_NOT_FOUND');
       await this.access.require(tx, ctx, account.agencyId, 'ledger:read');
       if (account.cashRegisterId)
-        await this.access.requireCash(tx, ctx, account.cashRegisterId, 'ledger:read');
+        await this.access.requireCashRead(tx, ctx, account.cashRegisterId, 'ledger:read');
       const [row] = await tx.$queryRaw<
         {
           currency: Currency;
@@ -205,31 +209,32 @@ export class LedgerService {
     });
   }
   async receipt(ctx: DataContext, value: unknown) {
+    return this.access.run(ctx, (tx) => this.receiptInTransaction(tx, ctx, value));
+  }
+  async receiptInTransaction(tx: Tx, ctx: DataContext, value: unknown) {
     const input = receiptSchema.parse(value);
-    return this.access.run(ctx, async (tx) => {
-      await this.access.require(tx, ctx, input.agencyId, 'receipt:post');
-      return this.write(tx, ctx, 'RECEIPT', input, input, async () => {
-        await this.access.lockAccounts(tx, ctx, [input.accountId, input.counterAccountId]);
-        return {
-          currency: input.currency,
-          lines: [
-            {
-              accountId: input.accountId,
-              cashSessionId: input.cashSessionId,
-              currency: input.currency,
-              amount: input.amount,
-              side: 'DEBIT',
-            },
-            {
-              accountId: input.counterAccountId,
-              cashSessionId: null,
-              currency: input.currency,
-              amount: input.amount,
-              side: 'CREDIT',
-            },
-          ],
-        };
-      });
+    await this.access.require(tx, ctx, input.agencyId, 'receipt:post');
+    return this.write(tx, ctx, 'RECEIPT', input, input, async () => {
+      await this.access.lockAccounts(tx, ctx, [input.accountId, input.counterAccountId]);
+      return {
+        currency: input.currency,
+        lines: [
+          {
+            accountId: input.accountId,
+            cashSessionId: input.cashSessionId,
+            currency: input.currency,
+            amount: input.amount,
+            side: 'DEBIT',
+          },
+          {
+            accountId: input.counterAccountId,
+            cashSessionId: null,
+            currency: input.currency,
+            amount: input.amount,
+            side: 'CREDIT',
+          },
+        ],
+      };
     });
   }
   async transfer(ctx: DataContext, value: unknown) {

@@ -41,7 +41,9 @@ export class CentralAccess {
           await new Promise((resolve) => setTimeout(resolve, 10 * (attempt + 1)));
           continue;
         }
-        throw new DataError(message.match(/CAISSEPRO_[A-Z_]+/)?.[0] ?? 'DATA_INTEGRITY_ERROR');
+        // Prisma peut inclure des extraits de code avant le message PostgreSQL.
+        const markers = [...message.matchAll(/CAISSEPRO_[A-Z_]+/g)];
+        throw new DataError(markers.at(-1)?.[0] ?? 'DATA_INTEGRITY_ERROR');
       }
     }
   }
@@ -60,5 +62,14 @@ export class CentralAccess {
   async requireCash(tx: Tx, ctx: DataContext, cashRegisterId: string, permission: string) {
     z.uuid().parse(cashRegisterId);
     await tx.$executeRaw`SELECT caissepro_assert_cash_permission(${ctx.companyId}::uuid,${ctx.userId}::uuid,${cashRegisterId}::uuid,${permission})`;
+  }
+  async requireCashRead(
+    tx: Tx,
+    ctx: DataContext,
+    cashRegisterId: string,
+    permission: 'ledger:read' | 'receipt:read',
+  ) {
+    z.uuid().parse(cashRegisterId);
+    await tx.$executeRaw`SELECT caissepro_assert_cash_read(${ctx.companyId}::uuid,${ctx.userId}::uuid,${cashRegisterId}::uuid,${permission})`;
   }
 }

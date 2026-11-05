@@ -127,6 +127,17 @@ impl Api {
                 (401, json!({"message":"Révoqué"}))
             }
             "/api/v1/auth/session" => (200, serde_json::to_value(&*p.lock().unwrap()).unwrap()),
+            "/api/v1/cash/registers" => {
+                let profile = p.lock().unwrap();
+                (
+                    200,
+                    json!({"items":[],"synchronizedAt":profile.validated_at,"expiresAt":profile.offline_until}),
+                )
+            }
+            path if path.starts_with("/api/v1/cash/drafts/") && path.ends_with("/confirm") => {
+                writes.fetch_add(1, Ordering::SeqCst);
+                (201, json!({"ok":true}))
+            }
             "/api/v1/auth/unlock" => (
                 201,
                 json!({"accessToken":"b".repeat(43),"profile":*p.lock().unwrap()}),
@@ -157,6 +168,7 @@ impl Api {
         let now = wall_now();
         SaveDraft {
             draft: Draft {
+                receipt_details: None,
                 id: Uuid::new_v4(),
                 kind: "expense-request".into(),
                 currency: "USD".into(),
@@ -322,6 +334,8 @@ async fn offline_unlock_requires_the_previous_users_password_and_keeps_a_fixed_e
     {
         let mut p = api.profile.lock().unwrap();
         p.permissions.push("offline:access".into());
+        p.permissions.push("ledger:read".into());
+        p.permissions.push("receipt:post".into());
         p.offline_until = Some(iso(wall_now() + 120000));
     }
     let broker = api.broker();
@@ -334,6 +348,10 @@ async fn offline_unlock_requires_the_previous_users_password_and_keeps_a_fixed_e
         .await
         .unwrap();
     let expiry = view.offline_until.clone();
+    assert_eq!(
+        broker.cash_catalog(Some(view.generation)).await.unwrap()["stale"],
+        false
+    );
     broker
         .save_draft(api.draft(), Some(view.generation))
         .unwrap();
@@ -356,4 +374,61 @@ async fn offline_unlock_requires_the_previous_users_password_and_keeps_a_fixed_e
     assert_eq!(unlocked.state, "offline");
     assert_eq!(unlocked.offline_until, expiry);
     assert_eq!(broker.drafts(Some(view.generation)).unwrap().len(), 1);
+    assert_eq!(
+        broker.cash_catalog(Some(view.generation)).await.unwrap()["stale"],
+        true
+    );
+    assert!(matches!(
+        broker
+            .cash_action(
+                "confirm",
+                Some(json!({"id":Uuid::new_v4(),"expectedVersion":1,"received":true})),
+                Some(view.generation)
+            )
+            .await,
+        Err(Error::OnlineRequired)
+    ));
+    assert!(matches!(
+        broker
+            .cash_action(
+                "open",
+                Some(json!({"id":Uuid::new_v4()})),
+                Some(view.generation)
+            )
+            .await,
+        Err(Error::OnlineRequired)
+    ));
+    assert_eq!(api.writes.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn financial_confirmation_checks_identity_before_sending_any_post() {
+    let api = Api::new();
+    api.profile
+        .lock()
+        .unwrap()
+        .permissions
+        .push("receipt:post".into());
+    let broker = api.broker();
+    let view = broker
+        .login(
+            "TEST".into(),
+            "alice@example.test".into(),
+            Zeroizing::new("password-test".into()),
+        )
+        .await
+        .unwrap();
+    *api.deployment.lock().unwrap() = "wrong-deployment".into();
+    assert!(matches!(
+        broker
+            .cash_action(
+                "confirm",
+                Some(json!({"id":Uuid::new_v4(),"expectedVersion":1,"received":true})),
+                Some(view.generation)
+            )
+            .await,
+        Err(Error::Identity)
+    ));
+    assert_eq!(api.writes.load(Ordering::SeqCst), 0);
+    assert_eq!(broker.status().unwrap().state, "anonymous");
 }

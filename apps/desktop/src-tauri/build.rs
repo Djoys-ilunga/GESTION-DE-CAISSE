@@ -24,6 +24,8 @@ fn main() {
         println!("cargo:rustc-env={name}={value}");
     }
     let manifest = tauri_build::AppManifest::new().commands(&[
+        "cash_catalog",
+        "cash_action",
         "auth_health",
         "auth_login",
         "auth_status",

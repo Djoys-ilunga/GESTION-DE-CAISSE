@@ -8,6 +8,22 @@ import {
   type AuthLog,
   type DraftSyncResult,
   type RoleCode,
+  cashSnapshotSchema,
+  cashConfigurationSchema,
+  confirmedReceiptSchema,
+  receiptHistorySchema,
+  receiptDraftListSchema,
+  supportingDocumentSchema,
+  type CashSnapshot,
+  type CashConfiguration,
+  type ConfirmedReceipt,
+  type ReceiptHistory,
+  type ReceiptDraftList,
+  type ReceiptQuery,
+  type SupportingDocument,
+  type CreateCash,
+  type CreateAgency,
+  type UpdateCash,
 } from '@caissepro/shared';
 export type SessionDraft = {
   draft: Draft;
@@ -18,6 +34,8 @@ export type SessionDraft = {
   state: string;
   result: DraftSyncResult | null;
   updatedAt: string;
+  confirmedReceiptId?: string | null;
+  receiptNumber?: string | null;
 };
 export type DraftInput = {
   draft: Draft;
@@ -46,6 +64,18 @@ export type AccessCatalog = {
   cashRegisters: { id: string; agencyId: string; name: string; code: string }[];
 };
 export interface AuthGateway {
+  cashCatalog(): Promise<CashSnapshot>;
+  cashConfiguration(): Promise<CashConfiguration>;
+  createAgency(input: CreateAgency): Promise<{ id: string }>;
+  createCash(input: CreateCash): Promise<{ id: string }>;
+  updateCash(id: string, input: UpdateCash): Promise<{ id: string }>;
+  openCashSession(id: string): Promise<{ id: string }>;
+  receiptDrafts(page?: number): Promise<ReceiptDraftList>;
+  restoreReceiptDraft(id: string): Promise<SessionDraft>;
+  confirmReceipt(id: string, expectedVersion: number, received: true): Promise<ConfirmedReceipt>;
+  receiptHistory(query?: ReceiptQuery): Promise<ReceiptHistory>;
+  receipt(id: string): Promise<ConfirmedReceipt>;
+  receiptEvidence(id: string): Promise<SupportingDocument>;
   available: boolean;
   health(): Promise<boolean>;
   status(): Promise<NativeSessionView>;
@@ -76,6 +106,47 @@ export interface AuthGateway {
   logs(): Promise<AuthLog[]>;
 }
 export class NativeAuthGateway implements AuthGateway {
+  private cashCall<T>(action: string, payload?: unknown): Promise<T> {
+    return this.call<T>('cash_action', { action, payload });
+  }
+  async cashCatalog() {
+    return cashSnapshotSchema.parse(await this.call('cash_catalog'));
+  }
+  async cashConfiguration() {
+    return cashConfigurationSchema.parse(await this.cashCall('configuration'));
+  }
+  createAgency(input: CreateAgency) {
+    return this.cashCall<{ id: string }>('create-agency', input);
+  }
+  createCash(input: CreateCash) {
+    return this.cashCall<{ id: string }>('create', input);
+  }
+  updateCash(id: string, input: UpdateCash) {
+    return this.cashCall<{ id: string }>('update', { id, data: input });
+  }
+  openCashSession(id: string) {
+    return this.cashCall<{ id: string }>('open', { id });
+  }
+  async receiptDrafts(page = 1) {
+    return receiptDraftListSchema.parse(await this.cashCall('pending', { page }));
+  }
+  restoreReceiptDraft(id: string) {
+    return this.cashCall<SessionDraft>('restore', { id });
+  }
+  async confirmReceipt(id: string, expectedVersion: number, received: true) {
+    return confirmedReceiptSchema.parse(
+      await this.cashCall('confirm', { id, expectedVersion, received }),
+    );
+  }
+  async receiptHistory(query: ReceiptQuery = {}) {
+    return receiptHistorySchema.parse(await this.cashCall('history', query));
+  }
+  async receipt(id: string) {
+    return confirmedReceiptSchema.parse(await this.cashCall('receipt', { id }));
+  }
+  async receiptEvidence(id: string) {
+    return supportingDocumentSchema.parse(await this.cashCall('evidence', { id }));
+  }
   readonly available = isTauri();
   private generation = 0;
   private async call<T>(command: string, args?: Record<string, unknown>): Promise<T> {

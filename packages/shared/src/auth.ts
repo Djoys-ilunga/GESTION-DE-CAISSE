@@ -16,10 +16,10 @@ export const roleCodeSchema = z.enum([
   'AUDITOR',
 ]);
 export type RoleCode = z.infer<typeof roleCodeSchema>;
-const read = ['directory:read', 'ledger:read'];
+const read = ['directory:read', 'ledger:read', 'receipt:read'];
 const drafts = ['draft:receive', 'draft:read_own', 'draft:write_own', 'offline:access'];
 export const ROLE_PERMISSIONS: Record<RoleCode, readonly string[]> = {
-  ADMINISTRATOR: [...read, 'users:manage', 'roles:assign', 'auth:logs:read'],
+  ADMINISTRATOR: [...read, 'users:manage', 'roles:assign', 'auth:logs:read', 'cash:configure'],
   DIRECTOR: [...read, 'expense:approve', 'auth:logs:read', 'offline:access'],
   FINANCE_MANAGER: [
     ...read,

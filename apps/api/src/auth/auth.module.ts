@@ -8,14 +8,17 @@ import { AdminService } from './admin.service';
 import { AuthGuard } from './auth.guard';
 import { AuthController, AdminController } from './auth.controller';
 import { WorkspaceController } from './workspace.controller';
+import { CashController } from '../cash/cash.controller';
+import { CashService } from '../cash/cash.service';
 @Module({
   imports: [DataModule],
-  controllers: [AuthController, AdminController, WorkspaceController],
+  controllers: [AuthController, AdminController, WorkspaceController, CashController],
   providers: [
     AuthStore,
     PasswordService,
     AuthService,
     AdminService,
+    CashService,
     { provide: APP_GUARD, useClass: AuthGuard },
   ],
   exports: [AuthService, AuthStore, AdminService, PasswordService],

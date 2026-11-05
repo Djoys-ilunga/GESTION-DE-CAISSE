@@ -1,5 +1,9 @@
 import { z } from 'zod';
+import { currencySchema, positiveAmountSchema } from './money.js';
+import { receiptDetailsSchema } from './receipts.js';
 export * from './auth.js';
+export * from './money.js';
+export * from './receipts.js';
 export const API_PROTOCOL_VERSION = 1 as const;
 export const apiHealthSchema = z
   .object({
@@ -10,10 +14,6 @@ export const apiHealthSchema = z
   })
   .strict();
 export type ApiHealth = z.infer<typeof apiHealthSchema>;
-export const currencySchema = z.enum(['CDF', 'USD']);
-export type Currency = z.infer<typeof currencySchema>;
-export const amountSchema = z.string().regex(/^(?:0|[1-9]\d{0,15})\.\d{2}$/);
-export const positiveAmountSchema = amountSchema.refine((v) => v !== '0.00');
 export const draftSchema = z
   .object({
     id: z.uuid(),
@@ -23,6 +23,7 @@ export const draftSchema = z
     description: z.string().trim().min(1).max(500),
     createdAt: z.iso.datetime(),
     expiresAt: z.iso.datetime(),
+    receiptDetails: receiptDetailsSchema.optional(),
   })
   .strict()
   .refine((d) => Date.parse(d.expiresAt) > Date.parse(d.createdAt), 'Expiration invalide.');

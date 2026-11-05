@@ -27,6 +27,298 @@ pub struct Broker {
     clock: Clock,
 }
 impl Broker {
+    pub async fn cash_catalog(&self, expected: Option<u64>) -> Result<Value> {
+        let (generation, _) = self.snapshot(true, false, expected)?;
+        let online = {
+            let state = self.state()?;
+            let s = state.session.as_ref().ok_or(Error::AuthRequired)?;
+            s.permission("ledger:read")?;
+            s.online
+        };
+        if online {
+            let data = self
+                .protected(Method::GET, "cash/registers", None, Some(generation))
+                .await?;
+            let now = self.clock.now();
+            if !data.get("items").is_some_and(Value::is_array)
+                || millis(
+                    data.get("synchronizedAt")
+                        .and_then(Value::as_str)
+                        .ok_or(Error::InvalidResponse)?,
+                )? > now + 30000
+            {
+                return Err(Error::InvalidResponse);
+            }
+            let mut state = self.state()?;
+            Self::generation(&state, Some(generation))?;
+            let s = state.session.as_mut().ok_or(Error::AuthRequired)?;
+            s.guard(now)?;
+            s.cash_catalog = Some(data.clone());
+            return Ok(json!({"data":data,"stale":false}));
+        }
+        let state = self.state()?;
+        Self::generation(&state, Some(generation))?;
+        let s = state.session.as_ref().ok_or(Error::AuthRequired)?;
+        s.guard(self.clock.now())?;
+        let data = s.cash_catalog.as_ref().ok_or(Error::Unavailable)?;
+        if self.clock.now()
+            >= millis(
+                data.get("expiresAt")
+                    .and_then(Value::as_str)
+                    .ok_or(Error::Expired)?,
+            )?
+        {
+            return Err(Error::Expired);
+        }
+        Ok(json!({"data":data,"stale":true}))
+    }
+    fn query_path(base: &str, payload: &Value, allowed: &[&str]) -> Result<String> {
+        let object = payload.as_object().ok_or(Error::InvalidInput)?;
+        if object.keys().any(|key| !allowed.contains(&key.as_str())) {
+            return Err(Error::InvalidInput);
+        }
+        let mut url = Url::parse("https://query.invalid/").map_err(|_| Error::InvalidInput)?;
+        {
+            let mut pairs = url.query_pairs_mut();
+            for (key, value) in object {
+                if value.is_null() {
+                    continue;
+                }
+                let value = match value {
+                    Value::String(s) => s.clone(),
+                    Value::Number(n) => n.to_string(),
+                    _ => return Err(Error::InvalidInput),
+                };
+                if value.len() > 300 {
+                    return Err(Error::InvalidInput);
+                }
+                if !value.is_empty() {
+                    pairs.append_pair(key, &value);
+                }
+            }
+        }
+        Ok(format!("{base}?{}", url.query().unwrap_or_default()))
+    }
+    fn mark_receipt(state: &mut State, value: &Value) -> Result<()> {
+        let client = Uuid::parse_str(
+            value
+                .get("clientDraftId")
+                .and_then(Value::as_str)
+                .ok_or(Error::InvalidResponse)?,
+        )
+        .map_err(|_| Error::InvalidResponse)?;
+        let id = Uuid::parse_str(
+            value
+                .get("id")
+                .and_then(Value::as_str)
+                .ok_or(Error::InvalidResponse)?,
+        )
+        .map_err(|_| Error::InvalidResponse)?;
+        let number = value
+            .get("number")
+            .and_then(Value::as_str)
+            .filter(|v| v.starts_with("REC-") && v.len() <= 160)
+            .ok_or(Error::InvalidResponse)?;
+        let version = value
+            .get("version")
+            .and_then(Value::as_u64)
+            .ok_or(Error::InvalidResponse)?;
+        let s = state.session.as_mut().ok_or(Error::AuthRequired)?;
+        let mut changed = false;
+        if let Some(record) = s.drafts.get_mut(&client) {
+            changed = record.state != "confirmed" || record.confirmed_receipt_id != Some(id);
+            if u64::from(record.version) != version {
+                s.drafts.remove(&client);
+            } else {
+                record.state = "confirmed".into();
+                record.confirmed_receipt_id = Some(id);
+                record.receipt_number = Some(number.into());
+                record.result = None;
+            }
+        }
+        if changed {
+            s.balances = None;
+            s.cash_catalog = None;
+        }
+        Ok(())
+    }
+    pub async fn cash_action(
+        &self,
+        action: &str,
+        payload: Option<Value>,
+        expected: Option<u64>,
+    ) -> Result<Value> {
+        let (generation, _) = self.snapshot(true, true, expected)?;
+        let payload = payload.unwrap_or_else(|| json!({}));
+        let permission = match action {
+            "configuration" | "create-agency" | "create" | "update" => "cash:configure",
+            "open" => "session:manage",
+            "pending" | "restore" => "draft:read_own",
+            "confirm" => "receipt:post",
+            "history" | "receipt" | "evidence" => "receipt:read",
+            _ => return Err(Error::Forbidden),
+        };
+        {
+            self.state()?
+                .session
+                .as_ref()
+                .ok_or(Error::AuthRequired)?
+                .permission(permission)?;
+        }
+        let id = || -> Result<Uuid> {
+            Uuid::parse_str(
+                payload
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .ok_or(Error::InvalidInput)?,
+            )
+            .map_err(|_| Error::InvalidInput)
+        };
+        let (method, path, body) = match action {
+            "configuration" => (Method::GET, "cash/configuration".into(), None),
+            "create-agency" => (Method::POST, "cash/agencies".into(), Some(payload.clone())),
+            "create" => (Method::POST, "cash/registers".into(), Some(payload.clone())),
+            "update" => (
+                Method::PUT,
+                format!("cash/registers/{}", id()?),
+                Some(payload.get("data").ok_or(Error::InvalidInput)?.clone()),
+            ),
+            "open" => (Method::POST, format!("cash/registers/{}/open", id()?), None),
+            "pending" => (
+                Method::GET,
+                Self::query_path("cash/drafts", &payload, &["page"])?,
+                None,
+            ),
+            "restore" => (Method::GET, format!("cash/drafts/{}", id()?), None),
+            "history" => (
+                Method::GET,
+                Self::query_path(
+                    "cash/receipts",
+                    &payload,
+                    &[
+                        "page",
+                        "cashRegisterId",
+                        "currency",
+                        "category",
+                        "search",
+                        "from",
+                        "to",
+                    ],
+                )?,
+                None,
+            ),
+            "receipt" => (Method::GET, format!("cash/receipts/{}", id()?), None),
+            "evidence" => (
+                Method::GET,
+                format!("cash/receipts/{}/evidence", id()?),
+                None,
+            ),
+            "confirm" => {
+                if payload.get("received") != Some(&Value::Bool(true))
+                    || !payload
+                        .get("expectedVersion")
+                        .and_then(Value::as_u64)
+                        .is_some_and(|v| v > 0 && v <= u32::MAX.into())
+                {
+                    return Err(Error::InvalidInput);
+                }
+                self.revalidate(Some(generation)).await?;
+                self.state()?
+                    .session
+                    .as_ref()
+                    .ok_or(Error::AuthRequired)?
+                    .permission("receipt:post")?;
+                (
+                    Method::POST,
+                    format!("cash/drafts/{}/confirm", id()?),
+                    Some(json!({"expectedVersion":payload["expectedVersion"],"received":true})),
+                )
+            }
+            _ => return Err(Error::Forbidden),
+        };
+        let value = self
+            .protected(method, &path, body, Some(generation))
+            .await?;
+        let now = self.clock.now();
+        let mut state = self.state()?;
+        Self::generation(&state, Some(generation))?;
+        state
+            .session
+            .as_ref()
+            .ok_or(Error::AuthRequired)?
+            .guard(now)?;
+        if action == "confirm" {
+            if value.get("sourceDraftId") != payload.get("id") {
+                return Err(Error::InvalidResponse);
+            }
+            Self::mark_receipt(&mut state, &value)?;
+            let s = state.session.as_mut().ok_or(Error::AuthRequired)?;
+            s.balances = None;
+            s.cash_catalog = None;
+        } else if action == "pending" {
+            for row in value
+                .get("items")
+                .and_then(Value::as_array)
+                .ok_or(Error::InvalidResponse)?
+            {
+                if !row.get("receiptId").is_none_or(Value::is_null) {
+                    Self::mark_receipt(
+                        &mut state,
+                        &json!({"id":row["receiptId"],"number":row["receiptNumber"],"clientDraftId":row["clientDraftId"],"version":row["version"]}),
+                    )?;
+                }
+            }
+        } else if action == "restore" {
+            #[derive(Deserialize)]
+            #[serde(rename_all = "camelCase", deny_unknown_fields)]
+            struct Remote {
+                client_draft_id: Uuid,
+                agency_id: Uuid,
+                cash_register_id: Uuid,
+                version: u32,
+                currency: String,
+                amount: String,
+                description: String,
+                receipt_details: Option<ReceiptDetails>,
+            }
+            let remote: Remote =
+                serde_json::from_value(value).map_err(|_| Error::InvalidResponse)?;
+            let s = state.session.as_mut().ok_or(Error::AuthRequired)?;
+            if let Some(old) = s.drafts.get(&remote.client_draft_id) {
+                if millis(&old.draft.expires_at)? > now {
+                    if old.state == "synced" && old.version == remote.version {
+                        return serde_json::to_value(old).map_err(|_| Error::InvalidResponse);
+                    }
+                    return Err(Error::Conflict);
+                }
+            }
+            let input = SaveDraft {
+                draft: Draft {
+                    id: remote.client_draft_id,
+                    kind: "receipt".into(),
+                    currency: remote.currency,
+                    amount: remote.amount,
+                    description: remote.description,
+                    created_at: crate::state::iso(now),
+                    expires_at: crate::state::iso((now + 900000).min(s.absolute_until)),
+                    receipt_details: remote.receipt_details,
+                },
+                agency_id: remote.agency_id,
+                cash_register_id: Some(remote.cash_register_id),
+                expected_version: None,
+            };
+            let mut record = s.save_draft(input, now)?;
+            if remote.version == 0 {
+                return Err(Error::InvalidResponse);
+            }
+            record.version = remote.version;
+            record.server_version = Some(remote.version);
+            record.state = "synced".into();
+            s.drafts.insert(record.draft.id, record.clone());
+            return serde_json::to_value(record).map_err(|_| Error::InvalidResponse);
+        }
+        Ok(value)
+    }
     pub fn new(
         base: &str,
         deployment: &str,
@@ -345,6 +637,7 @@ impl Broker {
                 }
                 if !profile.same_scope(&session.profile) {
                     session.balances = None;
+                    session.cash_catalog = None;
                     session.drafts.clear();
                 }
                 session.locked = session.locked || profile.locked;
@@ -423,6 +716,7 @@ impl Broker {
                         }
                         if !response.profile.same_scope(&s.profile) {
                             s.balances = None;
+                            s.cash_catalog = None;
                             s.drafts.clear();
                         }
                         s.token = Zeroizing::new(response.access_token);
@@ -704,7 +998,10 @@ impl Broker {
         self.revalidate(Some(generation)).await?;
         let records = self.drafts(Some(generation))?;
         let mut results = Vec::new();
-        for record in records.into_iter().filter(|r| r.state != "synced") {
+        for record in records
+            .into_iter()
+            .filter(|r| r.state != "synced" && r.state != "confirmed")
+        {
             let _ = self.snapshot(true, true, Some(generation))?;
             let result=self.protected(Method::POST,"workspace/drafts/sync",Some(json!({"draft":record.draft,"agencyId":record.agency_id,"cashRegisterId":record.cash_register_id,"version":record.version,"expectedServerVersion":record.server_version})),Some(generation)).await;
             let response = match result {

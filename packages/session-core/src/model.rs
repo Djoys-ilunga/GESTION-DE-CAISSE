@@ -87,6 +87,23 @@ pub struct Draft {
     pub description: String,
     pub created_at: String,
     pub expires_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub receipt_details: Option<ReceiptDetails>,
+}
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SupportingDocument {
+    pub file_name: String,
+    pub mime_type: String,
+    pub data_base64: String,
+}
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ReceiptDetails {
+    pub provenance: String,
+    pub category: String,
+    pub reference: String,
+    pub supporting_document: Option<SupportingDocument>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -99,6 +116,10 @@ pub struct DraftRecord {
     pub state: String,
     pub result: Option<SyncResult>,
     pub updated_at: String,
+    #[serde(default)]
+    pub confirmed_receipt_id: Option<Uuid>,
+    #[serde(default)]
+    pub receipt_number: Option<String>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

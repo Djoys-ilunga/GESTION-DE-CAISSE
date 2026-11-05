@@ -78,6 +78,7 @@ model Company {
   roles     Role[]
   rates     ExchangeRate[]
   audits    AuditEvent[]
+  receiptCounters ReceiptCounter[]
 }
 
 model Agency {
@@ -116,6 +117,7 @@ model User {
   attachments        Attachment[]
   audits             AuditEvent[]
   drafts             ImportedDraft[]
+  cashReceipts       CashReceipt[]
 }
 
 model CompanyMember {
@@ -185,6 +187,8 @@ model AgencyGrant {
 }
 
 model CashRegister {
+  version   Int                 @default(1)
+  configurationHash String?     @db.Char(64)
   grants    CashRegisterGrant[]
   id        String              @id @default(uuid()) @db.Uuid
   companyId String              @db.Uuid
@@ -195,6 +199,7 @@ model CashRegister {
   agency    Agency              @relation(fields: [companyId, agencyId], references: [companyId, id], onDelete: Restrict)
   accounts  TreasuryAccount[]
   sessions  CashSession[]
+  receipts  CashReceipt[]
 
   @@unique([companyId, id, agencyId])
   @@unique([companyId, agencyId, code])
@@ -267,6 +272,7 @@ model FinancialOperation {
   entries          LedgerEntry[]
   transfer         Transfer?
   attachments      Attachment[]
+  cashReceipt      CashReceipt?
 
   @@unique([companyId, id])
   @@unique([companyId, idempotencyKey])
@@ -408,6 +414,14 @@ model AuditEvent {
 }
 
 model ImportedDraft {
+  receiptProvenance String? @db.VarChar(160)
+  receiptCategory String? @db.VarChar(80)
+  receiptReference String? @db.VarChar(160)
+  evidenceName String? @db.VarChar(160)
+  evidenceMime String? @db.VarChar(100)
+  evidenceSha String? @db.Char(64)
+  evidenceBytes Bytes?
+  receipt CashReceipt?
   cashRegisterId String?   @db.Uuid
   id             String    @id @default(uuid()) @db.Uuid
   companyId      String    @db.Uuid
@@ -425,6 +439,59 @@ model ImportedDraft {
   author         User      @relation(fields: [authorId], references: [id], onDelete: Restrict)
 
   @@unique([companyId, authorId, clientDraftId])
+  @@unique([companyId, id])
+}
+
+model ReceiptCounter {
+  companyId String @db.Uuid
+  year Int
+  lastSequence BigInt
+  company Company @relation(fields:[companyId],references:[id],onDelete:Restrict)
+  @@id([companyId,year])
+}
+
+model CashReceipt {
+  evidenceByteLength Int?
+  id String @id @default(uuid()) @db.Uuid
+  companyId String @db.Uuid
+  agencyId String @db.Uuid
+  cashRegisterId String @db.Uuid
+  sourceDraftId String @db.Uuid
+  sourceVersion Int
+  clientDraftId String @db.Uuid
+  operationId String @db.Uuid
+  createdById String @db.Uuid
+  currency Currency
+  amount Decimal @db.Decimal(18,2)
+  provenance String @db.VarChar(160)
+  category String @db.VarChar(80)
+  description String @db.VarChar(500)
+  reference String @db.VarChar(160)
+  companyName String @db.VarChar(160)
+  companyCode String @db.VarChar(32)
+  agencyName String @db.VarChar(160)
+  agencyCode String @db.VarChar(40)
+  cashName String @db.VarChar(160)
+  cashCode String @db.VarChar(40)
+  cashierName String @db.VarChar(160)
+  postedAt DateTime @db.Timestamptz(3)
+  year Int
+  sequence BigInt
+  number String @db.VarChar(160)
+  evidenceName String? @db.VarChar(160)
+  evidenceMime String? @db.VarChar(100)
+  evidenceSha String? @db.Char(64)
+  evidenceBytes Bytes?
+  register CashRegister @relation(fields:[companyId,cashRegisterId,agencyId],references:[companyId,id,agencyId],onDelete:Restrict)
+  operation FinancialOperation @relation(fields:[companyId,operationId],references:[companyId,id],onDelete:Restrict)
+  source ImportedDraft @relation(fields:[companyId,sourceDraftId],references:[companyId,id],onDelete:Restrict)
+  creator User @relation(fields:[createdById],references:[id],onDelete:Restrict)
+  @@unique([companyId,id])
+  @@unique([companyId,sourceDraftId])
+  @@unique([companyId,operationId])
+  @@unique([companyId,number])
+  @@unique([companyId,year,sequence])
+  @@index([companyId,cashRegisterId,postedAt,id])
 }
 
 model UserCredential {

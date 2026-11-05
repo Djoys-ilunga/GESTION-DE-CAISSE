@@ -3,6 +3,62 @@ use crate::state::{iso, wall_now, Session, State, Verifier};
 use serde_json::json;
 use uuid::Uuid;
 use zeroize::Zeroizing;
+#[test]
+fn receipt_metadata_is_private_draft_data_and_a_confirmed_source_cannot_be_edited() {
+    let now = wall_now();
+    let mut s = session(now);
+    let mut input = draft(&s, now);
+    let cash = Uuid::new_v4();
+    s.profile.cash_registers.push(CashRegister {
+        id: cash,
+        agency_id: s.profile.agencies[0].id,
+        code: "C".into(),
+        name: "Caisse".into(),
+    });
+    input.cash_register_id = Some(cash);
+    input.draft.kind = "receipt".into();
+    input.draft.receipt_details = Some(ReceiptDetails {
+        provenance: "Payeur privé".into(),
+        category: "Ventes".into(),
+        reference: "R-1".into(),
+        supporting_document: None,
+    });
+    let saved = s.save_draft(input.clone(), now).unwrap();
+    assert_eq!(saved.draft.amount, "12.34");
+    assert!(saved.receipt_number.is_none());
+    s.drafts.get_mut(&saved.draft.id).unwrap().state = "confirmed".into();
+    input.expected_version = Some(1);
+    input.draft.amount = "99.00".into();
+    assert!(matches!(s.save_draft(input, now), Err(Error::Conflict)));
+    assert!(s.balances.is_none());
+}
+#[test]
+fn forged_attachment_is_rejected_before_it_is_stored() {
+    let now = wall_now();
+    let mut s = session(now);
+    let mut input = draft(&s, now);
+    let cash = Uuid::new_v4();
+    s.profile.cash_registers.push(CashRegister {
+        id: cash,
+        agency_id: s.profile.agencies[0].id,
+        code: "C".into(),
+        name: "Caisse".into(),
+    });
+    input.cash_register_id = Some(cash);
+    input.draft.kind = "receipt".into();
+    input.draft.receipt_details = Some(ReceiptDetails {
+        provenance: "Payeur".into(),
+        category: "Ventes".into(),
+        reference: String::new(),
+        supporting_document: Some(SupportingDocument {
+            file_name: "faux.pdf".into(),
+            mime_type: "application/pdf".into(),
+            data_base64: "aHRtbA==".into(),
+        }),
+    });
+    assert!(matches!(s.save_draft(input, now), Err(Error::InvalidInput)));
+    assert!(s.drafts.is_empty());
+}
 fn profile(now: i64) -> Profile {
     serde_json::from_value(json!({"sessionId":Uuid::new_v4(),"deviceId":Uuid::new_v4(),"user":{"id":Uuid::new_v4(),"email":"test@example.test","displayName":"Utilisateur test","mustChangePassword":false},"company":{"id":Uuid::new_v4(),"code":"TEST","name":"Entreprise test"},"roles":["CASHIER"],"permissions":["offline:access","draft:write_own","draft:read_own","ledger:read"],"agencies":[{"id":Uuid::new_v4(),"code":"A","name":"Agence A"}],"cashRegisters":[],"expiresAt":iso(now+3600000),"idleExpiresAt":iso(now+900000),"offlineUntil":iso(now+900000),"validatedAt":iso(now),"locked":false,"authorizationVersion":1})).unwrap()
 }
@@ -12,6 +68,7 @@ fn session(now: i64) -> Session {
 fn draft(s: &Session, now: i64) -> SaveDraft {
     SaveDraft {
         draft: Draft {
+            receipt_details: None,
             id: Uuid::new_v4(),
             kind: "expense-request".into(),
             currency: "USD".into(),
