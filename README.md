@@ -19,6 +19,8 @@ docs               Architecture, chiffrement et résultats réels
 
 Le module [Transferts et conversions](docs/transferts.md) prépare des brouillons hors connexion, réserve les fonds à la remise et comptabilise après réception explicite par un autre utilisateur autorisé. Les quatre sens CDF/USD sont pris en charge, avec taux validé et bordereau immuable.
 
+Pour essayer le projet avec deux caisses et six utilisateurs fictifs, consulter la [démonstration locale](docs/demonstration.md). Les identifiants sont générés aléatoirement hors Git et les données sont isolées dans une base dédiée.
+
 Depuis la racine, avec Node 24 et pnpm 11.25.0 :
 
 ```sh

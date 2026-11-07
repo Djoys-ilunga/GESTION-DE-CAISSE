@@ -7,6 +7,7 @@
     "allow-cash-catalog",
     "allow-cash-action",
     "allow-expense-action",
+    "allow-transfer-action",
     "allow-auth-health",
     "allow-auth-login",
     "allow-auth-status",

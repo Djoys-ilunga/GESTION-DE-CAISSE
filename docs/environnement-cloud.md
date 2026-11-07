@@ -22,3 +22,11 @@ Le frontend navigateur et l’API fonctionnent sur loopback avec `pnpm dev:web` 
 PostgreSQL est fourni par Docker sur `127.0.0.1:5432`. Les tests créent une base temporaire distincte puis la suppriment, sans réinitialiser la base de développement. Les variables PostgreSQL restent dans `.env` ignoré par Git. Un clone de restauration a généré sa propre configuration locale et n’a pas reçu une copie des secrets du premier checkout.
 
 La bibliothèque chiffrée reste bloquée dans l’application. Les résultats Linux, les tests navigateur et une compilation TypeScript ne valident pas les installateurs ou magasins de clés Windows/macOS. Consulter le rapport de validation et les résultats du workflow natif dans GitHub Actions avant toute décision d’activation.
+
+## Complément — démonstration native du 7 novembre 2026
+
+La fenêtre native de l'étape 7 est désormais compilée et contrôlée dans le conteneur `caissepro-native-demo:local`, construit depuis `tools/native/Dockerfile`. L'hôte reste sans GTK/WebKit et sans sudo. La compilation verrouillée, hors réseau, s'est terminée avec succès. Le compte Unix 1000 est déclaré dans l'image pour le fonctionnement de D-Bus ; aucun bac à sable WebKit n'a été désactivé.
+
+Le lanceur `pnpm demo:native` et `docs/demonstration.md` décrivent la reproduction. La base démo est distincte, le compte SQL de son API est restreint, et tous les accès et archives de données restent privés hors Git. Les captures prouvent la connexion réelle, la préparation en mémoire et la transmission sans écriture financière d'un brouillon, pas le pilotage manuel de tous les parcours ni la qualification Windows/macOS.
+
+Diagnostic du partage : l'environnement `ccarenv_b64_Y2NhcmVudl8yMWZlZTI2NjJmYjQ4MTkxYjg5MmM0ODMxOTJmN2Y5MQ` annonce `remote_desktop.enabled=true` avec état `unknown`. Aucun outil Desktop `js`/`cua_repl` ni `open_in_codex` n'est exposé au présent chat. L'affichage Xvfb créé pour le contrôle natif n'est pas le bureau partagé de la plateforme ; les captures ne donnent donc pas une prise en main interactive à l'utilisateur.

@@ -16,7 +16,7 @@
     "build:desktop": "pnpm --filter @caissepro/shared build && pnpm --filter @caissepro/desktop tauri build",
     "typecheck": "pnpm --filter @caissepro/shared build && pnpm -r --workspace-concurrency=1 typecheck",
     "lint": "eslint . --max-warnings 0",
-    "test": "pnpm --filter @caissepro/shared build && pnpm -r --workspace-concurrency=1 test",
+    "test": "pnpm --filter @caissepro/shared build && node --test tests/native/permissions.test.mjs && pnpm -r --workspace-concurrency=1 test",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -35,7 +35,11 @@
     "test:native:linux": "bash tests/native/smoke-linux.sh",
     "setup:admin": "pnpm --filter @caissepro/shared build && pnpm --filter @caissepro/api build && node scripts/bootstrap-admin.mjs",
     "test:session": "node scripts/check-session.mjs",
-    "test:auth:desktop": "pnpm --filter @caissepro/shared build && pnpm --filter @caissepro/api build && node scripts/test-auth-desktop.mjs"
+    "test:auth:desktop": "pnpm --filter @caissepro/shared build && pnpm --filter @caissepro/api build && node scripts/test-auth-desktop.mjs",
+    "demo:prepare": "pnpm build && node scripts/demo.mjs prepare",
+    "demo:start": "node scripts/demo.mjs start",
+    "demo:backup:test": "node scripts/demo.mjs backup-test",
+    "demo:native": "bash scripts/demo-native.sh"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
