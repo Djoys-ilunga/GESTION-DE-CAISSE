@@ -1,6 +1,35 @@
-# Validation de CaissePro — 5 novembre 2026
+# Validation de CaissePro — 7 novembre 2026
 
-## Étape 6 : moteur de synchronisation sécurisée — validation courante
+## Étape 7 — transferts et conversions internes
+
+**251 tests automatisés distincts ont réussi**, plus le parcours intégré Rust/API/PostgreSQL étendu aux transferts. L’étape 8 n’est pas commencée. Les reprises ciblées ne sont pas additionnées au total.
+
+| Contrôle                           | Résultat réel                                                                                                                                                            |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Contrats partagés                  | 18 tests réussis, dont 5 nouveaux pour les transferts, devises, taux et consentements                                                                                    |
+| API HTTP avec double de base       | 4 tests réussis                                                                                                                                                          |
+| Desktop React avec courtier simulé | 72 tests réussis, dont 6 nouveaux : préparation hors connexion, absence d’exécution implicite, taux validé, acteur distinct et bordereau serveur                         |
+| PostgreSQL réel                    | 91 tests distincts réussis : les 76 précédents et 15 scénarios de transfert/conversion ; suite complète de 89 puis validation ciblée incluant les deux ajouts de clôture |
+| Courtier Rust Linux                | 46 tests réussis, format et Clippy sans avertissement ; blocages hors connexion, perte d’accusé, conservation de l’UUID, déverrouillage requis et permissions revalidées |
+| SQLCipher Linux                    | 9 tests de non-régression réussis ; stockage sensible toujours désactivé                                                                                                 |
+| API compilée et PostgreSQL réel    | 2 tests réussis : disponibilité/CORS/arrêt et refus de démarrage sans PostgreSQL                                                                                         |
+| Chromium avec doubles IPC          | 9 tests réussis ; préparation de transfert hors connexion sans appel financier et réception explicite avec bordereau imprimable                                          |
+| Rust → API → PostgreSQL réels      | Réussi sous LOGIN NOINHERIT/NOBYPASSRLS : deux responsables financiers distincts, transfert USD, conversion USD/CDF, bordereaux et réception idempotente                 |
+| Outils                             | `pnpm check` : lint, types, tests, builds NestJS et Vite réussis ; schéma Prisma valide                                                                                  |
+
+Les quinze scénarios financiers nouveaux couvrent CDF/CDF, USD/USD, CDF/USD et USD/CDF, conversion dans une même caisse, grands montants calculés sans arrondi intermédiaire (oracle entier indépendant), montants/taux invalides, destinataire hors périmètre, sessions/révocations, auteur et réceptionnaire distincts, UUID stable, quatre remises/réceptions simultanées dédupliquées, insuffisance de fonds en concurrence, protection des réservations malgré un périmètre destination retiré, fermeture de session, transitions SQL forgées et rollback après écritures et insertion du taux lorsque la création du bordereau échoue. Les tests négatifs ne désactivent aucune contrainte.
+
+Le parcours intégré conserve les contrôles antérieurs d’encaissement, dépense et révocation puis vérifie les nouveaux mouvements avec de vrais courtiers natifs. Résultat SQL final contrôlé : **4 opérations, 10 écritures, 1 reçu, 1 dépense payée, 1 bon, 2 brouillons d’encaissement/dépense et 2 transferts reçus**. Solde source final `7.00 USD`, destination `2.00 USD` et `2800.00 CDF`. Les bases et rôles LOGIN de test sont supprimés.
+
+La migration additive `20261107000100_transfer_workflow` est appliquée à la base de développement ; les treize migrations ont été rejouées sur des bases vierges. Les empreintes des migrations historiques ont été vérifiées avant application. Les nombres de lignes et SHA-256 des dix tables financières/de préparation contrôlées sont identiques avant/après application. La fonction d’agrégation des réservations a un propriétaire NOLOGIN/NOBYPASSRLS dédié et applique RLS ; elle conserve le disponible correct même si un utilisateur ne peut pas consulter les transferts vers une autre caisse.
+
+Les essais ont identifié et corrigé une clé étrangère nécessitant une unicité composite supplémentaire, le droit d’insertion de taux désormais limité par un garde SQL, les extensions ESM indispensables à Node compilé et les contrats stricts du double de catalogue navigateur. Un essai concurrent de synchronisation a rencontré un conflit lors d’une exécution chargée ; la suite entière a ensuite passé sans modifier les assertions ou augmenter les plafonds. Les échecs initiaux ne sont pas comptés comme réussites.
+
+La capture `test-results/transfert-bordereau.png` a été inspectée. Le PDF `test-results/transfert-bordereau.pdf` contient une page A4. Ces fichiers ignorés sont des résultats locaux de démonstration synthétique, pas des bordereaux financiers réels.
+
+**Limites :** la fenêtre Tauri Linux n’a pas été recompilée pour cette étape, les prérequis GTK/WebKit n’étant pas installés ; le courtier Rust et son transport réel sont testés séparément. Les installateurs Windows/macOS, signatures et magasins de clés restent à qualifier. Pas de persistance sensible hors connexion ni d’annulation automatique des fonds déjà remis. Voir [transferts.md](transferts.md) pour les règles de remise/réception, d’arrondi, de reprise et de résolution des transferts en attente.
+
+## Historique — étape 6 : moteur de synchronisation sécurisée
 
 **221 tests automatisés distincts ont réussi**, plus un parcours du courtier Rust contre NestJS/PostgreSQL réels et un contrôle de la vraie fenêtre Tauri Linux. Les répétitions ciblées après correction ne sont pas additionnées. L’étape 7 n’est pas commencée.
 

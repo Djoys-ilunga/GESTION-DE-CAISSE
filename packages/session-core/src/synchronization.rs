@@ -180,12 +180,15 @@ impl Session {
         self.scope(input.agency_id, input.cash_register_id)?;
         self.form_buffers
             .retain(|_, b| millis(&b.expires_at).is_ok_and(|end| end > now));
-        if !["receipt", "expense-request"].contains(&input.kind.as_str())
-            || input.fields.len() > 8
+        if !["receipt", "expense-request", "transfer"].contains(&input.kind.as_str())
+            || input.fields.len() > 12
             || input.fields.iter().any(|(key, value)| {
                 let max = match key.as_str() {
                     "amount" => 19,
-                    "currency" => 3,
+                    "currency" | "destinationCurrency" => 3,
+                    "destinationCashRegisterId" => 36,
+                    "rate" => 25,
+                    "rateSource" => 100,
                     "description" => 500,
                     "provenance" | "category" | "reference" | "beneficiary" => 160,
                     _ => 0,
@@ -209,6 +212,18 @@ impl Session {
             }
         } else if input.expected_local_version.is_some() {
             return Err(Error::Conflict);
+        }
+        if input.kind == "transfer" {
+            if let Some(destination) = input.fields.get("destinationCashRegisterId") {
+                let id = uuid::Uuid::parse_str(destination).map_err(|_| Error::InvalidInput)?;
+                let register = self
+                    .profile
+                    .cash_registers
+                    .iter()
+                    .find(|r| r.id == id)
+                    .ok_or(Error::Forbidden)?;
+                self.scope(register.agency_id, Some(id))?;
+            }
         }
         let source_expiry = self
             .drafts

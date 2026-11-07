@@ -4,6 +4,18 @@ use tauri::State;
 use zeroize::Zeroizing;
 type Reply<T> = std::result::Result<T, String>;
 #[tauri::command]
+pub async fn transfer_action(
+    broker: State<'_, Broker>,
+    action: String,
+    payload: Option<Value>,
+    expected_generation: u64,
+) -> Reply<Value> {
+    broker
+        .transfer_action(&action, payload, Some(expected_generation))
+        .await
+        .map_err(safe)
+}
+#[tauri::command]
 pub async fn cash_catalog(broker: State<'_, Broker>, expected_generation: u64) -> Reply<Value> {
     broker
         .cash_catalog(Some(expected_generation))

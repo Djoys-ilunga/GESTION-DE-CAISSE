@@ -239,39 +239,37 @@ export class LedgerService {
   }
   async transfer(ctx: DataContext, value: unknown) {
     const input = transferSchema.parse(value);
-    return this.access.run(ctx, async (tx) => {
-      await this.access.require(tx, ctx, input.agencyId, 'transfer:post');
-      return this.write(tx, ctx, 'TRANSFER', input, input, async () => {
-        await this.access.lockAccounts(tx, ctx, [
-          input.sourceAccountId,
-          input.destinationAccountId,
-        ]);
-        return {
+    return this.access.run(ctx, (tx) => this.transferInTransaction(tx, ctx, input));
+  }
+  async transferInTransaction(tx: Tx, ctx: DataContext, input: z.infer<typeof transferSchema>) {
+    await this.access.require(tx, ctx, input.agencyId, 'transfer:post');
+    return this.write(tx, ctx, 'TRANSFER', input, input, async () => {
+      await this.access.lockAccounts(tx, ctx, [input.sourceAccountId, input.destinationAccountId]);
+      return {
+        currency: input.currency,
+        transfer: {
+          sourceAccountId: input.sourceAccountId,
+          destinationAccountId: input.destinationAccountId,
           currency: input.currency,
-          transfer: {
-            sourceAccountId: input.sourceAccountId,
-            destinationAccountId: input.destinationAccountId,
+          amount: input.amount,
+        },
+        lines: [
+          {
+            accountId: input.sourceAccountId,
+            cashSessionId: input.sourceSessionId,
             currency: input.currency,
             amount: input.amount,
+            side: 'CREDIT',
           },
-          lines: [
-            {
-              accountId: input.sourceAccountId,
-              cashSessionId: input.sourceSessionId,
-              currency: input.currency,
-              amount: input.amount,
-              side: 'CREDIT',
-            },
-            {
-              accountId: input.destinationAccountId,
-              cashSessionId: input.destinationSessionId,
-              currency: input.currency,
-              amount: input.amount,
-              side: 'DEBIT',
-            },
-          ],
-        };
-      });
+          {
+            accountId: input.destinationAccountId,
+            cashSessionId: input.destinationSessionId,
+            currency: input.currency,
+            amount: input.amount,
+            side: 'DEBIT',
+          },
+        ],
+      };
     });
   }
   async requestExpense(ctx: DataContext, value: unknown) {
@@ -404,61 +402,62 @@ export class LedgerService {
   }
   async convert(ctx: DataContext, value: unknown) {
     const input = fxSchema.parse(value);
-    return this.access.run(ctx, async (tx) => {
-      await this.access.require(tx, ctx, input.agencyId, 'fx:post');
-      return this.write(tx, ctx, 'FX', input, input, async () => {
-        const rate = await tx.exchangeRate.findFirst({
-          where: { companyId: ctx.companyId, id: input.exchangeRateId },
-        });
-        if (!rate) throw new DataError('RATE_NOT_FOUND');
-        await this.access.lockAccounts(tx, ctx, [
-          input.sourceAccountId,
-          input.destinationAccountId,
-          input.sourceCounterId,
-          input.destinationCounterId,
-        ]);
-        const target = new ExactDecimal(input.amount)
-          .mul(rate.rate.toString())
-          .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
-          .toFixed(2);
-        positiveAmountSchema.parse(target);
-        return {
-          currency: null,
-          exchangeRateId: rate.id,
-          sourceAmount: input.amount,
-          targetAmount: target,
-          lines: [
-            {
-              accountId: input.sourceAccountId,
-              cashSessionId: input.sourceSessionId,
-              currency: rate.fromCurrency,
-              amount: input.amount,
-              side: 'CREDIT',
-            },
-            {
-              accountId: input.sourceCounterId,
-              cashSessionId: null,
-              currency: rate.fromCurrency,
-              amount: input.amount,
-              side: 'DEBIT',
-            },
-            {
-              accountId: input.destinationAccountId,
-              cashSessionId: input.destinationSessionId,
-              currency: rate.toCurrency,
-              amount: target,
-              side: 'DEBIT',
-            },
-            {
-              accountId: input.destinationCounterId,
-              cashSessionId: null,
-              currency: rate.toCurrency,
-              amount: target,
-              side: 'CREDIT',
-            },
-          ],
-        };
+    return this.access.run(ctx, (tx) => this.convertInTransaction(tx, ctx, input));
+  }
+  async convertInTransaction(tx: Tx, ctx: DataContext, input: z.infer<typeof fxSchema>) {
+    await this.access.require(tx, ctx, input.agencyId, 'fx:post');
+    return this.write(tx, ctx, 'FX', input, input, async () => {
+      const rate = await tx.exchangeRate.findFirst({
+        where: { companyId: ctx.companyId, id: input.exchangeRateId },
       });
+      if (!rate) throw new DataError('RATE_NOT_FOUND');
+      await this.access.lockAccounts(tx, ctx, [
+        input.sourceAccountId,
+        input.destinationAccountId,
+        input.sourceCounterId,
+        input.destinationCounterId,
+      ]);
+      const target = new ExactDecimal(input.amount)
+        .mul(rate.rate.toString())
+        .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
+        .toFixed(2);
+      positiveAmountSchema.parse(target);
+      return {
+        currency: null,
+        exchangeRateId: rate.id,
+        sourceAmount: input.amount,
+        targetAmount: target,
+        lines: [
+          {
+            accountId: input.sourceAccountId,
+            cashSessionId: input.sourceSessionId,
+            currency: rate.fromCurrency,
+            amount: input.amount,
+            side: 'CREDIT',
+          },
+          {
+            accountId: input.sourceCounterId,
+            cashSessionId: null,
+            currency: rate.fromCurrency,
+            amount: input.amount,
+            side: 'DEBIT',
+          },
+          {
+            accountId: input.destinationAccountId,
+            cashSessionId: input.destinationSessionId,
+            currency: rate.toCurrency,
+            amount: target,
+            side: 'DEBIT',
+          },
+          {
+            accountId: input.destinationCounterId,
+            cashSessionId: null,
+            currency: rate.toCurrency,
+            amount: target,
+            side: 'CREDIT',
+          },
+        ],
+      };
     });
   }
   async reverse(ctx: DataContext, value: unknown) {

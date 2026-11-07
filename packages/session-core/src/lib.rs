@@ -7,6 +7,10 @@ pub use model::*;
 type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("TRANSFER_CONFLICT")]
+    TransferConflict,
+    #[error("TRANSFER_DISTINCT_RECEIVER_REQUIRED")]
+    TransferReceiver,
     #[error("SYNC_BUSY")]
     SyncBusy,
     #[error("EXPENSE_CONFLICT")]

@@ -28,6 +28,122 @@ pub struct Broker {
     sync_lock: tokio::sync::Mutex<()>,
 }
 impl Broker {
+    /// Only transmission can read a local buffer. Financial confirmations are always explicit.
+    pub async fn transfer_action(
+        &self,
+        action: &str,
+        payload: Option<Value>,
+        expected: Option<u64>,
+    ) -> Result<Value> {
+        let (generation, _) = self.snapshot(true, true, expected)?;
+        let payload = payload.unwrap_or_else(|| json!({}));
+        let permission = match action {
+            "send" => "draft:write_own",
+            "list" | "detail" => "ledger:read",
+            "handover" | "receive" => "transfer:post",
+            _ => return Err(Error::Forbidden),
+        };
+        self.state()?
+            .session
+            .as_ref()
+            .ok_or(Error::AuthRequired)?
+            .permission(permission)?;
+        let id = || {
+            Uuid::parse_str(
+                payload
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .ok_or(Error::InvalidInput)?,
+            )
+            .map_err(|_| Error::InvalidInput)
+        };
+        self.revalidate(Some(generation)).await?;
+        self.state()?
+            .session
+            .as_ref()
+            .ok_or(Error::AuthRequired)?
+            .permission(permission)?;
+        let mut sent_buffer = None;
+        let (method, path, body) = match action {
+            "send" => {
+                let buffer = {
+                    let mut state = self.state()?;
+                    let session = state.session.as_mut().ok_or(Error::AuthRequired)?;
+                    session
+                        .list_form_buffers(self.clock.now())?
+                        .into_iter()
+                        .find(|b| b.id == id().unwrap_or_default())
+                        .ok_or(Error::InvalidInput)?
+                };
+                if buffer.kind != "transfer" {
+                    return Err(Error::InvalidInput);
+                }
+                let fields = &buffer.fields;
+                let currency = fields.get("currency").ok_or(Error::InvalidInput)?;
+                let destination_currency = fields
+                    .get("destinationCurrency")
+                    .ok_or(Error::InvalidInput)?;
+                let rate = if currency == destination_currency {
+                    Value::Null
+                } else {
+                    json!(fields.get("rate").ok_or(Error::InvalidInput)?)
+                };
+                let body = json!({"id":buffer.id,"sourceCashRegisterId":buffer.cash_register_id,
+                    "destinationCashRegisterId":fields.get("destinationCashRegisterId"),"sourceCurrency":currency,
+                    "destinationCurrency":destination_currency,"amount":fields.get("amount"),"rate":rate,
+                    "rateSource":fields.get("rateSource").map(String::as_str).unwrap_or(""),"description":fields.get("description")});
+                sent_buffer = Some(buffer);
+                (Method::POST, "transfers/drafts".into(), Some(body))
+            }
+            "list" => (
+                Method::GET,
+                Self::query_path("transfers", &payload, &["page", "state"])?,
+                None,
+            ),
+            "detail" => (Method::GET, format!("transfers/{}", id()?), None),
+            "handover" => {
+                if payload.get("handedOver") != Some(&Value::Bool(true)) {
+                    return Err(Error::InvalidInput);
+                }
+                (
+                    Method::POST,
+                    format!("transfers/{}/handover", id()?),
+                    Some(
+                        json!({"expectedVersion":payload["expectedVersion"],"handedOver":true,"rateValidated":payload["rateValidated"]}),
+                    ),
+                )
+            }
+            "receive" => {
+                if payload.get("received") != Some(&Value::Bool(true)) {
+                    return Err(Error::InvalidInput);
+                }
+                (
+                    Method::POST,
+                    format!("transfers/{}/receive", id()?),
+                    Some(json!({"expectedVersion":payload["expectedVersion"],"received":true})),
+                )
+            }
+            _ => return Err(Error::Forbidden),
+        };
+        let value = self
+            .protected(method, &path, body, Some(generation))
+            .await?;
+        let mut state = self.state()?;
+        Self::generation(&state, Some(generation))?;
+        let session = state.session.as_mut().ok_or(Error::AuthRequired)?;
+        session.guard(self.clock.now())?;
+        // A lost acknowledgement retains the UUID. A newer edit is never discarded.
+        if let Some(buffer) = sent_buffer {
+            if value.get("id").and_then(Value::as_str) != Some(buffer.id.to_string().as_str()) {
+                return Err(Error::InvalidResponse);
+            }
+        }
+        if ["handover", "receive"].contains(&action) {
+            session.balances = None;
+            session.cash_catalog = None;
+        }
+        Ok(value)
+    }
     pub async fn expense_action(
         &self,
         action: &str,
@@ -631,6 +747,21 @@ impl Broker {
                 Some("EXPENSE_EVIDENCE_REQUIRED") => Error::ExpenseEvidence,
                 _ if forbidden => Error::Forbidden,
                 _ => Error::ExpenseConflict,
+            });
+        }
+        if path.starts_with("transfers") && response.status().as_u16() == 409 {
+            let mut bytes = Vec::new();
+            while let Some(chunk) = response.chunk().await.map_err(|_| Error::Unavailable)? {
+                if bytes.len().saturating_add(chunk.len()) > 4096 {
+                    return Err(Error::InvalidResponse);
+                }
+                bytes.extend_from_slice(&chunk);
+            }
+            let body: Value = serde_json::from_slice(&bytes).map_err(|_| Error::InvalidResponse)?;
+            return Err(match body.get("code").and_then(Value::as_str) {
+                Some("INSUFFICIENT_FUNDS") => Error::InsufficientFunds,
+                Some("TRANSFER_DISTINCT_RECEIVER_REQUIRED") => Error::TransferReceiver,
+                _ => Error::TransferConflict,
             });
         }
         if path == "workspace/drafts/sync" && response.status().as_u16() == 409 {

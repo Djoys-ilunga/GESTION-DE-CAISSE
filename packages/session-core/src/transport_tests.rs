@@ -178,6 +178,20 @@ impl Api {
                     json!({"serverId":b["draft"]["id"],"clientDraftId":b["draft"]["id"],"agencyId":b["agencyId"],"cashRegisterId":b["cashRegisterId"],"kind":b["draft"]["kind"],"version":b["version"],"createdAt":b["originalCreatedAt"],"updatedAt":b["updatedAt"],"receivedAt":iso(wall_now()),"sourceState":"draft","receiptId":null,"expenseRequestId":null,"currency":b["draft"]["currency"],"amount":b["draft"]["amount"],"description":b["draft"]["description"],"receiptDetails":b["draft"].get("receiptDetails"),"expenseDetails":b["draft"].get("expenseDetails")}),
                 )
             }
+            "/api/v1/transfers/drafts" => {
+                let body: Value = serde_json::from_slice(&bytes[header_end..]).unwrap();
+                sync.requests.lock().unwrap().push(body.clone());
+                *sync.stored.lock().unwrap() = Some(body.clone());
+                if sync.drop_reply.swap(false, Ordering::SeqCst) {
+                    return;
+                }
+                (201, json!({"id":body["id"],"state":"DRAFT"}))
+            }
+            path if path.starts_with("/api/v1/transfers/") => {
+                writes.fetch_add(1, Ordering::SeqCst);
+                sync.financial.fetch_add(1, Ordering::SeqCst);
+                (201, json!({"ok":true}))
+            }
             "/api/v1/workspace/drafts/sync" => {
                 let body: Value = serde_json::from_slice(&bytes[header_end..]).unwrap();
                 sync.requests.lock().unwrap().push(body.clone());
@@ -467,6 +481,9 @@ async fn offline_unlock_requires_the_previous_users_password_and_keeps_a_fixed_e
             .await,
         Err(Error::OnlineRequired)
     ));
+    for action in ["send", "handover", "receive"] {
+        assert!(matches!(broker.transfer_action(action, Some(json!({"id":Uuid::new_v4(),"expectedVersion":1,"handedOver":true,"received":true})), Some(view.generation)).await, Err(Error::OnlineRequired)));
+    }
     for action in ["submit", "decide", "pay", "configure"] {
         assert!(matches!(broker.expense_action(action,Some(json!({"id":Uuid::new_v4(),"expectedVersion":1,"paid":true,"submitted":true})),Some(view.generation)).await,Err(Error::OnlineRequired)));
     }
@@ -642,9 +659,11 @@ async fn losing_the_reply_retries_the_exact_payload_only_after_explicit_unlock()
         .await
         .unwrap();
     broker.synchronize(Some(next)).await.unwrap();
-    let requests = api.sync.requests.lock().unwrap();
-    assert_eq!(requests.len(), 2);
-    assert_eq!(requests[0], requests[1]);
+    {
+        let requests = api.sync.requests.lock().unwrap();
+        assert_eq!(requests.len(), 2);
+        assert_eq!(requests[0], requests[1]);
+    }
     assert_eq!(broker.drafts(Some(next)).unwrap()[0].state, "synced");
     assert_eq!(api.sync.financial.load(Ordering::SeqCst), 0);
 }
@@ -811,4 +830,127 @@ async fn a_late_ack_cannot_repopulate_data_after_logout() {
     assert_eq!(broker.status().unwrap().state, "anonymous");
     assert!(broker.drafts(None).is_err());
     assert_eq!(api.sync.financial.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn transfer_transmission_keeps_uuid_after_lost_ack_and_never_executes_a_financial_action() {
+    let api = Api::new();
+    let (source, destination, agency) = {
+        let mut p = api.profile.lock().unwrap();
+        p.permissions.push("offline:access".into());
+        p.offline_until = Some(iso(wall_now() + 120000));
+        let agency = p.agencies[0].id;
+        let source = Uuid::new_v4();
+        let destination = Uuid::new_v4();
+        p.cash_registers = vec![
+            crate::CashRegister {
+                id: source,
+                agency_id: agency,
+                code: "A".into(),
+                name: "Source".into(),
+            },
+            crate::CashRegister {
+                id: destination,
+                agency_id: agency,
+                code: "B".into(),
+                name: "Destination".into(),
+            },
+        ];
+        (source, destination, agency)
+    };
+    let broker = api.broker();
+    let mut view = broker
+        .login(
+            "TEST".into(),
+            "alice@example.test".into(),
+            Zeroizing::new("test-password".into()),
+        )
+        .await
+        .unwrap();
+    let id = Uuid::new_v4();
+    let input = json!({"id":id,"kind":"transfer","agencyId":agency,"cashRegisterId":source,"expectedLocalVersion":null,
+        "fields":{"amount":"12.34","currency":"USD","destinationCurrency":"CDF","destinationCashRegisterId":destination.to_string(),"rate":"2800","rateSource":"Guichet","description":"Transfert local"}});
+    broker
+        .synchronization_action("buffer-save", Some(input), Some(view.generation))
+        .await
+        .unwrap();
+    api.sync.drop_reply.store(true, Ordering::SeqCst);
+    assert!(broker
+        .transfer_action("send", Some(json!({"id":id})), Some(view.generation))
+        .await
+        .is_err());
+    assert_eq!(broker.status().unwrap().state, "locked");
+    view = broker
+        .unlock(
+            Zeroizing::new("test-password".into()),
+            Some(view.generation),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        broker
+            .synchronization_action("buffers", None, Some(view.generation))
+            .await
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    broker.revalidate(Some(view.generation)).await.unwrap();
+    let reply = broker
+        .transfer_action("send", Some(json!({"id":id})), Some(view.generation))
+        .await
+        .unwrap();
+    assert_eq!(reply["id"], id.to_string());
+    {
+        let requests = api.sync.requests.lock().unwrap();
+        assert_eq!(requests.len(), 2);
+        assert_eq!(requests[0], requests[1]);
+    }
+    assert_eq!(api.sync.financial.load(Ordering::SeqCst), 0);
+    assert_eq!(api.writes.load(Ordering::SeqCst), 0);
+    broker.logout(Some(view.generation)).await.unwrap();
+    assert!(broker
+        .transfer_action("send", Some(json!({"id":id})), Some(view.generation))
+        .await
+        .is_err());
+}
+
+#[tokio::test]
+async fn transfer_confirmations_require_explicit_consent_and_revalidated_permissions() {
+    let api = Api::new();
+    api.profile
+        .lock()
+        .unwrap()
+        .permissions
+        .push("transfer:post".into());
+    let broker = api.broker();
+    let view = broker
+        .login(
+            "TEST".into(),
+            "alice@example.test".into(),
+            Zeroizing::new("test-password".into()),
+        )
+        .await
+        .unwrap();
+    for action in ["handover", "receive"] {
+        assert!(matches!(
+            broker
+                .transfer_action(
+                    action,
+                    Some(json!({"id":Uuid::new_v4(),"expectedVersion":1})),
+                    Some(view.generation)
+                )
+                .await,
+            Err(Error::InvalidInput)
+        ));
+    }
+    api.profile
+        .lock()
+        .unwrap()
+        .permissions
+        .retain(|p| p != "transfer:post");
+    assert!(broker.transfer_action("handover",Some(json!({"id":Uuid::new_v4(),"expectedVersion":1,"handedOver":true,"rateValidated":true})),Some(view.generation)).await.is_err());
+    assert_eq!(api.writes.load(Ordering::SeqCst), 0);
 }

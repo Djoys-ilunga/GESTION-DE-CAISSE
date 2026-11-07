@@ -16,6 +16,8 @@ export class DataErrorFilter implements ExceptionFilter {
   catch(error: DataError, host: ArgumentsHost) {
     const domainCode = error.code.replace(/^CAISSEPRO_/, '');
     const publicCodes = [
+      'TRANSFER_CONFLICT',
+      'TRANSFER_DISTINCT_RECEIVER_REQUIRED',
       'EXPENSE_POLICY_REQUIRED',
       'EXPENSE_LIMIT_EXCEEDED',
       'EXPENSE_EVIDENCE_REQUIRED',

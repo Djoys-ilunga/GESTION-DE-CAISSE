@@ -82,7 +82,7 @@ export function SyncCenter({
     if (active.current) {
       setStatus(s);
       setRows(d);
-      setBuffers(b);
+      setBuffers(b.filter((buffer) => buffer.kind !== 'transfer'));
     }
   }
   async function refresh() {
@@ -110,7 +110,7 @@ export function SyncCenter({
         if (current) {
           setStatus(s);
           setRows(d);
-          setBuffers(b);
+          setBuffers(b.filter((buffer) => buffer.kind !== 'transfer'));
         }
       } catch {
         /* Le verrouillage ou la révocation retire cet écran. */
@@ -300,8 +300,12 @@ export function SyncCenter({
           {buffers.map((b) => (
             <div className="expense-toolbar" key={b.id}>
               <span>
-                {b.kind === 'receipt' ? 'Encaissement' : 'Demande de dépense'} · {b.id.slice(0, 8)}{' '}
-                · Capture du {formatDate(b.updatedAt)}
+                {b.kind === 'receipt'
+                  ? 'Encaissement'
+                  : b.kind === 'transfer'
+                    ? 'Transfert'
+                    : 'Demande de dépense'}{' '}
+                · {b.id.slice(0, 8)} · Capture du {formatDate(b.updatedAt)}
               </span>
               <button
                 className="secondary-button"

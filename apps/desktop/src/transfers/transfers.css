@@ -1,0 +1,61 @@
+.transfer-page {
+  display: grid;
+  gap: 20px;
+}
+.transfer-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.transfer-form label {
+  display: grid;
+  gap: 8px;
+  font-weight: 600;
+}
+.transfer-form input,
+.transfer-form select {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 12px;
+  background: white;
+  color: #172b3a;
+  min-width: 0;
+}
+.transfer-form p {
+  grid-column: 1/-1;
+}
+.transfer-row,
+.transfer-history {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.transfer-history {
+  width: 100%;
+  background: transparent;
+  text-align: left;
+  color: inherit;
+}
+.transfer-warning {
+  padding: 16px;
+  background: #fff7df;
+  border-radius: 8px;
+}
+.transfer-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+}
+@media (max-width: 760px) {
+  .transfer-form {
+    grid-template-columns: 1fr;
+  }
+  .transfer-row,
+  .transfer-history {
+    flex-wrap: wrap;
+  }
+}

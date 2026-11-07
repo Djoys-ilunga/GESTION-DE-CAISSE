@@ -97,12 +97,16 @@ export type SyncStatus = z.infer<typeof syncStatusSchema>;
 export const formBufferInputSchema = z
   .object({
     id: z.uuid(),
-    kind: z.enum(['receipt', 'expense-request']),
+    kind: z.enum(['receipt', 'expense-request', 'transfer']),
     agencyId: z.uuid(),
     cashRegisterId: z.uuid().nullable(),
     expectedLocalVersion: z.number().int().positive().nullable(),
     fields: z
       .object({
+        destinationCashRegisterId: z.uuid().optional(),
+        destinationCurrency: z.string().max(3).optional(),
+        rate: z.string().max(25).optional(),
+        rateSource: z.string().max(100).optional(),
         amount: z.string().max(19).optional(),
         currency: z.string().max(3).optional(),
         description: z.string().max(500).optional(),

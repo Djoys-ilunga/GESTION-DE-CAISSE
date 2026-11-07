@@ -1,6 +1,6 @@
 # CaissePro
 
-Gestion de caisse d’entreprise : Tauri 2/Rust/React, NestJS, PostgreSQL et Prisma. Étapes 1 à 6 : socle technique, données centrales, authentification, autorisations, caisses, encaissements, dépenses et synchronisation sécurisée. Les encaissements produisent des reçus après confirmation explicite. Les dépenses disposent d’un circuit de soumission, approbation ou rejet motivé, réservation, paiement explicite et bon de sortie ; les transferts et autres confirmations restent des services internes.
+Gestion de caisse d’entreprise : Tauri 2/Rust/React, NestJS, PostgreSQL et Prisma. Étapes 1 à 7 : socle technique, données centrales, authentification, autorisations, caisses, encaissements, dépenses, synchronisation sécurisée, transferts et conversions. Les encaissements produisent des reçus après confirmation explicite. Les dépenses disposent d’un circuit de soumission, approbation ou rejet motivé, réservation, paiement explicite et bon de sortie.
 
 Le [centre de synchronisation](docs/synchronisation.md) suit les brouillons, reprises, conflits et copies serveur sans déclencher de traitement financier. Les brouillons non transmis restent temporaires en mémoire et sont perdus à la fermeture ; les copies reçues sont restaurables après connexion.
 
@@ -16,6 +16,8 @@ packages/local-store  Adaptateur SQLCipher Rust avec verrou de qualification
 packages/session-core  Courtier natif de sessions, cache et brouillons en RAM
 docs               Architecture, chiffrement et résultats réels
 ```
+
+Le module [Transferts et conversions](docs/transferts.md) prépare des brouillons hors connexion, réserve les fonds à la remise et comptabilise après réception explicite par un autre utilisateur autorisé. Les quatre sens CDF/USD sont pris en charge, avec taux validé et bordereau immuable.
 
 Depuis la racine, avec Node 24 et pnpm 11.25.0 :
 

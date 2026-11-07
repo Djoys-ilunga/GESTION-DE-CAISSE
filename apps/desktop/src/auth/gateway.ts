@@ -1,3 +1,4 @@
+import { transferViewSchema, transferListSchema, type TransferView } from '@caissepro/shared';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import {
   nativeSessionViewSchema,
@@ -95,6 +96,18 @@ export type AccessCatalog = {
   cashRegisters: { id: string; agencyId: string; name: string; code: string }[];
 };
 export interface AuthGateway {
+  sendTransfer(id: string): Promise<TransferView>;
+  transferList(
+    page?: number,
+  ): Promise<{ items: TransferView[]; total: number; page: number; pageSize: 25 }>;
+  transferDetail(id: string): Promise<TransferView>;
+  handoverTransfer(
+    id: string,
+    expectedVersion: number,
+    handedOver: true,
+    rateValidated: boolean,
+  ): Promise<TransferView>;
+  receiveTransfer(id: string, expectedVersion: number, received: true): Promise<TransferView>;
   formBuffers(): Promise<FormBuffer[]>;
   saveFormBuffer(input: FormBufferInput): Promise<FormBuffer>;
   removeFormBuffer(id: string): Promise<void>;
@@ -164,6 +177,34 @@ export interface AuthGateway {
   logs(): Promise<AuthLog[]>;
 }
 export class NativeAuthGateway implements AuthGateway {
+  private transferCall(action: string, payload?: unknown) {
+    return this.call('transfer_action', { action, payload });
+  }
+  async sendTransfer(id: string) {
+    return transferViewSchema.parse(await this.transferCall('send', { id }));
+  }
+  async transferList(page = 1) {
+    return transferListSchema.parse(await this.transferCall('list', { page }));
+  }
+  async transferDetail(id: string) {
+    return transferViewSchema.parse(await this.transferCall('detail', { id }));
+  }
+  async handoverTransfer(
+    id: string,
+    expectedVersion: number,
+    handedOver: true,
+    rateValidated: boolean,
+  ) {
+    return transferViewSchema.parse(
+      await this.transferCall('handover', { id, expectedVersion, handedOver, rateValidated }),
+    );
+  }
+  async receiveTransfer(id: string, expectedVersion: number, received: true) {
+    return transferViewSchema.parse(
+      await this.transferCall('receive', { id, expectedVersion, received }),
+    );
+  }
+
   async formBuffers() {
     const value = await this.syncCall('buffers');
     if (!Array.isArray(value)) throw new Error('SERVER_RESPONSE_INVALID');
@@ -366,14 +407,17 @@ export class NativeAuthGateway implements AuthGateway {
 export function message(error: unknown) {
   const code = error instanceof Error ? error.message : String(error);
   const labels: Record<string, string> = {
+    TRANSFER_CONFLICT:
+      'Le transfert a changé ou ce brouillon a déjà été transmis. Actualisez le même transfert avant de réessayer.',
+    TRANSFER_DISTINCT_RECEIVER_REQUIRED:
+      'La réception doit être confirmée par un autre utilisateur autorisé.',
     SYNC_BUSY: 'Une synchronisation est déjà en cours. Patientez avant de réessayer.',
     EXPENSE_CONFLICT:
       'La demande ou les règles ont changé. Actualisez les demandes et réessayez sur la même demande.',
     EXPENSE_POLICY_REQUIRED:
       'Un administrateur doit configurer les plafonds de dépenses pour cette devise.',
     EXPENSE_LIMIT_EXCEEDED: 'Le montant dépasse votre plafond autorisé pour cette action.',
-    INSUFFICIENT_FUNDS:
-      'Les fonds disponibles sont insuffisants pour réserver ou payer cette dépense.',
+    INSUFFICIENT_FUNDS: 'Les fonds disponibles sont insuffisants pour cette opération.',
     EXPENSE_EVIDENCE_REQUIRED: 'Au moins un justificatif est requis par les règles de dépenses.',
     FILE_INVALID:
       'Justificatifs invalides : PDF, PNG ou JPEG, 3 fichiers maximum et 1 Mio au total.',

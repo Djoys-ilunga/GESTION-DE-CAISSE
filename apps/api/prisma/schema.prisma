@@ -207,6 +207,7 @@ model CashRegister {
   receipts          CashReceipt[]
 
   @@unique([companyId, id, agencyId])
+  @@unique([companyId, id])
   @@unique([companyId, agencyId, code])
 }
 
@@ -665,4 +666,34 @@ model SyncEvent {
 
   @@unique([companyId, authorId, attemptId, stage])
   @@index([companyId, authorId, createdAt])
+}
+
+model TransferOrder {
+  id                        String    @id @db.Uuid
+  companyId                 String    @db.Uuid
+  authorId                  String    @db.Uuid
+  sourceCashRegisterId      String    @db.Uuid
+  destinationCashRegisterId String    @db.Uuid
+  sourceAccountId           String    @db.Uuid
+  destinationAccountId      String    @db.Uuid
+  sourceCurrency            Currency
+  destinationCurrency       Currency
+  amount                    Decimal   @db.Decimal(18, 2)
+  targetAmount              Decimal   @db.Decimal(18, 2)
+  rate                      Decimal?  @db.Decimal(24, 12)
+  rateSource                String    @db.VarChar(100)
+  description               String    @db.VarChar(500)
+  payloadHash               String    @db.Char(64)
+  state                     String    @default("DRAFT") @db.VarChar(20)
+  version                   Int       @default(1)
+  createdAt                 DateTime  @default(now()) @db.Timestamptz(3)
+  handedOverAt              DateTime? @db.Timestamptz(3)
+  receivedAt                DateTime? @db.Timestamptz(3)
+  handedOverById            String?   @db.Uuid
+  receivedById              String?   @db.Uuid
+  operationId               String?   @unique @db.Uuid
+  slip                      Json?
+
+  @@unique([companyId, id])
+  @@index([companyId, createdAt, id])
 }

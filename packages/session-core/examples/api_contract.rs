@@ -375,6 +375,117 @@ async fn run(input: Input) -> Result<(), Box<dyn std::error::Error>> {
             .await?,
         voucher
     );
+    // Étape 7 : deux opérateurs distincts et deux caisses, transport réel sans jeton React.
+    let destination_cash = Uuid::new_v4();
+    admin.cash_action("create",Some(json!({"id":destination_cash,"agencyId":agency,"code":"TRANSFERTS","name":"Destination des transferts","authorizedUserIds":[]})),Some(administrator.generation)).await?;
+    let mut operators = Vec::new();
+    for name in ["Remettant synthétique", "Réceptionnaire synthétique"] {
+        let email = format!("{}@example.test", Uuid::new_v4());
+        admin.admin("create",Some(json!({"email":email,"displayName":name,"initialPassword":input.renewed_password,"access":{"roles":["FINANCE_MANAGER"],"agencyIds":[agency],"cashRegisterIds":[cash,destination_cash],"active":true}})),Some(administrator.generation)).await?;
+        let broker = Broker::new(&input.base, &input.deployment, Uuid::new_v4(), true)?;
+        let first = broker
+            .login(
+                profile.company.code.clone(),
+                email.clone(),
+                Zeroizing::new(input.renewed_password.clone()),
+            )
+            .await?;
+        let next_password = format!("Native-test-{}", Uuid::new_v4());
+        broker
+            .change_password(
+                Zeroizing::new(input.renewed_password.clone()),
+                Zeroizing::new(next_password.clone()),
+                Some(first.generation),
+            )
+            .await?;
+        let session = broker
+            .login(
+                profile.company.code.clone(),
+                email,
+                Zeroizing::new(next_password),
+            )
+            .await?;
+        operators.push((broker, session));
+    }
+    let (sender, sender_view) = &operators[0];
+    let (receiver, receiver_view) = &operators[1];
+    let sender_generation = Some(sender_view.generation);
+    let receiver_generation = Some(receiver_view.generation);
+    sender
+        .cash_action(
+            "open",
+            Some(json!({"id":destination_cash})),
+            sender_generation,
+        )
+        .await?;
+    for (destination_currency, amount, rate, rate_source) in [
+        ("USD", "2.00", "", ""),
+        ("CDF", "1.00", "2800", "Guichet synthétique"),
+    ] {
+        let id = Uuid::new_v4();
+        sender.synchronization_action("buffer-save",Some(json!({"id":id,"kind":"transfer","agencyId":agency,"cashRegisterId":cash,"expectedLocalVersion":null,"fields":{"amount":amount,"currency":"USD","destinationCurrency":destination_currency,"destinationCashRegisterId":destination_cash.to_string(),"rate":rate,"rateSource":rate_source,"description":"Transfert intégré synthétique"}})),sender_generation).await?;
+        let draft = sender
+            .transfer_action("send", Some(json!({"id":id})), sender_generation)
+            .await?;
+        assert_eq!(draft["state"], "DRAFT");
+        let handed = sender
+            .transfer_action(
+                "handover",
+                Some(json!({"id":id,"expectedVersion":1,"handedOver":true,"rateValidated":true})),
+                sender_generation,
+            )
+            .await?;
+        assert_eq!(handed["state"], "HANDED_OVER");
+        let posted = receiver
+            .transfer_action(
+                "receive",
+                Some(json!({"id":id,"expectedVersion":2,"received":true})),
+                receiver_generation,
+            )
+            .await?;
+        assert_eq!(posted["state"], "RECEIVED");
+        assert!(posted["slip"]["number"]
+            .as_str()
+            .unwrap()
+            .starts_with("TRF-"));
+        let replay = receiver
+            .transfer_action(
+                "receive",
+                Some(json!({"id":id,"expectedVersion":2,"received":true})),
+                receiver_generation,
+            )
+            .await?;
+        assert_eq!(posted, replay);
+    }
+    let balances = receiver.cash_catalog(receiver_generation).await?;
+    let registers = balances["data"]["items"].as_array().unwrap();
+    let funds = registers
+        .iter()
+        .find(|r| r["id"] == cash.to_string())
+        .unwrap()["funds"]
+        .as_array()
+        .unwrap();
+    assert_eq!(
+        funds.iter().find(|f| f["currency"] == "USD").unwrap()["balance"],
+        "7.00"
+    );
+    let target = registers
+        .iter()
+        .find(|r| r["id"] == destination_cash.to_string())
+        .unwrap()["funds"]
+        .as_array()
+        .unwrap();
+    assert_eq!(
+        target.iter().find(|f| f["currency"] == "USD").unwrap()["balance"],
+        "2.00"
+    );
+    assert_eq!(
+        target.iter().find(|f| f["currency"] == "CDF").unwrap()["balance"],
+        "2800.00"
+    );
+    for (broker, session) in operators {
+        broker.logout(Some(session.generation)).await?;
+    }
     let locked = cashier.lock(generation).await?;
     // Cette requête ne s'exécute qu'après déverrouillage ci-dessous.
     assert_eq!(locked.state, "locked");

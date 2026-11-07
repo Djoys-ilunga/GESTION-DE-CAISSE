@@ -153,9 +153,9 @@ try {
   await checks.connect();
   assert.equal(
     (await checks.query('SELECT count(*)::int AS n FROM "FinancialOperation"')).rows[0].n,
-    2,
+    4,
   );
-  assert.equal((await checks.query('SELECT count(*)::int AS n FROM "LedgerEntry"')).rows[0].n, 4);
+  assert.equal((await checks.query('SELECT count(*)::int AS n FROM "LedgerEntry"')).rows[0].n, 10);
   assert.equal((await checks.query('SELECT count(*)::int AS n FROM "ImportedDraft"')).rows[0].n, 2);
   assert.equal((await checks.query('SELECT count(*)::int AS n FROM "CashReceipt"')).rows[0].n, 1);
   assert.equal(
@@ -171,8 +171,22 @@ try {
     (await checks.query('SELECT count(*)::int AS n FROM "ExpenseEvidence"')).rows[0].n,
     1,
   );
+  assert.equal(
+    (await checks.query('SELECT count(*)::int AS n FROM "TransferOrder" WHERE state=\'RECEIVED\''))
+      .rows[0].n,
+    2,
+  );
+  for (const kind of ['TRANSFER', 'FX'])
+    assert.equal(
+      (
+        await checks.query('SELECT count(*)::int AS n FROM "FinancialOperation" WHERE kind=$1', [
+          kind,
+        ])
+      ).rows[0].n,
+      1,
+    );
   console.info(
-    '1 parcours Rust → API réelle → PostgreSQL réussi avec LOGIN restreint NOINHERIT/NOBYPASSRLS : authentification, brouillon transmis sans solde modifié, confirmation explicite unique, reçu numéroté, historique, soumission de dépense distincte, approbation par un directeur, réservation sans paiement, paiement explicite unique, bon de sortie, verrouillage et révocation. SQL final : 2 opérations, 4 écritures, 1 reçu, 1 dépense payée, 1 bon et 2 brouillons.',
+    '1 parcours Rust → API réelle → PostgreSQL réussi avec LOGIN restreint NOINHERIT/NOBYPASSRLS : authentification, brouillon transmis sans solde modifié, confirmation explicite unique, reçu numéroté, historique, soumission de dépense distincte, approbation par un directeur, réservation sans paiement, paiement explicite unique, bon de sortie, verrouillage et révocation. Transfert USD et conversion USD/CDF avec remise, réception distincte, bordereaux et rejeu idempotent réussis. SQL final : 4 opérations, 10 écritures, 1 reçu, 1 dépense payée, 1 bon, 2 brouillons de recette/dépense et 2 transferts reçus.',
   );
 } finally {
   if (server && server.exitCode === null && server.signalCode === null) {

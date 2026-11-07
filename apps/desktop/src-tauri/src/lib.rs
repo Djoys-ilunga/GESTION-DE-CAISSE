@@ -13,6 +13,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::cash_catalog,
             commands::cash_action,
+            commands::transfer_action,
             commands::expense_action,
             commands::auth_health,
             commands::auth_login,

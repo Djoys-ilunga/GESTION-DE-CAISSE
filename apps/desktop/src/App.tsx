@@ -1,3 +1,4 @@
+import { TransfersPage } from './transfers/TransfersPage';
 import { useEffect, useMemo, useState, useSyncExternalStore, type FormEvent } from 'react';
 import {
   Wallet,
@@ -598,6 +599,12 @@ function Workspace({
     { id: 'overview', label: 'Vue d’ensemble', icon: LayoutDashboard },
     { id: 'cash', label: 'Caisses', icon: Wallet, permission: 'ledger:read' },
     { id: 'receipts', label: 'Encaissements', icon: ReceiptText, permission: 'receipt:read' },
+    {
+      id: 'transfers',
+      label: 'Transferts et conversions',
+      icon: RefreshCw,
+      permission: 'ledger:read',
+    },
     { id: 'expenses', label: 'Dépenses', icon: FilePenLine, permission: 'ledger:read' },
     { id: 'users', label: 'Utilisateurs', icon: Users, permission: 'users:manage' },
     { id: 'logs', label: 'Journal des connexions', icon: ScrollText, permission: 'auth:logs:read' },
@@ -690,6 +697,8 @@ function Workspace({
             <ReceiptsPage profile={profile} gateway={gateway} online={online} />
           ) : page === 'expenses' ? (
             <ExpensesPage profile={profile} gateway={gateway} online={online} />
+          ) : page === 'transfers' ? (
+            <TransfersPage profile={profile} gateway={gateway} online={online} />
           ) : page === 'sync' ? (
             <SyncCenter profile={profile} gateway={gateway} online={online} />
           ) : page === 'users' ? (
