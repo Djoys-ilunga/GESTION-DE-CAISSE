@@ -1,3 +1,10 @@
+import {
+  reportSnapshotSchema,
+  closureViewSchema,
+  type ReportQuery,
+  type ReportSnapshot,
+  type CloseCash,
+} from '@caissepro/shared';
 import { transferViewSchema, transferListSchema, type TransferView } from '@caissepro/shared';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import {
@@ -96,6 +103,9 @@ export type AccessCatalog = {
   cashRegisters: { id: string; agencyId: string; name: string; code: string }[];
 };
 export interface AuthGateway {
+  reportSnapshot(query?: ReportQuery): Promise<ReportSnapshot>;
+  saveReport(format: 'pdf' | 'xlsx', query: ReportQuery): Promise<{ saved: boolean }>;
+  closeCash(input: CloseCash): Promise<unknown>;
   sendTransfer(id: string): Promise<TransferView>;
   transferList(
     page?: number,
@@ -177,6 +187,23 @@ export interface AuthGateway {
   logs(): Promise<AuthLog[]>;
 }
 export class NativeAuthGateway implements AuthGateway {
+  async reportSnapshot(query: ReportQuery = {}) {
+    return reportSnapshotSchema.parse(
+      await this.call('report_action', { action: 'snapshot', payload: query }),
+    );
+  }
+  saveReport(format: 'pdf' | 'xlsx', query: ReportQuery) {
+    return this.call<{ saved: boolean }>('report_action', {
+      action: 'save-' + format,
+      payload: query,
+    });
+  }
+  async closeCash(input: CloseCash) {
+    return closureViewSchema.parse(
+      await this.call('report_action', { action: 'close', payload: input }),
+    );
+  }
+
   private transferCall(action: string, payload?: unknown) {
     return this.call('transfer_action', { action, payload });
   }
@@ -407,6 +434,18 @@ export class NativeAuthGateway implements AuthGateway {
 export function message(error: unknown) {
   const code = error instanceof Error ? error.message : String(error);
   const labels: Record<string, string> = {
+    REPORT_TOO_LARGE:
+      'Le rapport dépasse la limite de volume. Réduisez la période ou le périmètre et réessayez.',
+    REPORT_DATES_INVALID:
+      'Choisissez une période valide de 366 jours au maximum, sans début dans le futur.',
+    CLOSURE_RESERVED_FUNDS:
+      'Des fonds sont encore réservés : résolvez les dépenses ou transferts en attente avant de clôturer.',
+    CLOSURE_CONFLICT:
+      'La session a changé ou le comptage diffère du PV enregistré. Actualisez les caisses.',
+    REPORT_SAVE_FAILED:
+      'Le fichier ne peut pas être enregistré à cet emplacement. Choisissez un autre dossier.',
+    REQUEST_INVALID: 'Vérifiez les dates, les champs et les montants saisis (deux décimales).',
+
     TRANSFER_CONFLICT:
       'Le transfert a changé ou ce brouillon a déjà été transmis. Actualisez le même transfert avant de réessayer.',
     TRANSFER_DISTINCT_RECEIVER_REQUIRED:

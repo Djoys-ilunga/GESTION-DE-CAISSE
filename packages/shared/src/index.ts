@@ -81,3 +81,4 @@ export const draftSyncResultSchema = z.discriminatedUnion('outcome', [
 export type DraftSyncResult = z.infer<typeof draftSyncResultSchema>;
 
 export * from './transfers.js';
+export * from './reports.js';

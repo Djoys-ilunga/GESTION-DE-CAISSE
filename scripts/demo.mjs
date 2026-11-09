@@ -56,8 +56,11 @@ if (action === 'prepare') {
       true,
       'Une préparation interrompue existe : diagnostiquer sans supprimer les données.',
     );
+    run('pnpm', ['--filter', '@caissepro/api', 'db:deploy'], {
+      env: { ...process.env, DATABASE_URL: s.url },
+    });
     await secureRuntime(s);
-    console.info('Démonstration existante conservée.');
+    console.info('Démonstration existante conservée ; migrations mises à jour.');
     process.exit(0);
   }
   const adminUrl = new URL(process.env.DATABASE_URL);
@@ -316,13 +319,21 @@ if (action === 'prepare') {
       for (const { tablename } of tables) {
         assert.match(tablename, /^[A-Za-z_]+$/);
         const sql = `SELECT row_to_json(t)::text AS v FROM "${tablename}" t ORDER BY row_to_json(t)::text`;
-        assert.deepEqual((await db.query(sql)).rows, (await copy.query(sql)).rows);
+        assert.ok(
+          JSON.stringify((await db.query(sql)).rows) ===
+            JSON.stringify((await copy.query(sql)).rows),
+          'Données ou métadonnées restaurées différentes.',
+        );
       }
       for (const sql of [
         "SELECT relname,relrowsecurity,relforcerowsecurity FROM pg_class WHERE relnamespace='public'::regnamespace AND relkind='r' ORDER BY relname",
         "SELECT proname,pg_get_userbyid(proowner) AS owner,prosecdef,proconfig FROM pg_proc WHERE pronamespace='public'::regnamespace ORDER BY proname,oid::regprocedure::text",
       ])
-        assert.deepEqual((await db.query(sql)).rows, (await copy.query(sql)).rows);
+        assert.ok(
+          JSON.stringify((await db.query(sql)).rows) ===
+            JSON.stringify((await copy.query(sql)).rows),
+          'Données ou métadonnées restaurées différentes.',
+        );
       console.info(
         'Sauvegarde PostgreSQL restaurée et comparée : toutes les tables publiques identiques. Archive privée conservée hors Git.',
       );

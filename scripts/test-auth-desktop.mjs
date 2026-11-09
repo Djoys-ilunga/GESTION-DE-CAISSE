@@ -186,7 +186,7 @@ try {
       1,
     );
   console.info(
-    '1 parcours Rust → API réelle → PostgreSQL réussi avec LOGIN restreint NOINHERIT/NOBYPASSRLS : authentification, brouillon transmis sans solde modifié, confirmation explicite unique, reçu numéroté, historique, soumission de dépense distincte, approbation par un directeur, réservation sans paiement, paiement explicite unique, bon de sortie, verrouillage et révocation. Transfert USD et conversion USD/CDF avec remise, réception distincte, bordereaux et rejeu idempotent réussis. SQL final : 4 opérations, 10 écritures, 1 reçu, 1 dépense payée, 1 bon, 2 brouillons de recette/dépense et 2 transferts reçus.',
+    '1 parcours Rust → API réelle → PostgreSQL réussi avec LOGIN restreint NOINHERIT/NOBYPASSRLS : authentification, brouillon transmis sans solde modifié, confirmation explicite unique, reçu numéroté, historique, soumission de dépense distincte, approbation par un directeur, réservation sans paiement, paiement explicite unique, bon de sortie, verrouillage et révocation. Rapports serveur, PDF et Excel vérifiés par le courtier natif. Transfert USD et conversion USD/CDF avec remise, réception distincte, bordereaux et rejeu idempotent réussis. SQL final : 4 opérations, 10 écritures, 1 reçu, 1 dépense payée, 1 bon, 2 brouillons de recette/dépense et 2 transferts reçus.',
   );
 } finally {
   if (server && server.exitCode === null && server.signalCode === null) {

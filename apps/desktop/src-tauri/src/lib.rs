@@ -14,6 +14,7 @@ pub fn run() {
             commands::cash_catalog,
             commands::cash_action,
             commands::transfer_action,
+            commands::report_action,
             commands::expense_action,
             commands::auth_health,
             commands::auth_login,

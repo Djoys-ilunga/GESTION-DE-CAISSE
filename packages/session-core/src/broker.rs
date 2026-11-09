@@ -29,6 +29,77 @@ pub struct Broker {
 }
 impl Broker {
     /// Only transmission can read a local buffer. Financial confirmations are always explicit.
+    pub async fn report_action(
+        &self,
+        action: &str,
+        payload: Option<Value>,
+        expected: Option<u64>,
+    ) -> Result<Value> {
+        let (generation, _) = self.snapshot(true, true, expected)?;
+        let permission = if action == "close" {
+            "session:manage"
+        } else {
+            "ledger:read"
+        };
+        self.state()?
+            .session
+            .as_ref()
+            .ok_or(Error::AuthRequired)?
+            .permission(permission)?;
+        if !["snapshot", "pdf", "xlsx", "close"].contains(&action) {
+            return Err(Error::Forbidden);
+        }
+        self.revalidate(Some(generation)).await?;
+        self.state()?
+            .session
+            .as_ref()
+            .ok_or(Error::AuthRequired)?
+            .permission(permission)?;
+        let payload = payload.unwrap_or_else(|| json!({}));
+        let (method, path, body) = if action == "close" {
+            if payload.get("confirmed") != Some(&Value::Bool(true)) {
+                return Err(Error::InvalidInput);
+            }
+            (Method::POST, "reports/close".into(), Some(payload))
+        } else {
+            let path = match action {
+                "pdf" => "reports/pdf",
+                "xlsx" => "reports/xlsx",
+                _ => "reports",
+            };
+            (
+                Method::GET,
+                Self::query_path(
+                    path,
+                    &payload,
+                    &[
+                        "period",
+                        "date",
+                        "from",
+                        "to",
+                        "agencyId",
+                        "cashRegisterId",
+                        "userId",
+                        "category",
+                        "kind",
+                    ],
+                )?,
+                None,
+            )
+        };
+        let value = self
+            .protected(method, &path, body, Some(generation))
+            .await?;
+        let mut state = self.state()?;
+        Self::generation(&state, Some(generation))?;
+        let session = state.session.as_mut().ok_or(Error::AuthRequired)?;
+        session.guard(self.clock.now())?;
+        if action == "close" {
+            session.balances = None;
+            session.cash_catalog = None;
+        }
+        Ok(value)
+    }
     pub async fn transfer_action(
         &self,
         action: &str,
@@ -749,6 +820,22 @@ impl Broker {
                 _ => Error::ExpenseConflict,
             });
         }
+        if path.starts_with("reports") && response.status().as_u16() == 409 {
+            let mut bytes = Vec::new();
+            while let Some(chunk) = response.chunk().await.map_err(|_| Error::Unavailable)? {
+                if bytes.len() + chunk.len() > 4096 {
+                    return Err(Error::InvalidResponse);
+                }
+                bytes.extend_from_slice(&chunk);
+            }
+            let body: Value = serde_json::from_slice(&bytes).map_err(|_| Error::InvalidResponse)?;
+            return Err(match body.get("code").and_then(Value::as_str) {
+                Some("REPORT_TOO_LARGE") => Error::ReportTooLarge,
+                Some("REPORT_DATES_INVALID") => Error::ReportDates,
+                Some("CLOSURE_RESERVED_FUNDS") => Error::ClosureReserved,
+                _ => Error::ClosureConflict,
+            });
+        }
         if path.starts_with("transfers") && response.status().as_u16() == 409 {
             let mut bytes = Vec::new();
             while let Some(chunk) = response.chunk().await.map_err(|_| Error::Unavailable)? {
@@ -793,15 +880,20 @@ impl Broker {
             400..=499 => return Err(Error::InvalidInput),
             _ => return Err(Error::Unavailable),
         }
+        let response_limit = if path.starts_with("reports") {
+            12_000_000
+        } else {
+            2_000_000
+        };
         if response
             .content_length()
-            .is_some_and(|size| size > 2_000_000)
+            .is_some_and(|size| size > response_limit as u64)
         {
             return Err(Error::InvalidResponse);
         }
         let mut bytes = Vec::new();
         while let Some(chunk) = response.chunk().await.map_err(|_| Error::Unavailable)? {
-            if bytes.len().saturating_add(chunk.len()) > 2_000_000 {
+            if bytes.len().saturating_add(chunk.len()) > response_limit {
                 return Err(Error::InvalidResponse);
             }
             bytes.extend_from_slice(&chunk);

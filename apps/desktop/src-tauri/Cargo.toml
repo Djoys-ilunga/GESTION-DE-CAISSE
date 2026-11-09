@@ -18,6 +18,8 @@ caissepro-session = { path = "../../../packages/session-core" }
 serde_json = "1"
 uuid = { version = "1", features = ["v4"] }
 zeroize = "1.9"
+base64 = "0.22"
+rfd = { version = "=0.15.4", default-features = false, features = ["gtk3"] }
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

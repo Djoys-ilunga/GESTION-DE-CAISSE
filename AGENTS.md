@@ -20,3 +20,5 @@
 - Distinguer tests Linux, tests natifs Windows/macOS, tests avec doubles et tests sur PostgreSQL réel. Ne jamais annoncer une fonctionnalité opérationnelle ou une restauration exacte sans preuve.
 - Préserver les modifications utilisateur. Après reconstruction : commit, archive vérifiée hors checkout et vérification du SHA distant lors d'une sauvegarde GitHub autorisée. Ne pas confondre publication cloud et sauvegarde Git.
 - Utiliser pnpm et les verrouillages pnpm/Cargo. `apps/desktop`, `apps/api`, `packages/shared`, `packages/local-store`, `packages/session-core`, `docs` sont les frontières du monorepo.
+
+- Rapports : agréger côté serveur sur les caisses autorisées ; CDF/USD séparés, transferts/FX exclus des recettes/dépenses, contre-écritures prises en compte. Ne pas inventer de comptage ou d’écart nul ; PV et comptage immuables à la clôture, sans correction automatique du solde. Les exports sont explicites, bornés et soumis à revalidation de session.

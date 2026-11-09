@@ -697,3 +697,15 @@ model TransferOrder {
   @@unique([companyId, id])
   @@index([companyId, createdAt, id])
 }
+
+model CashClosureReport {
+  id             String   @id @db.Uuid
+  companyId      String   @db.Uuid
+  cashRegisterId String   @db.Uuid
+  sessionId      String   @unique @db.Uuid
+  closedById     String   @db.Uuid
+  closedAt       DateTime @db.Timestamptz(3)
+  snapshot       Json
+
+  @@index([companyId, closedAt])
+}

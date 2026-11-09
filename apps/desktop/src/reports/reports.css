@@ -1,0 +1,267 @@
+.reports-page {
+  display: grid;
+  gap: 22px;
+  min-width: 0;
+}
+.report-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+  gap: 16px;
+  align-items: end;
+}
+.report-filters label,
+.report-search label {
+  display: grid;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.report-filters input,
+.report-filters select,
+.report-search input,
+.report-search select {
+  padding: 11px;
+  border: 1px solid #d7e0da;
+  background: #fff;
+  border-radius: 8px;
+  color: #203d33;
+  min-width: 0;
+  width: 100%;
+}
+.report-context {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: #61796b;
+}
+.report-context span {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+}
+.report-caption {
+  font-size: 12px;
+  color: #667b70;
+  line-height: 1.7;
+}
+.report-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+.report-kpi {
+  padding: 22px !important;
+}
+.report-kpi > svg {
+  color: #678b60;
+}
+.report-kpi h2 {
+  font-size: 13px;
+  font-weight: 500;
+  margin: 16px 0;
+}
+.report-kpi > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.report-kpi strong {
+  font-size: 21px;
+  letter-spacing: -0.6px;
+  font-variant-numeric: tabular-nums;
+}
+.report-kpi small {
+  width: 100%;
+  text-align: right;
+}
+.report-charts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+}
+.report-curve {
+  margin: 15px 0 0;
+  min-width: 0;
+}
+.report-curve figcaption,
+.report-curve > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+}
+.report-curve figcaption strong {
+  color: #315b46;
+}
+.report-curve figcaption span {
+  font-weight: 600;
+}
+.report-curve svg {
+  width: 100%;
+  height: auto;
+}
+.report-curve small {
+  font-size: 10px;
+  color: #667b70;
+}
+.report-doc-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid #e0e6e1;
+  padding-bottom: 18px;
+}
+.report-tools button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 14px;
+  border: 1px solid #d5dfd5;
+  border-radius: 7px;
+  background: #fff;
+  color: #315b46;
+}
+.report-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin: 20px 0;
+}
+.report-tabs button {
+  white-space: nowrap;
+}
+.report-tabs [aria-selected='true'] {
+  background: #173e32;
+  color: #fff;
+  border-color: #173e32;
+}
+.report-search {
+  display: flex;
+  gap: 16px;
+  margin: 18px 0;
+  flex-wrap: wrap;
+}
+.reports-page td {
+  font-variant-numeric: tabular-nums;
+}
+.reports-page td small {
+  display: block;
+  max-width: 200px;
+  overflow-wrap: anywhere;
+  margin-top: 5px;
+  font-size: 10px;
+  color: #728276;
+}
+.report-closure {
+  padding: 20px 0;
+  border-bottom: 1px solid #e0e6e1;
+}
+.report-closure h4 {
+  overflow-wrap: anywhere;
+}
+.report-doc .table-wrap {
+  max-width: 100%;
+  overflow: auto;
+}
+.report-doc table {
+  width: 100%;
+}
+.report-doc button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+@media (max-width: 1150px) {
+  .report-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 760px) {
+  .report-kpis,
+  .report-charts {
+    grid-template-columns: 1fr;
+  }
+  .report-filters {
+    grid-template-columns: 1fr;
+  }
+  .report-kpi strong {
+    font-size: 24px;
+  }
+}
+@media print {
+  body:has(.report-doc) > #root {
+    display: block !important;
+  }
+  body:has(.report-doc) .app-shell {
+    display: block !important;
+    min-height: 0 !important;
+  }
+  body:has(.report-doc) .app-shell :not(.report-doc):not(.report-doc *):not(:has(.report-doc)) {
+    display: none !important;
+  }
+  body:has(.report-doc) .main-area,
+  body:has(.report-doc) main,
+  body:has(.report-doc) .reports-page {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+  }
+  .report-doc,
+  .report-doc * {
+    visibility: visible !important;
+  }
+  .report-doc {
+    page: caissepro-report;
+    position: static;
+    width: 100%;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: 0 !important;
+  }
+  .report-tools,
+  .report-tools * {
+    display: none !important;
+  }
+  .report-doc table {
+    font-size: 9px;
+  }
+  .report-doc thead {
+    display: table-header-group;
+  }
+  .report-doc tr,
+  .report-closure {
+    break-inside: avoid;
+  }
+  @page caissepro-report {
+    size: A4 landscape;
+    margin: 12mm;
+  }
+}
+
+.reports-page > * {
+  min-width: 0;
+}
+.report-search label {
+  min-width: 0;
+  max-width: 100%;
+}
+.report-search input,
+.report-search select {
+  max-width: 100%;
+}
+.report-doc-header > div {
+  min-width: 0;
+  max-width: 100%;
+}
+.report-doc-header h2 {
+  overflow-wrap: anywhere;
+}
+.report-tools.action-buttons {
+  flex-wrap: wrap;
+}

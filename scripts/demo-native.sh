@@ -20,8 +20,11 @@ docker run --rm --network none --user 1000:1000 \
  caissepro-native-demo:local cargo build --locked --manifest-path apps/desktop/src-tauri/Cargo.toml --features custom-protocol
 mkdir -p /workspace/scratch/caissepro-demo/home
 if docker container inspect caissepro-demo-desktop >/dev/null 2>&1; then
- echo 'Conteneur caissepro-demo-desktop existant conservé ; inspecter son état avant de lancer une seconde session.'
- exit 0
+ if [[ "$(docker inspect --format '{{.State.Running}}' caissepro-demo-desktop)" == true ]]; then
+  echo 'Session native existante conservée.'
+  exit 0
+ fi
+ exec docker start -a caissepro-demo-desktop
 fi
 node_path="$(readlink -f "$(command -v node)")"
 exec docker run --rm --name caissepro-demo-desktop --network gestion-de-caisse_default --user 1000:1000 \

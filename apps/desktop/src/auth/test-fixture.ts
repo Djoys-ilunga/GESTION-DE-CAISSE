@@ -39,6 +39,11 @@ export function view(p = profile()): NativeSessionView {
 export function fakeGateway(initial: NativeSessionView = anonymous) {
   let current = structuredClone(initial);
   const gateway: AuthGateway = {
+    reportSnapshot: vi.fn(async () => {
+      throw new Error('ONLINE_REQUIRED');
+    }),
+    saveReport: vi.fn(),
+    closeCash: vi.fn(),
     sendTransfer: vi.fn(),
     transferList: vi.fn(async () => ({ items: [], total: 0, page: 1, pageSize: 25 as const })),
     transferDetail: vi.fn(),

@@ -1,8 +1,39 @@
-# Validation de CaissePro — 7 novembre 2026
+# Validation de CaissePro — 9 novembre 2026
 
-## Étape 7 — transferts et conversions internes
+## Étape 8 — tableau de bord, rapports et clôtures avec comptage
 
-**251 tests automatisés distincts ont réussi**, plus le parcours intégré Rust/API/PostgreSQL étendu aux transferts. L’étape 8 n’est pas commencée. Les reprises ciblées ne sont pas additionnées au total.
+**278 tests distincts ont réussi**, plus un parcours intégré Rust/API/PostgreSQL et les contrôles graphiques de la vraie application Linux. Les relances ne sont pas additionnées. L'étape 9 n'est pas commencée.
+
+| Contrôle                                | Résultat observé                                                                                                                                                         |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Contrats partagés                       | 21 tests réussis                                                                                                                                                         |
+| API HTTP avec double de base            | 4 tests réussis                                                                                                                                                          |
+| Interface React avec passerelle simulée | 79 tests réussis : données serveur, absence de statistiques de remplacement, filtres appliqués, exports, erreurs et retrait des chiffres après une actualisation échouée |
+| Suite PostgreSQL réelle                 | 105 tests réussis, dont 14 scénarios/calendrier des rapports ; la suite ciblée a ensuite été rejouée après les derniers contrôles d'écarts et de cellules Excel          |
+| Courtier Rust Linux                     | 46 tests réussis, dont refus des rapports, exports et clôtures hors connexion                                                                                            |
+| SQLCipher Linux                         | 9 tests réussis, activation sensible toujours bloquée                                                                                                                    |
+| API compilée/PostgreSQL                 | 2 tests réussis                                                                                                                                                          |
+| Chromium avec IPC simulé                | 11 tests réussis, dont tableau de bord et adaptation à 650 pixels sans débordement global                                                                                |
+| Contrat des permissions Tauri           | 1 test réussi, incluant `report_action` dans les listes runtime/build/capability                                                                                         |
+| Parcours Rust/API/PostgreSQL réel       | Rapports, solde exact, PDF et XLSX reçus par Rust ; compte SQL NOINHERIT/NOBYPASSRLS ; contrôles des étapes précédentes conservés                                        |
+| Desktop Linux                           | Compilation `custom-protocol` et Clippy sur toutes les cibles sans avertissement ; ouverture de la vraie fenêtre et consultation des rapports sous Xvfb                  |
+| Export natif réel                       | PDF et XLSX enregistrés avec le dialogue système ; fichiers relus et vérifiés                                                                                            |
+
+Les rapports agrègent les écritures et les réservations sur les caisses effectivement autorisées, dans une transaction sérialisable. Les tests prouvent la précision d'un solde `9999999999999999.99`, la séparation CDF/USD, l'exclusion des transferts des encaissements, les contre-écritures nettes, le périmètre entreprise/agence/caisse, la révocation, les filtres, les demandes en attente et les décisions distinctes des paiements. Ils couvrent également les périodes impossibles, le changement de jour à Kinshasa, les semaines ISO et février bissextile.
+
+Les nouvelles clôtures sont comptées explicitement par devise, puis figées avec le solde et l'écart. Tests : clôtures simultanées dédupliquées, comptage contradictoire refusé, interdiction de modification du PV, refus de fermeture avec fonds réservés et rollback de la session, absence d'écriture de correction automatique et anciennes clôtures marquées non mesurées. Le PDF réel commence par `%PDF-` ; le classeur XLSX est relu avec ses feuilles et valeurs exactes de type texte, y compris un nom commençant par une formule qui reste une cellule de texte.
+
+La migration additive 14 `20261109000100_closure_reports` est appliquée aux bases de développement et de démonstration, et rejouée sur bases vierges de test. Les douze migrations historiques et celle des transferts sont conservées. Avant/après migration, les empreintes et nombres de lignes des dix tables financières/de préparation contrôlées sont identiques. La démonstration a été actualisée sans réinitialiser ses données.
+
+Le contrôle graphique utilise des données synthétiques clairement identifiées. Le tableau de bord natif a affiché `5600000.00 CDF` et `2000.00 USD`, correspondant aux quatre opérations initiales de fonds fictifs, et aucun encaissement/décaissement le jour du contrôle. Le PDF `native-test-results/stage8-report.pdf` contient l'identité d'entreprise et une page A4 ; le fichier `stage8-report.xlsx` contient quatre mouvements de trésorerie et le total USD exact en texte. Les deux fichiers ont été choisis via le dialogue natif, pas écrits par une simulation de téléchargement. Captures : `stage8-dashboard.png`, `stage8-journal.png`, `stage8-save-dialog.png`, `stage8-excel-dialog.png`.
+
+Les essais ont détecté une collision entre les styles d'impression des rapports et ceux des reçus/bons. Les styles sont désormais isolés par une page nommée ; les reçus et bons sont à nouveau vérifiés sur une page par les tests existants. Le débordement de fenêtre étroite a été corrigé avec des conteneurs réductibles et une navigation d'onglets défilante. Les assertions n'ont pas été retirées. Un incident de saisie automatisée a conduit au renouvellement des accès fictifs et à la révocation des sessions démo ; aucune valeur d'accès n'est versionnée.
+
+**Limites explicites :** périodes de 366 jours au plus, 10 000 écritures, 10 000 décisions, 1 000 PV, JSON borné à 10 Mo, fichiers de 1,3 Mo au plus. Refus explicite au-delà, sans troncature silencieuse. Les exports sont recalculés au moment de la demande. Les dialogues/impressions Windows/macOS restent à qualifier sur leurs systèmes ; les preuves graphiques présentes sont Linux/Chromium. Voir [rapports.md](rapports.md) pour le détail des calculs et filtres.
+
+## Historique — étape 7 : transferts et conversions internes
+
+**251 tests automatisés distincts ont réussi**, plus le parcours intégré Rust/API/PostgreSQL étendu aux transferts. À cette date, l’étape 8 n’était pas commencée. Les reprises ciblées ne sont pas additionnées au total.
 
 | Contrôle                           | Résultat réel                                                                                                                                                            |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

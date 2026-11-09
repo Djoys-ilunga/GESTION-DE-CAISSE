@@ -1,3 +1,5 @@
+import { ReportsController } from '../reports/reports.controller';
+import { ReportsService } from '../reports/reports.service';
 import { TransfersService } from '../transfers/transfers.service';
 import { TransfersController } from '../transfers/transfers.controller';
 import { Module } from '@nestjs/common';
@@ -23,6 +25,7 @@ import { CashService } from '../cash/cash.service';
     CashController,
     ExpensesController,
     TransfersController,
+    ReportsController,
   ],
   providers: [
     AuthStore,
@@ -32,6 +35,7 @@ import { CashService } from '../cash/cash.service';
     CashService,
     ExpensesService,
     TransfersService,
+    ReportsService,
     { provide: APP_GUARD, useClass: AuthGuard },
   ],
   exports: [AuthService, AuthStore, AdminService, PasswordService],

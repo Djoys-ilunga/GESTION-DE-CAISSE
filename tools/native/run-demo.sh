@@ -5,6 +5,10 @@ cd /workspace/GESTION-DE-CAISSE
 export HOME=/workspace/scratch/caissepro-demo/home
 export DISPLAY=:99
 mkdir -p "$HOME" native-test-results
+# A stopped container can retain the socket/lock from its own previous display.
+if ! xdotool getdisplaygeometry >/dev/null 2>&1; then
+  rm -f /tmp/.X99-lock /tmp/.X11-unix/X99
+fi
 Xvfb :99 -screen 0 1440x1100x24 -nolisten tcp >native-test-results/display.log 2>&1 &
 display_pid=$!
 CAISSEPRO_DEMO_DB_HOST=postgres node scripts/demo.mjs start >native-test-results/demo-api.log 2>&1 &

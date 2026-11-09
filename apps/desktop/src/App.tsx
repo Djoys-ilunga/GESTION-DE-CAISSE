@@ -1,3 +1,4 @@
+import { ReportsPage } from './reports/ReportsPage';
 import { TransfersPage } from './transfers/TransfersPage';
 import { useEffect, useMemo, useState, useSyncExternalStore, type FormEvent } from 'react';
 import {
@@ -35,25 +36,11 @@ import type { ConnectionService } from './hybrid/connection';
 import { ExpensesPage } from './expenses/ExpensesPage';
 import { SyncCenter } from './hybrid/SyncCenter';
 import { AuthController } from './auth/controller';
-import {
-  NativeAuthGateway,
-  message,
-  type AuthGateway,
-  type Balances,
-  type AccessCatalog,
-} from './auth/gateway';
+import { NativeAuthGateway, message, type AuthGateway, type AccessCatalog } from './auth/gateway';
 import './auth.css';
 const nativeGateway = new NativeAuthGateway();
 const time = (iso: string) =>
   new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-function since(iso: string) {
-  const minutes = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 60000));
-  return minutes === 0 ? 'à l’instant' : `il y a ${minutes} min`;
-}
-function money(value: string) {
-  const [whole, decimal] = value.split('.');
-  return `${(whole ?? '').replace(/\B(?=(\d{3})+(?!\d))/g, '\u202f')},${decimal ?? '00'}`;
-}
 const roleName = (code: string) => ROLE_LABELS[code as RoleCode] ?? code;
 export function App({
   connection,
@@ -597,6 +584,7 @@ function Workspace({
   const permission = (p: string) => profile.permissions.includes(p);
   const items = [
     { id: 'overview', label: 'Vue d’ensemble', icon: LayoutDashboard },
+    { id: 'reports', label: 'Rapports', icon: ScrollText, permission: 'ledger:read' },
     { id: 'cash', label: 'Caisses', icon: Wallet, permission: 'ledger:read' },
     { id: 'receipts', label: 'Encaissements', icon: ReceiptText, permission: 'receipt:read' },
     {
@@ -690,7 +678,9 @@ function Workspace({
             </div>
           )}
           {page === 'overview' ? (
-            <Overview profile={profile} gateway={gateway} online={online} />
+            <ReportsPage profile={profile} gateway={gateway} online={online} />
+          ) : page === 'reports' ? (
+            <ReportsPage profile={profile} gateway={gateway} online={online} reports />
           ) : page === 'cash' ? (
             <CashPage profile={profile} gateway={gateway} online={online} />
           ) : page === 'receipts' ? (
@@ -741,139 +731,6 @@ function Workspace({
         </main>
       </div>
     </div>
-  );
-}
-function Overview({
-  profile,
-  gateway,
-  online,
-}: {
-  profile: SessionProfile;
-  gateway: AuthGateway;
-  online: boolean;
-}) {
-  const [balances, setBalances] = useState<Balances | null>(null),
-    [error, setError] = useState('');
-  useEffect(() => {
-    let active = true;
-    setBalances(null);
-    if (profile.permissions.includes('ledger:read'))
-      void gateway
-        .balances()
-        .then((value) => {
-          if (active) setBalances(value);
-        })
-        .catch((error) => {
-          if (active) setError(message(error));
-        });
-    return () => {
-      active = false;
-    };
-  }, [gateway, profile.validatedAt, online, profile.permissions]);
-  return (
-    <>
-      <div className="page-heading">
-        <div>
-          <p className="eyebrow">VOTRE ESPACE FINANCIER</p>
-          <h1>
-            Bienvenue, {profile.user.displayName.split(' ')[0]}
-            <span className="heading-dot">.</span>
-          </h1>
-          <p>Les informations accessibles correspondent à vos agences et caisses affectées.</p>
-        </div>
-        <span className="setup-tag">{profile.roles.map(roleName).join(' · ')}</span>
-      </div>
-      <section className="welcome-card">
-        <div className="hero-content">
-          <span className="hero-label">
-            <span /> ACCÈS PERSONNEL AUTORISÉ
-          </span>
-          <h2>
-            Une vision claire.
-            <br />
-            Des responsabilités définies.
-          </h2>
-          <p>
-            Votre espace rassemble les informations de trésorerie
-            <br />
-            que votre rôle et vos affectations permettent de consulter.
-          </p>
-        </div>
-        <div className="auth-dashboard-shield">
-          <ShieldCheck size={85} />
-        </div>
-      </section>
-      <div className="stat-grid">
-        <article className="stat-card">
-          <Building2 size={23} />
-          <h3>{profile.agencies.length} agence(s) autorisée(s)</h3>
-          <p>{profile.agencies.map((a) => a.name).join(', ') || 'Aucune affectation financière'}</p>
-        </article>
-        <article className="stat-card">
-          <Wallet size={23} />
-          <h3>{profile.cashRegisters.length} caisse(s) affectée(s)</h3>
-          <p>Les devises CDF et USD restent séparées.</p>
-        </article>
-        <article className="stat-card">
-          <LockKeyhole size={23} />
-          <h3>{online ? 'Session en ligne' : 'Consultation locale'}</h3>
-          <p>
-            {online
-              ? 'Permissions revalidées auprès du serveur.'
-              : 'Informations datées, sans confirmation financière.'}
-          </p>
-        </article>
-      </div>
-      <section className="panel">
-        <div className="panel-heading">
-          <h2>Soldes de vos caisses</h2>
-          <span className="subtle-pill">{balances?.stale ? 'Non actualisés' : 'Consultation'}</span>
-        </div>
-        {balances && (
-          <p className="section-description">
-            Données du {time(balances.data.synchronizedAt)}, consultées{' '}
-            {since(balances.data.synchronizedAt)}.
-            {balances.stale ? ' Ces soldes ne sont pas actualisés.' : ''}
-          </p>
-        )}
-        {error && <p className="auth-notice">{error}</p>}
-        {balances?.data.balances.length ? (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Caisse</th>
-                  <th>Devise</th>
-                  <th>Solde comptable</th>
-                  <th>Réservé</th>
-                  <th>Disponible</th>
-                </tr>
-              </thead>
-              <tbody>
-                {balances.data.balances.map((row) => (
-                  <tr key={row.accountId}>
-                    <td>{profile.cashRegisters.find((r) => r.id === row.cashRegisterId)?.name}</td>
-                    <td>
-                      <span className="currency-pill">{row.currency}</span>
-                    </td>
-                    <td>{money(row.balance)}</td>
-                    <td>{money(row.reserved)}</td>
-                    <td>{money(row.available)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="empty-text">Aucun solde disponible dans votre périmètre.</p>
-        )}
-      </section>
-      <p className="availability-note">
-        <ShieldCheck size={16} />
-        Les encaissements se confirment dans « Encaissements », uniquement après réception effective
-        des fonds et validation du serveur.
-      </p>
-    </>
   );
 }
 function UsersPage({ gateway, online }: { gateway: AuthGateway; online: boolean }) {

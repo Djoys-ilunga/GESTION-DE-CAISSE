@@ -1,6 +1,6 @@
 # CaissePro
 
-Gestion de caisse d’entreprise : Tauri 2/Rust/React, NestJS, PostgreSQL et Prisma. Étapes 1 à 7 : socle technique, données centrales, authentification, autorisations, caisses, encaissements, dépenses, synchronisation sécurisée, transferts et conversions. Les encaissements produisent des reçus après confirmation explicite. Les dépenses disposent d’un circuit de soumission, approbation ou rejet motivé, réservation, paiement explicite et bon de sortie.
+Gestion de caisse d’entreprise : Tauri 2/Rust/React, NestJS, PostgreSQL et Prisma. Étapes 1 à 8 : socle technique, données centrales, authentification, autorisations, caisses, encaissements, dépenses, synchronisation sécurisée, transferts, conversions, tableau de bord et rapports. Les encaissements produisent des reçus après confirmation explicite. Les dépenses disposent d’un circuit de soumission, approbation ou rejet motivé, réservation, paiement explicite et bon de sortie.
 
 Le [centre de synchronisation](docs/synchronisation.md) suit les brouillons, reprises, conflits et copies serveur sans déclencher de traitement financier. Les brouillons non transmis restent temporaires en mémoire et sont perdus à la fermeture ; les copies reçues sont restaurables après connexion.
 
@@ -20,6 +20,8 @@ docs               Architecture, chiffrement et résultats réels
 Le module [Transferts et conversions](docs/transferts.md) prépare des brouillons hors connexion, réserve les fonds à la remise et comptabilise après réception explicite par un autre utilisateur autorisé. Les quatre sens CDF/USD sont pris en charge, avec taux validé et bordereau immuable.
 
 Pour essayer le projet avec deux caisses et six utilisateurs fictifs, consulter la [démonstration locale](docs/demonstration.md). Les identifiants sont générés aléatoirement hors Git et les données sont isolées dans une base dédiée.
+
+Le [tableau de bord et les rapports](docs/rapports.md) affichent les indicateurs serveur par devise, les journaux filtrables, les décisions de dépenses et les PV avec comptage. Les exports PDF/Excel sont enregistrés uniquement à votre demande via le dialogue natif.
 
 Depuis la racine, avec Node 24 et pnpm 11.25.0 :
 

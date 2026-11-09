@@ -4,6 +4,66 @@ use tauri::State;
 use zeroize::Zeroizing;
 type Reply<T> = std::result::Result<T, String>;
 #[tauri::command]
+pub async fn report_action(
+    broker: State<'_, Broker>,
+    action: String,
+    payload: Option<Value>,
+    expected_generation: u64,
+) -> Reply<Value> {
+    if action == "save-pdf" || action == "save-xlsx" {
+        use base64::Engine;
+        let format = if action == "save-pdf" { "pdf" } else { "xlsx" };
+        let result = broker
+            .report_action(format, payload, Some(expected_generation))
+            .await
+            .map_err(safe)?;
+        let name = result["fileName"]
+            .as_str()
+            .filter(|n| n.starts_with("CaissePro-") && !n.contains(['/', '\\']))
+            .ok_or("SERVER_RESPONSE_INVALID")?;
+        let encoded = result["dataBase64"]
+            .as_str()
+            .ok_or("SERVER_RESPONSE_INVALID")?;
+        if encoded.len() > 1_800_000 {
+            return Err("SERVER_RESPONSE_INVALID".into());
+        }
+        let bytes = zeroize::Zeroizing::new(
+            base64::engine::general_purpose::STANDARD
+                .decode(encoded)
+                .map_err(|_| "SERVER_RESPONSE_INVALID")?,
+        );
+        if !name.ends_with(&format!(".{format}"))
+            || (format == "pdf" && !bytes.starts_with(b"%PDF-"))
+            || (format == "xlsx" && !bytes.starts_with(b"PK"))
+        {
+            return Err("SERVER_RESPONSE_INVALID".into());
+        }
+        let file = rfd::AsyncFileDialog::new()
+            .set_file_name(name)
+            .add_filter("Rapport financier", &[format])
+            .save_file()
+            .await;
+        let Some(file) = file else {
+            return Ok(json!({"saved":false}));
+        };
+        // Revalidate again after the user has interacted with the save dialog.
+        broker
+            .revalidate(Some(expected_generation))
+            .await
+            .map_err(safe)?;
+        let view = broker.status().map_err(safe)?;
+        if view.generation != expected_generation || view.state != "online" {
+            return Err("SESSION_CHANGED".into());
+        }
+        file.write(&bytes).await.map_err(|_| "REPORT_SAVE_FAILED")?;
+        return Ok(json!({"saved":true}));
+    }
+    broker
+        .report_action(&action, payload, Some(expected_generation))
+        .await
+        .map_err(safe)
+}
+#[tauri::command]
 pub async fn transfer_action(
     broker: State<'_, Broker>,
     action: String,

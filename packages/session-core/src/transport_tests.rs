@@ -484,6 +484,18 @@ async fn offline_unlock_requires_the_previous_users_password_and_keeps_a_fixed_e
     for action in ["send", "handover", "receive"] {
         assert!(matches!(broker.transfer_action(action, Some(json!({"id":Uuid::new_v4(),"expectedVersion":1,"handedOver":true,"received":true})), Some(view.generation)).await, Err(Error::OnlineRequired)));
     }
+    for action in ["snapshot", "pdf", "xlsx", "close"] {
+        assert!(matches!(
+            broker
+                .report_action(
+                    action,
+                    Some(json!({"confirmed":true})),
+                    Some(view.generation)
+                )
+                .await,
+            Err(Error::OnlineRequired)
+        ));
+    }
     for action in ["submit", "decide", "pay", "configure"] {
         assert!(matches!(broker.expense_action(action,Some(json!({"id":Uuid::new_v4(),"expectedVersion":1,"paid":true,"submitted":true})),Some(view.generation)).await,Err(Error::OnlineRequired)));
     }

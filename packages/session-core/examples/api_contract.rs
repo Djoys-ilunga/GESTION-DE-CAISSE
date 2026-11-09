@@ -375,6 +375,29 @@ async fn run(input: Input) -> Result<(), Box<dyn std::error::Error>> {
             .await?,
         voucher
     );
+    // Étape 8 : statistiques et fichiers réels, sans jeton ni calcul financier côté React.
+    let report = cashier
+        .report_action("snapshot", Some(json!({"period":"month"})), generation)
+        .await?;
+    assert_eq!(
+        report["totals"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["currency"] == "USD")
+            .unwrap()["balance"],
+        "10.00"
+    );
+    assert_eq!(report["company"]["code"], profile.company.code);
+    for format in ["pdf", "xlsx"] {
+        use base64::Engine;
+        let file = cashier
+            .report_action(format, Some(report["query"].clone()), generation)
+            .await?;
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(file["dataBase64"].as_str().unwrap())?;
+        assert!(bytes.starts_with(if format == "pdf" { b"%PDF-" } else { b"PK" }));
+    }
     // Étape 7 : deux opérateurs distincts et deux caisses, transport réel sans jeton React.
     let destination_cash = Uuid::new_v4();
     admin.cash_action("create",Some(json!({"id":destination_cash,"agencyId":agency,"code":"TRANSFERTS","name":"Destination des transferts","authorizedUserIds":[]})),Some(administrator.generation)).await?;

@@ -28,6 +28,7 @@ fn main() {
         "cash_action",
         "expense_action",
         "transfer_action",
+        "report_action",
         "auth_health",
         "auth_login",
         "auth_status",
