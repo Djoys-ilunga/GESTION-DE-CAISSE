@@ -1,3 +1,4 @@
+import { SupervisionPanel } from '../management/Supervision';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   ArrowDownLeft,
@@ -9,7 +10,13 @@ import {
   Printer,
   ShieldCheck,
 } from 'lucide-react';
-import type { ReportQuery, ReportSnapshot, SessionProfile, CashSnapshot } from '@caissepro/shared';
+import type {
+  ReportQuery,
+  ReportSnapshot,
+  SessionProfile,
+  CashSnapshot,
+  Supervision,
+} from '@caissepro/shared';
 import { message, type AuthGateway } from '../auth/gateway';
 import { formatMoney } from '../cash/CashPage';
 import './reports.css';
@@ -85,11 +92,15 @@ export function ReportsPage({
   gateway,
   online,
   reports = false,
+  supervision,
+  supervisionError,
 }: {
   profile: SessionProfile;
   gateway: AuthGateway;
   online: boolean;
   reports?: boolean;
+  supervision?: Supervision | null;
+  supervisionError?: string;
 }) {
   const [data, setData] = useState<ReportSnapshot | null>(null),
     [query, setQuery] = useState<ReportQuery>({ period: 'month' }),
@@ -213,8 +224,9 @@ export function ReportsPage({
       if (alive.current) setBusy(false);
     }
   }
+  const orderedRows = reports ? data?.rows : [...(data?.rows ?? [])].reverse();
   const filtered =
-    data?.rows.filter(
+    orderedRows?.filter(
       (r) =>
         (currency === 'ALL' || r.currency === currency) &&
         (!search ||
@@ -459,6 +471,9 @@ export function ReportsPage({
                   ))}
                 </article>
               </div>
+              {!reports && supervision !== undefined && (
+                <SupervisionPanel data={supervision} error={supervisionError} />
+              )}
               <section className="panel">
                 <h2>Évolution de la trésorerie</h2>
                 <p className="report-caption">

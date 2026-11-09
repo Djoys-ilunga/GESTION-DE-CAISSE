@@ -17,6 +17,8 @@ export class DataErrorFilter implements ExceptionFilter {
     const domainCode = error.code.replace(/^CAISSEPRO_/, '');
     const publicCodes = [
       'REPORT_TOO_LARGE',
+      'SETTINGS_CONFLICT',
+      'AGENCY_HAS_ACTIVE_CASH',
       'REPORT_DATES_INVALID',
       'CLOSURE_CONFLICT',
       'CLOSURE_RESERVED_FUNDS',

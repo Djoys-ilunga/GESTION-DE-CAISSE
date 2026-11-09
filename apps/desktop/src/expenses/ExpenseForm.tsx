@@ -1,3 +1,4 @@
+import { useReferences } from '../ui/use-references';
 import { useFormBuffer, bufferedFields } from '../hybrid/use-form-buffer';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
@@ -13,6 +14,7 @@ import { message, type AuthGateway, type SessionDraft } from '../auth/gateway';
 
 export function ExpenseForm({
   gateway,
+  online = false,
   profile,
   cashes,
   source,
@@ -22,6 +24,7 @@ export function ExpenseForm({
   onCancel,
 }: {
   gateway: AuthGateway;
+  online?: boolean;
   profile: SessionProfile;
   cashes: CashView[];
   source: SessionDraft | null;
@@ -31,6 +34,7 @@ export function ExpenseForm({
   onCancel(): void;
 }) {
   const editing = copy ? null : source;
+  const references = useReferences(gateway, online);
   const fields = bufferedFields(buffer);
   const [formId] = useState(editing?.draft.id ?? buffer?.id ?? crypto.randomUUID());
   const [agency, setAgency] = useState(
@@ -50,6 +54,9 @@ export function ExpenseForm({
     [reference, setReference] = useState(
       fields.reference ?? source?.draft.expenseDetails?.reference ?? '',
     ),
+    [category, setCategory] = useState(
+      fields.category ?? source?.draft.expenseDetails?.category ?? '',
+    ),
     [documents, setDocuments] = useState(source?.draft.expenseDetails?.documents ?? []),
     [files, setFiles] = useState<File[]>([]),
     [busy, setBusy] = useState(false),
@@ -62,7 +69,7 @@ export function ExpenseForm({
       agencyId: agency,
       cashRegisterId: cash || null,
       expectedLocalVersion: editing?.version ?? null,
-      fields: { amount, currency, description, beneficiary, reference },
+      fields: { amount, currency, description, beneficiary, reference, category },
     },
     !busy && Boolean(agency),
   );
@@ -84,7 +91,12 @@ export function ExpenseForm({
         ? await Promise.all(files.map(readSupportingDocument))
         : documents;
       if (!mounted.current) return;
-      const details = expenseDetailsSchema.parse({ beneficiary, reference, documents: evidence });
+      const details = expenseDetailsSchema.parse({
+        beneficiary,
+        reference,
+        documents: evidence,
+        ...(category.trim() ? { category: category.trim() } : {}),
+      });
       const base = {
         kind: 'expense-request' as const,
         currency,
@@ -193,6 +205,22 @@ export function ExpenseForm({
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.00"
             />
+          </label>
+          <label>
+            Catégorie de dépense (facultatif)
+            <input
+              maxLength={80}
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              list="expense-categories"
+            />
+            <datalist id="expense-categories">
+              {references?.categories
+                .filter((c) => c.kind === 'EXPENSE')
+                .map((c) => (
+                  <option key={c.id} value={c.name} />
+                ))}
+            </datalist>
           </label>
           <label>
             Bénéficiaire

@@ -1,3 +1,4 @@
+import { useReferences } from '../ui/use-references';
 import { useFormBuffer, bufferedFields } from '../hybrid/use-form-buffer';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { FilePlus2, Paperclip } from 'lucide-react';
@@ -31,6 +32,7 @@ export async function readSupportingDocument(file: File): Promise<SupportingDocu
 }
 export function ReceiptForm({
   gateway,
+  online = false,
   cashes,
   editing,
   buffer,
@@ -38,12 +40,14 @@ export function ReceiptForm({
   onCancel,
 }: {
   gateway: AuthGateway;
+  online?: boolean;
   cashes: CashView[];
   editing: SessionDraft | null;
   buffer?: FormBuffer;
   onSaved(): void;
   onCancel(): void;
 }) {
+  const references = useReferences(gateway, online);
   const fields = bufferedFields(buffer);
   const [formId] = useState(editing?.draft.id ?? buffer?.id ?? crypto.randomUUID());
   const [cash, setCash] = useState(
@@ -221,10 +225,11 @@ export function ReceiptForm({
             list="receipt-categories"
           />
           <datalist id="receipt-categories">
-            <option value="Ventes" />
-            <option value="Prestations" />
-            <option value="Apport" />
-            <option value="Autres recettes" />
+            {references?.categories
+              .filter((c) => c.kind === 'RECEIPT')
+              .map((c) => (
+                <option key={c.id} value={c.name} />
+              ))}
           </datalist>
         </label>
         <label>

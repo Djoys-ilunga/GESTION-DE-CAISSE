@@ -836,6 +836,21 @@ impl Broker {
                 _ => Error::ClosureConflict,
             });
         }
+        if path.starts_with("management") && response.status().as_u16() == 409 {
+            let mut bytes = Vec::new();
+            while let Some(chunk) = response.chunk().await.map_err(|_| Error::Unavailable)? {
+                if bytes.len() + chunk.len() > 4096 {
+                    return Err(Error::InvalidResponse);
+                }
+                bytes.extend_from_slice(&chunk);
+            }
+            let body: Value = serde_json::from_slice(&bytes).map_err(|_| Error::InvalidResponse)?;
+            return Err(match body.get("code").and_then(Value::as_str) {
+                Some("REPORT_TOO_LARGE") => Error::ReportTooLarge,
+                Some("AGENCY_HAS_ACTIVE_CASH") => Error::AgencyHasActiveCash,
+                _ => Error::SettingsConflict,
+            });
+        }
         if path.starts_with("transfers") && response.status().as_u16() == 409 {
             let mut bytes = Vec::new();
             while let Some(chunk) = response.chunk().await.map_err(|_| Error::Unavailable)? {
@@ -1370,7 +1385,73 @@ impl Broker {
         payload: Option<Value>,
         expected: Option<u64>,
     ) -> Result<Value> {
+        let (generation, _) = self.snapshot(true, true, expected)?;
+        let permission = match action {
+            "settings" | "company" | "agency" | "category" | "rate" => "cash:configure",
+            "references" => "directory:read",
+            "supervision" => "ledger:read",
+            "audit" | "audit-pdf" | "audit-xlsx" | "logs" => "auth:logs:read",
+            "access" => "roles:assign",
+            "users" | "catalog" | "create" => "users:manage",
+            _ => return Err(Error::Forbidden),
+        };
+        self.state()?
+            .session
+            .as_ref()
+            .ok_or(Error::AuthRequired)?
+            .permission(permission)?;
+        if ["company", "agency", "category", "rate"].contains(&action) {
+            if payload.as_ref().and_then(|v| v.get("confirmed")) != Some(&Value::Bool(true)) {
+                return Err(Error::InvalidInput);
+            }
+            self.revalidate(Some(generation)).await?;
+            self.state()?
+                .session
+                .as_ref()
+                .ok_or(Error::AuthRequired)?
+                .permission(permission)?;
+        }
         let (method, path, body) = match action {
+            "settings" => (Method::GET, "management/settings".into(), None),
+            "references" => (Method::GET, "management/references".into(), None),
+            "supervision" => (Method::GET, "management/supervision".into(), None),
+            "audit" | "audit-pdf" | "audit-xlsx" => (
+                Method::GET,
+                Self::query_path(
+                    if action == "audit-pdf" {
+                        "management/audit/pdf"
+                    } else if action == "audit-xlsx" {
+                        "management/audit/xlsx"
+                    } else {
+                        "management/audit"
+                    },
+                    &payload.unwrap_or_else(|| json!({})),
+                    &["page", "from", "to", "action", "actorId", "cashRegisterId"],
+                )?,
+                None,
+            ),
+            "company" => (Method::PUT, "management/company".into(), payload),
+            "category" => (Method::POST, "management/categories".into(), payload),
+            "rate" => (Method::POST, "management/rates".into(), payload),
+            "agency" => {
+                let mut value = payload.ok_or(Error::InvalidInput)?;
+                let id = Uuid::parse_str(
+                    value
+                        .get("id")
+                        .and_then(Value::as_str)
+                        .ok_or(Error::InvalidInput)?,
+                )
+                .map_err(|_| Error::InvalidInput)?;
+                value
+                    .as_object_mut()
+                    .ok_or(Error::InvalidInput)?
+                    .remove("id");
+                (
+                    Method::PUT,
+                    format!("management/agencies/{id}"),
+                    Some(value),
+                )
+            }
             "users" => (Method::GET, "admin/users".to_string(), None),
             "catalog" => (Method::GET, "admin/access".to_string(), None),
             "logs" => (Method::GET, "admin/logs".to_string(), None),
@@ -1394,7 +1475,14 @@ impl Broker {
             }
             _ => return Err(Error::Forbidden),
         };
-        self.protected(method, &path, body, expected).await
+        let value = self.protected(method, &path, body, expected).await?;
+        if action == "company" && value.get("sessionsRevoked") == Some(&Value::Bool(true)) {
+            let mut state = self.state()?;
+            if state.generation == generation {
+                state.clear("SESSION_REVOKED");
+            }
+        }
+        Ok(value)
     }
     pub async fn change_password(
         &self,

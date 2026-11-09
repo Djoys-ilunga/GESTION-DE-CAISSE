@@ -105,6 +105,9 @@ describe('Dépenses desktop avec courtier explicitement simulé', () => {
     await userEvent.click(screen.getByRole('tab', { name: 'Plafonds et règles' }));
     await userEvent.type(screen.getByLabelText('Approbation — Directeur'), '250,00');
     await userEvent.click(screen.getByRole('button', { name: 'Enregistrer les plafonds' }));
+    expect(s.gateway.configureExpensePolicy).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toHaveTextContent('Devise : USD');
+    await userEvent.click(screen.getByRole('button', { name: 'Enregistrer ces plafonds' }));
     await waitFor(() =>
       expect(s.gateway.configureExpensePolicy).toHaveBeenCalledWith('USD', {
         expectedVersion: null,

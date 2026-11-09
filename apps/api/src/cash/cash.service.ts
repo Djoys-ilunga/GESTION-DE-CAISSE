@@ -326,6 +326,7 @@ export class CashService {
           openedById: ctx.userId,
         },
       });
+      await this.audit(tx, ctx, 'CASH_SESSION_OPENED', 'CASH', id);
       return { id: session.id };
     });
   }

@@ -68,6 +68,14 @@ model Installation {
 }
 
 model Company {
+  address         String           @default("") @db.VarChar(300)
+  phone           String           @default("") @db.VarChar(60)
+  email           String           @default("") @db.VarChar(254)
+  taxId           String           @default("") @db.VarChar(100)
+  settingsVersion Int              @default(1)
+  sessionMinutes  Int              @default(480)
+  idleMinutes     Int              @default(15)
+  offlineMinutes  Int              @default(15)
   syncEvents      SyncEvent[]
   code            String           @unique @default(dbgenerated("('CP-'::text || upper(substr((gen_random_uuid())::text, 1, 12)))")) @db.VarChar(32)
   id              String           @id @default(uuid()) @db.Uuid
@@ -85,6 +93,7 @@ model Company {
 }
 
 model Agency {
+  version    Int                  @default(1)
   id         String               @id @default(uuid()) @db.Uuid
   companyId  String               @db.Uuid
   code       String               @db.VarChar(40)
@@ -307,6 +316,7 @@ model LedgerEntry {
 }
 
 model ExpenseRequest {
+  category            String               @default("Dépenses non catégorisées") @db.VarChar(80)
   workflowTransaction BigInt?
   sourceDraftId       String?              @db.Uuid
   sourceVersion       Int?
@@ -708,4 +718,30 @@ model CashClosureReport {
   snapshot       Json
 
   @@index([companyId, closedAt])
+}
+
+model FinancialCategory {
+  id        String  @id @db.Uuid
+  companyId String  @db.Uuid
+  code      String  @db.VarChar(40)
+  name      String  @db.VarChar(80)
+  kind      String  @db.VarChar(10)
+  active    Boolean @default(true)
+  version   Int     @default(1)
+
+  @@unique([companyId, code])
+}
+
+model ReferenceExchangeRate {
+  id            String   @id @db.Uuid
+  companyId     String   @db.Uuid
+  fromCurrency  Currency
+  toCurrency    Currency
+  rate          Decimal  @db.Decimal(24, 12)
+  source        String   @db.VarChar(100)
+  validFrom     DateTime @db.Timestamptz(3)
+  publishedAt   DateTime @default(now()) @db.Timestamptz(3)
+  publishedById String   @db.Uuid
+
+  @@index([companyId, validFrom])
 }

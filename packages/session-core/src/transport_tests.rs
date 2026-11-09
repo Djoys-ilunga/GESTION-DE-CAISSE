@@ -496,6 +496,29 @@ async fn offline_unlock_requires_the_previous_users_password_and_keeps_a_fixed_e
             Err(Error::OnlineRequired)
         ));
     }
+    for action in [
+        "settings",
+        "references",
+        "supervision",
+        "audit",
+        "audit-pdf",
+        "audit-xlsx",
+        "company",
+        "agency",
+        "category",
+        "rate",
+    ] {
+        assert!(matches!(
+            broker
+                .admin(
+                    action,
+                    Some(json!({"confirmed":true})),
+                    Some(view.generation)
+                )
+                .await,
+            Err(Error::OnlineRequired)
+        ));
+    }
     for action in ["submit", "decide", "pay", "configure"] {
         assert!(matches!(broker.expense_action(action,Some(json!({"id":Uuid::new_v4(),"expectedVersion":1,"paid":true,"submitted":true})),Some(view.generation)).await,Err(Error::OnlineRequired)));
     }

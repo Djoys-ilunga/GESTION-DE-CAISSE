@@ -1,6 +1,17 @@
+import { Appearance } from './ui/Appearance';
+import { ConfirmDialog } from './ui/ConfirmDialog';
+import { SettingsPage } from './management/SettingsPage';
+import { RolesPage, permissionLabels } from './management/RolesPage';
+import { AuditPage } from './management/AuditPage';
+import {
+  useSupervision,
+  NotificationCenter,
+  SyncStamp,
+  OfflineOverview,
+} from './management/Supervision';
 import { ReportsPage } from './reports/ReportsPage';
 import { TransfersPage } from './transfers/TransfersPage';
-import { useEffect, useMemo, useState, useSyncExternalStore, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from 'react';
 import {
   Wallet,
   ShieldCheck,
@@ -38,11 +49,12 @@ import { SyncCenter } from './hybrid/SyncCenter';
 import { AuthController } from './auth/controller';
 import { NativeAuthGateway, message, type AuthGateway, type AccessCatalog } from './auth/gateway';
 import './auth.css';
+import './ui/theme.css';
 const nativeGateway = new NativeAuthGateway();
 const time = (iso: string) =>
   new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 const roleName = (code: string) => ROLE_LABELS[code as RoleCode] ?? code;
-export function App({
+function SessionApp({
   connection,
   gateway = nativeGateway,
 }: {
@@ -190,6 +202,14 @@ export function App({
       onLock={() => controller.action(() => gateway.lock())}
       onLogout={logout}
     />
+  );
+}
+export function App(props: { connection?: ConnectionService; gateway?: AuthGateway }) {
+  return (
+    <>
+      <SessionApp {...props} />
+      <Appearance />
+    </>
   );
 }
 function reasonLabel(reason: string | null) {
@@ -582,6 +602,7 @@ function Workspace({
   const profile = view.profile,
     online = view.state === 'online';
   const permission = (p: string) => profile.permissions.includes(p);
+  const supervision = useSupervision(gateway, online, permission('ledger:read'));
   const items = [
     { id: 'overview', label: 'Vue d’ensemble', icon: LayoutDashboard },
     { id: 'reports', label: 'Rapports', icon: ScrollText, permission: 'ledger:read' },
@@ -594,6 +615,15 @@ function Workspace({
       permission: 'ledger:read',
     },
     { id: 'expenses', label: 'Dépenses', icon: FilePenLine, permission: 'ledger:read' },
+    {
+      id: 'documents',
+      label: 'Documents financiers',
+      icon: ReceiptText,
+      permission: 'ledger:read',
+    },
+    { id: 'settings', label: 'Paramètres', icon: Building2, permission: 'cash:configure' },
+    { id: 'roles', label: 'Rôles et permissions', icon: ShieldCheck, permission: 'users:manage' },
+    { id: 'audit', label: 'Journal d’audit', icon: ScrollText, permission: 'auth:logs:read' },
     { id: 'users', label: 'Utilisateurs', icon: Users, permission: 'users:manage' },
     { id: 'logs', label: 'Journal des connexions', icon: ScrollText, permission: 'auth:logs:read' },
     { id: 'sync', label: 'Synchronisation', icon: RefreshCw, permission: 'draft:read_own' },
@@ -612,17 +642,28 @@ function Workspace({
         </div>
         <p className="nav-label">ESPACE DE TRAVAIL</p>
         <nav aria-label="Navigation principale">
-          {items.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => setPage(id)}
-              className={`nav-button ${page === id ? 'active' : ''}`}
-              aria-current={page === id ? 'page' : undefined}
-            >
-              <Icon size={18} />
-              {label}
-            </button>
-          ))}
+          {['Pilotage', 'Opérations', 'Supervision', 'Administration']
+            .filter((group) => items.some((item) => navGroup(item.id) === group))
+            .map((group) => (
+              <div className="nav-group" key={group}>
+                <p className="nav-group-label">{group}</p>
+                {items
+                  .filter((item) => navGroup(item.id) === group)
+                  .map(({ id, label, icon: Icon }) => (
+                    <button
+                      key={id}
+                      title={label}
+                      aria-label={label}
+                      onClick={() => setPage(id)}
+                      className={`nav-button ${page === id ? 'active' : ''}`}
+                      aria-current={page === id ? 'page' : undefined}
+                    >
+                      <Icon size={18} />
+                      {label}
+                    </button>
+                  ))}
+              </div>
+            ))}
         </nav>
         <div className="sidebar-bottom">
           <div className="profile">
@@ -654,8 +695,18 @@ function Workspace({
             {profile.company.name} <span>/</span>
             <strong>{items.find((i) => i.id === page)?.label}</strong>
           </span>
-          <Network online={online} />
+          <div className="topbar-actions">
+            <span id="appearance-slot" />
+            <NotificationCenter
+              data={supervision.data}
+              error={supervision.error}
+              online={online}
+              onNavigate={setPage}
+            />
+            <Network online={online} />
+          </div>
         </header>
+        <SyncStamp gateway={gateway} profile={profile} online={online} />
         <main>
           {error && (
             <p className="form-error" role="alert">
@@ -678,7 +729,17 @@ function Workspace({
             </div>
           )}
           {page === 'overview' ? (
-            <ReportsPage profile={profile} gateway={gateway} online={online} />
+            online ? (
+              <ReportsPage
+                profile={profile}
+                gateway={gateway}
+                online={online}
+                supervision={supervision.data}
+                supervisionError={supervision.error}
+              />
+            ) : (
+              <OfflineOverview gateway={gateway} profile={profile} onNavigate={setPage} />
+            )
           ) : page === 'reports' ? (
             <ReportsPage profile={profile} gateway={gateway} online={online} reports />
           ) : page === 'cash' ? (
@@ -691,6 +752,14 @@ function Workspace({
             <TransfersPage profile={profile} gateway={gateway} online={online} />
           ) : page === 'sync' ? (
             <SyncCenter profile={profile} gateway={gateway} online={online} />
+          ) : page === 'settings' ? (
+            <SettingsPage profile={profile} gateway={gateway} online={online} />
+          ) : page === 'roles' ? (
+            <RolesPage gateway={gateway} online={online} />
+          ) : page === 'audit' ? (
+            <AuditPage profile={profile} gateway={gateway} online={online} />
+          ) : page === 'documents' ? (
+            <Documents profile={profile} onNavigate={setPage} />
           ) : page === 'users' ? (
             <UsersPage gateway={gateway} online={online} />
           ) : page === 'logs' ? (
@@ -733,18 +802,108 @@ function Workspace({
     </div>
   );
 }
+function navGroup(id: string) {
+  if (['overview', 'reports', 'documents'].includes(id)) return 'Pilotage';
+  if (['cash', 'receipts', 'transfers', 'expenses'].includes(id)) return 'Opérations';
+  if (['settings', 'roles', 'users'].includes(id)) return 'Administration';
+  return 'Supervision';
+}
+function Documents({
+  profile,
+  onNavigate,
+}: {
+  profile: SessionProfile;
+  onNavigate(page: string): void;
+}) {
+  const docs = [
+    {
+      title: 'Reçus d’encaissement',
+      page: 'receipts',
+      text: 'Retrouver les reçus numérotés après confirmation serveur.',
+      permission: 'receipt:read',
+    },
+    {
+      title: 'Bons de sortie',
+      page: 'expenses',
+      text: 'Consulter les bons des dépenses payées après approbation.',
+      permission: 'ledger:read',
+    },
+    {
+      title: 'Bordereaux de transfert',
+      page: 'transfers',
+      text: 'Retrouver les bordereaux de fonds reçus et comptabilisés.',
+      permission: 'ledger:read',
+    },
+    {
+      title: 'Procès-verbaux de clôture',
+      page: 'reports',
+      text: 'Consulter les comptages et écarts figés dans les rapports.',
+      permission: 'ledger:read',
+    },
+  ];
+  return (
+    <>
+      <header className="page-heading">
+        <div>
+          <p className="eyebrow">DOCUMENTS FINANCIERS</p>
+          <h1>Vos documents officiels</h1>
+          <p>Documents établis par le serveur, dans le périmètre de vos autorisations.</p>
+        </div>
+      </header>
+      <div className="document-grid">
+        {docs
+          .filter((d) => profile.permissions.includes(d.permission))
+          .map((d) => (
+            <section className="panel" key={d.title}>
+              <ReceiptText size={26} />
+              <h2>{d.title}</h2>
+              <p>{d.text}</p>
+              <button className="secondary-button" onClick={() => onNavigate(d.page)}>
+                Consulter les documents
+              </button>
+            </section>
+          ))}
+      </div>
+      <p className="auth-notice">
+        Les rapports proposent les exports PDF et Excel. Les reçus, bons et bordereaux disposent de
+        leur vue d’impression. Hors connexion, les documents sensibles ne sont pas téléchargés.
+      </p>
+    </>
+  );
+}
 function UsersPage({ gateway, online }: { gateway: AuthGateway; online: boolean }) {
   const [users, setUsers] = useState<ManagedUser[]>([]),
     [catalog, setCatalog] = useState<AccessCatalog | null>(null),
     [editing, setEditing] = useState<ManagedUser | null | undefined>(undefined),
-    [error, setError] = useState('');
+    [error, setError] = useState(''),
+    [search, setSearch] = useState(''),
+    [state, setState] = useState('ALL');
+  const seq = useRef(0);
   const load = async () => {
-    const [users, catalog] = await Promise.all([gateway.users(), gateway.catalog()]);
-    setUsers(users);
-    setCatalog(catalog);
+    const n = ++seq.current;
+    setUsers([]);
+    setCatalog(null);
+    setError('');
+    try {
+      const [users, catalog] = await Promise.all([gateway.users(), gateway.catalog()]);
+      if (n === seq.current) {
+        setUsers(users);
+        setCatalog(catalog);
+      }
+    } catch (e) {
+      if (n === seq.current) setError(message(e));
+    }
   };
   useEffect(() => {
-    if (online) void load().catch((error) => setError(message(error)));
+    setEditing(undefined);
+    if (online) void load();
+    else {
+      setUsers([]);
+      setCatalog(null);
+    }
+    return () => {
+      seq.current++;
+    };
   }, [gateway, online]);
   if (!online)
     return (
@@ -761,7 +920,7 @@ function UsersPage({ gateway, online }: { gateway: AuthGateway; online: boolean 
           <h1>Utilisateurs & affectations</h1>
           <p>Les changements de droits révoquent les sessions concernées.</p>
         </div>
-        <button className="primary-button" onClick={() => setEditing(null)}>
+        <button className="primary-button" disabled={!catalog} onClick={() => setEditing(null)}>
           <Plus size={16} />
           Nouvel utilisateur
         </button>
@@ -785,39 +944,68 @@ function UsersPage({ gateway, online }: { gateway: AuthGateway; online: boolean 
           }}
         />
       )}
-      <section className="panel table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Utilisateur</th>
-              <th>Rôles</th>
-              <th>Affectations</th>
-              <th>État</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((user) => (
-              <tr key={user.id}>
-                <td>
-                  <strong>{user.displayName}</strong>
-                  <small>{user.email}</small>
-                </td>
-                <td>{user.roles.map(roleName).join(', ')}</td>
-                <td>
-                  {user.agencyIds.length} agence(s) · {user.cashRegisterIds.length} caisse(s)
-                </td>
-                <td>{user.active ? 'Actif' : 'Désactivé'}</td>
-                <td>
-                  <button className="text-button" onClick={() => setEditing(user)}>
-                    Modifier les accès
-                  </button>
-                </td>
+      {!catalog && !error && <p role="status">Chargement des utilisateurs depuis le serveur…</p>}
+      {catalog && (
+        <section className="panel table-wrap">
+          <div className="report-search">
+            <label>
+              Rechercher un utilisateur
+              <input value={search} onChange={(e) => setSearch(e.target.value)} />
+            </label>
+            <label>
+              État du compte
+              <select value={state} onChange={(e) => setState(e.target.value)}>
+                <option value="ALL">Tous les comptes</option>
+                <option value="ACTIVE">Actifs</option>
+                <option value="INACTIVE">Désactivés</option>
+              </select>
+            </label>
+          </div>
+          <p>
+            Résultats du serveur : {users.length} utilisateur(s), au plus 200. Les filtres portent
+            sur cette liste.
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>Utilisateur</th>
+                <th>Rôles</th>
+                <th>Affectations</th>
+                <th>État</th>
+                <th />
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
+            </thead>
+            <tbody>
+              {users
+                .filter(
+                  (user) =>
+                    (state === 'ALL' || user.active === (state === 'ACTIVE')) &&
+                    (user.displayName + ' ' + user.email + ' ' + user.roles.map(roleName).join(' '))
+                      .toLowerCase()
+                      .includes(search.toLowerCase()),
+                )
+                .map((user) => (
+                  <tr key={user.id}>
+                    <td>
+                      <strong>{user.displayName}</strong>
+                      <small>{user.email}</small>
+                    </td>
+                    <td>{user.roles.map(roleName).join(', ')}</td>
+                    <td>
+                      {user.agencyIds.length} agence(s) · {user.cashRegisterIds.length} caisse(s)
+                    </td>
+                    <td>{user.active ? 'Actif' : 'Désactivé'}</td>
+                    <td>
+                      <button className="text-button" onClick={() => setEditing(user)}>
+                        Modifier les accès
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </section>
+      )}
     </>
   );
 }
@@ -837,19 +1025,29 @@ function UserEditor({
     access: AccessAssignment;
   }): Promise<void>;
 }) {
+  const eligibleAgencies =
+    user?.agencyIds.filter((id) => catalog.agencies.some((a) => a.id === id)) ?? [];
+  const eligibleCash =
+    user?.cashRegisterIds.filter((id) =>
+      catalog.cashRegisters.some((c) => c.id === id && eligibleAgencies.includes(c.agencyId)),
+    ) ?? [];
   const [email, setEmail] = useState(user?.email ?? ''),
     [name, setName] = useState(user?.displayName ?? ''),
     [password, setPassword] = useState(''),
     [roles, setRoles] = useState<RoleCode[]>(user?.roles ?? ['CASHIER']),
-    [agencies, setAgencies] = useState<string[]>(user?.agencyIds ?? []),
-    [cash, setCash] = useState<string[]>(user?.cashRegisterIds ?? []),
+    [agencies, setAgencies] = useState<string[]>(eligibleAgencies),
+    [cash, setCash] = useState<string[]>(eligibleCash),
     [active, setActive] = useState(user?.active ?? true),
     [busy, setBusy] = useState(false),
-    [error, setError] = useState('');
+    [error, setError] = useState(''),
+    [confirmation, setConfirmation] = useState(false);
   const toggle = <T,>(values: T[], value: T) =>
     values.includes(value) ? values.filter((v) => v !== value) : [...values, value];
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    setConfirmation(true);
+  };
+  const confirmSave = async () => {
     setError('');
     setBusy(true);
     try {
@@ -864,11 +1062,40 @@ function UserEditor({
     } finally {
       setPassword('');
       setBusy(false);
+      setConfirmation(false);
     }
   };
   return (
     <form className="panel editor-form" onSubmit={submit}>
+      {confirmation && (
+        <ConfirmDialog
+          title={
+            user ? 'Confirmer les changements d’accès' : 'Confirmer la création de l’utilisateur'
+          }
+          busy={busy}
+          onCancel={() => setConfirmation(false)}
+          onConfirm={() => void confirmSave()}
+        >
+          <p>
+            {user
+              ? 'Les sessions de cet utilisateur seront révoquées. Vérifiez ses rôles et ses affectations.'
+              : 'Le mot de passe initial devra être renouvelé à la première connexion.'}
+          </p>
+          <p>
+            {user?.displayName ?? name} · {roles.map(roleName).join(', ')} · {agencies.length}{' '}
+            agence(s) · {cash.length} caisse(s)
+          </p>
+        </ConfirmDialog>
+      )}
       <h2>{user ? 'Modifier les accès' : 'Créer un utilisateur'}</h2>
+      {user &&
+        (eligibleAgencies.length !== user.agencyIds.length ||
+          eligibleCash.length !== user.cashRegisterIds.length) && (
+          <p className="auth-notice">
+            Les affectations d’agences ou de caisses désactivées sont retirées de cette proposition.
+            Aucun accès n’est modifié avant votre confirmation.
+          </p>
+        )}
       {!user && (
         <div className="form-grid">
           <label>
@@ -918,6 +1145,11 @@ function UserEditor({
               <span>
                 {roleName(code)}
                 <small>{catalog.roles[code as RoleCode].length} permissions</small>
+                <small className="permission-preview">
+                  {catalog.roles[code as RoleCode]
+                    .map((p) => permissionLabels[p] ?? 'Autorisation métier')
+                    .join(' · ')}
+                </small>
               </span>
             </label>
           ))}
@@ -982,13 +1214,29 @@ function UserEditor({
 }
 function Logs({ gateway, online }: { gateway: AuthGateway; online: boolean }) {
   const [rows, setRows] = useState<AuthLog[]>([]),
-    [error, setError] = useState('');
+    [error, setError] = useState(''),
+    [search, setSearch] = useState(''),
+    [loaded, setLoaded] = useState(false);
   useEffect(() => {
+    let active = true;
+    setRows([]);
+    setError('');
+    setLoaded(false);
     if (online)
       void gateway
         .logs()
-        .then(setRows)
-        .catch((error) => setError(message(error)));
+        .then((v) => {
+          if (active) {
+            setRows(v);
+            setLoaded(true);
+          }
+        })
+        .catch((e) => {
+          if (active) setError(message(e));
+        });
+    return () => {
+      active = false;
+    };
   }, [gateway, online]);
   const labels: Record<string, string> = {
     LOGIN_SUCCESS: 'Connexion réussie',
@@ -1022,6 +1270,11 @@ function Logs({ gateway, online }: { gateway: AuthGateway; online: boolean }) {
               {error}
             </p>
           )}
+          <label className="filter-field">
+            Rechercher dans les 100 événements récents
+            <input value={search} onChange={(e) => setSearch(e.target.value)} />
+          </label>
+          {!loaded && !error && <p role="status">Chargement du journal de sécurité…</p>}
           <table>
             <thead>
               <tr>
@@ -1032,17 +1285,24 @@ function Logs({ gateway, online }: { gateway: AuthGateway; online: boolean }) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
-                <tr key={row.id}>
-                  <td>{new Date(row.createdAt).toLocaleString('fr-FR')}</td>
-                  <td>{labels[row.code] ?? row.code}</td>
-                  <td>{row.subjectName ?? row.actorName ?? '—'}</td>
-                  <td>{row.actorName ?? 'Système'}</td>
-                </tr>
-              ))}
+              {rows
+                .filter((row) =>
+                  [row.actorName, row.subjectName, labels[row.code] ?? row.code]
+                    .join(' ')
+                    .toLowerCase()
+                    .includes(search.toLowerCase()),
+                )
+                .map((row) => (
+                  <tr key={row.id}>
+                    <td>{new Date(row.createdAt).toLocaleString('fr-FR')}</td>
+                    <td>{labels[row.code] ?? row.code}</td>
+                    <td>{row.subjectName ?? row.actorName ?? '—'}</td>
+                    <td>{row.actorName ?? 'Système'}</td>
+                  </tr>
+                ))}
             </tbody>
           </table>
-          {rows.length === 0 && <p className="empty-text">Aucun événement disponible.</p>}
+          {loaded && rows.length === 0 && <p className="empty-text">Aucun événement disponible.</p>}
         </section>
       )}
     </>

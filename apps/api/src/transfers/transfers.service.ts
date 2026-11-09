@@ -110,6 +110,16 @@ export class TransfersService {
           payloadHash,
         },
       });
+      await tx.auditEvent.create({
+        data: {
+          id: randomUUID(),
+          companyId: ctx.companyId,
+          actorId: ctx.userId,
+          action: 'TRANSFER_DRAFT_RECEIVED',
+          targetType: 'TRANSFER',
+          targetId: row.id,
+        },
+      });
       return this.view(row);
     });
   }
@@ -180,6 +190,16 @@ export class TransfersService {
       >`SELECT available FROM "AvailableFunds" WHERE "companyId"=${ctx.companyId}::uuid AND "accountId"=${row.sourceAccountId}::uuid`;
       if (!funds || funds.available.lt(row.amount)) throw new DataError('INSUFFICIENT_FUNDS');
       await this.sessions(tx, ctx, row);
+      await tx.auditEvent.create({
+        data: {
+          id: randomUUID(),
+          companyId: ctx.companyId,
+          actorId: ctx.userId,
+          action: 'TRANSFER_HANDED_OVER',
+          targetType: 'TRANSFER',
+          targetId: id,
+        },
+      });
       return this.view(
         await tx.transferOrder.update({
           where: { id },
@@ -272,6 +292,16 @@ export class TransfersService {
           destinationCounterId: await counter(row.destinationCurrency),
         }));
       }
+      await tx.auditEvent.create({
+        data: {
+          id: randomUUID(),
+          companyId: ctx.companyId,
+          actorId: ctx.userId,
+          action: 'TRANSFER_RECEIVED',
+          targetType: 'TRANSFER',
+          targetId: id,
+        },
+      });
       return this.view(
         await tx.transferOrder.update({
           where: { id },

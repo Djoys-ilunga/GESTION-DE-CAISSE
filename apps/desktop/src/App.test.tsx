@@ -1,10 +1,62 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { StrictMode } from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { App } from './App';
 import { fakeGateway, view, profile } from './auth/test-fixture';
+import type { ManagedUser, RoleCode } from '@caissepro/shared';
 describe('Interface d’authentification avec courtier simulé', () => {
+  it('permet de corriger les affectations après désactivation d’une agence, seulement après confirmation', async () => {
+    const p = profile('Admin', 'ADMINISTRATOR');
+    p.permissions.push('users:manage', 'roles:assign');
+    const { gateway } = fakeGateway(view(p));
+    const activeAgency = p.agencies[0]!.id,
+      activeCash = crypto.randomUUID();
+    const user: ManagedUser = {
+      id: crypto.randomUUID(),
+      memberId: crypto.randomUUID(),
+      email: 'caisse@example.test',
+      displayName: 'Compte à corriger',
+      active: true,
+      roles: ['CASHIER'],
+      agencyIds: [activeAgency, crypto.randomUUID()],
+      cashRegisterIds: [activeCash, crypto.randomUUID()],
+      version: 2,
+    };
+    vi.mocked(gateway.users).mockResolvedValue([user]);
+    vi.mocked(gateway.catalog).mockResolvedValue({
+      roles: Object.fromEntries(
+        ['ADMINISTRATOR', 'DIRECTOR', 'FINANCE_MANAGER', 'ACCOUNTANT', 'CASHIER', 'AUDITOR'].map(
+          (code) => [code, ['ledger:read']],
+        ),
+      ) as Record<RoleCode, string[]>,
+      agencies: p.agencies,
+      cashRegisters: [{ id: activeCash, agencyId: activeAgency, code: 'A', name: 'Caisse active' }],
+    });
+    vi.mocked(gateway.assignUser).mockResolvedValue(user);
+    render(<App gateway={gateway} />);
+    await screen.findByRole('heading', { name: /Bienvenue, Admin/ });
+    await userEvent.click(screen.getByRole('button', { name: 'Utilisateurs' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Modifier les accès' }));
+    expect(screen.getByText(/affectations d’agences ou de caisses désactivées/)).toBeVisible();
+    await userEvent.click(screen.getByRole('button', { name: 'Enregistrer les accès' }));
+    expect(gateway.assignUser).not.toHaveBeenCalled();
+    await userEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'Confirmer' }),
+    );
+    await waitFor(() =>
+      expect(gateway.assignUser).toHaveBeenCalledExactlyOnceWith(
+        user.id,
+        {
+          roles: ['CASHIER'],
+          agencyIds: [activeAgency],
+          cashRegisterIds: [activeCash],
+          active: true,
+        },
+        2,
+      ),
+    );
+  });
   it('termine le contrôle de disponibilité après le remontage StrictMode', async () => {
     const { gateway } = fakeGateway();
     render(

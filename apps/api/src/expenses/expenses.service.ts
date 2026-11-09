@@ -307,6 +307,7 @@ export class ExpensesService {
           currency: draft.currency,
           amount: draft.amount,
           description: draft.description,
+          category: details.category ?? 'Dépenses non catégorisées',
           beneficiary: details.beneficiary,
           reference: details.reference,
           sourceDraftId: id,

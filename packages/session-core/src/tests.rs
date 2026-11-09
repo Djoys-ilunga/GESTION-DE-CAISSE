@@ -248,6 +248,7 @@ fn expense_details_remain_drafts_and_are_isolated_until_expiry() {
     let mut s = session(now);
     let mut input = draft(&s, now);
     input.draft.expense_details = Some(ExpenseDetails {
+        category: None,
         beneficiary: "Bénéficiaire privé".into(),
         reference: "F-1".into(),
         documents: vec![],
@@ -290,6 +291,7 @@ fn expense_draft_rejects_forged_or_excessive_evidence_before_storage() {
         data_base64: "aHRtbA==".into(),
     };
     input.draft.expense_details = Some(ExpenseDetails {
+        category: None,
         beneficiary: "Fournisseur".into(),
         reference: String::new(),
         documents: vec![document.clone()],

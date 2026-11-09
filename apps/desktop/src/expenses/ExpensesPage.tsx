@@ -248,6 +248,7 @@ export function ExpensesPage({
           </p>
           {form && (
             <ExpenseForm
+              online={online}
               key={`${form.source?.draft.id ?? 'new'}:${form.copy}`}
               gateway={gateway}
               profile={profile}

@@ -122,7 +122,12 @@ describe('Circuit de dépenses avec API et PostgreSQL réels', () => {
       description: 'Achat de fournitures',
       createdAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 600000).toISOString(),
-      expenseDetails: { beneficiary: 'Fournisseur de test', reference: 'FACT-001', documents },
+      expenseDetails: {
+        category: 'Fournitures',
+        beneficiary: 'Fournisseur de test',
+        reference: 'FACT-001',
+        documents,
+      },
     };
     const body = {
       draft,
@@ -180,6 +185,9 @@ describe('Circuit de dépenses avec API et PostgreSQL réels', () => {
     expect(new Set(results.map((r) => r.body.id)).size).toBe(1);
     const ex = expenseViewSchema.parse(results[0]!.body);
     expect(ex.state).toBe('PENDING');
+    expect((await db.expenseRequest.findUniqueOrThrow({ where: { id: ex.id } })).category).toBe(
+      'Fournitures',
+    );
     expect(ex.voucher).toBeNull();
     expect(ex.evidence).toHaveLength(1);
     expect(

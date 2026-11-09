@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   expensePolicyInputSchema,
   ROLE_LABELS,
@@ -26,10 +27,18 @@ export function ExpensePolicies({ gateway, online }: { gateway: AuthGateway; onl
     [busy, setBusy] = useState(false),
     [loaded, setLoaded] = useState(false),
     [error, setError] = useState(''),
-    [notice, setNotice] = useState('');
+    [notice, setNotice] = useState(''),
+    [pending, setPending] = useState<{ currency: 'CDF' | 'USD'; input: ExpensePolicyInput } | null>(
+      null,
+    );
+  const epoch = useRef(0);
   useEffect(() => {
     let active = true;
+    epoch.current++;
     setLoaded(false);
+    setPending(null);
+    setPolicies([]);
+    setBusy(false);
     if (online)
       void gateway
         .expensePolicies()
@@ -44,6 +53,7 @@ export function ExpensePolicies({ gateway, online }: { gateway: AuthGateway; onl
         });
     return () => {
       active = false;
+      epoch.current++;
     };
   }, [gateway, online]);
   const policy = policies.find((p) => p.currency === currency);
@@ -68,17 +78,53 @@ export function ExpensePolicies({ gateway, online }: { gateway: AuthGateway; onl
           return maximum ? [{ ...c, maximum }] : [];
         }),
       });
-      const updated = await gateway.configureExpensePolicy(currency, input);
-      setPolicies((old) => [...old.filter((p) => p.currency !== currency), updated]);
-      setNotice('Règles enregistrées pour les prochaines actions.');
+      setPending({ currency, input });
     } catch (e) {
       setError(message(e));
     } finally {
       setBusy(false);
     }
   }
+  async function apply() {
+    if (!pending || !online || busy) return;
+    const n = epoch.current;
+    setBusy(true);
+    setError('');
+    try {
+      const updated = await gateway.configureExpensePolicy(pending.currency, pending.input);
+      if (n !== epoch.current) return;
+      setPolicies((old) => [...old.filter((p) => p.currency !== pending.currency), updated]);
+      setPending(null);
+      setNotice('Règles enregistrées pour les prochaines actions.');
+    } catch (e) {
+      if (n === epoch.current) {
+        setPending(null);
+        setError(message(e));
+      }
+    } finally {
+      if (n === epoch.current) setBusy(false);
+    }
+  }
   return (
     <form className="panel editor-form" onSubmit={save}>
+      {pending && (
+        <ConfirmDialog
+          title="Confirmer les seuils d’approbation"
+          confirm="Enregistrer ces plafonds"
+          busy={busy}
+          onCancel={() => setPending(null)}
+          onConfirm={() => void apply()}
+        >
+          <p>
+            Devise : {pending.currency}. {pending.input.limits.length} plafond(s) défini(s). Un
+            plafond vide interdit l’action pour le rôle concerné.
+          </p>
+          <p>
+            Les nouvelles limites seront revérifiées sur les prochaines demandes, décisions et
+            paiements ; aucun paiement n’est exécuté ici.
+          </p>
+        </ConfirmDialog>
+      )}
       <h2>Règles de dépenses par devise</h2>
       <p>
         Les fonds sont réservés à l’approbation. Un plafond vide interdit cette action pour ce rôle.

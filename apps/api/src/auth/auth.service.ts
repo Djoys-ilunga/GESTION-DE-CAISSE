@@ -159,8 +159,8 @@ export class AuthService {
           memberVersion: current.authorizationVersion,
           createdAt: now,
           lastSeenAt: now,
-          expiresAt: new Date(now.getTime() + SESSION_ABSOLUTE_MS),
-          idleExpiresAt: new Date(now.getTime() + SESSION_IDLE_MS),
+          expiresAt: new Date(now.getTime() + current.company.sessionMinutes * 60000),
+          idleExpiresAt: new Date(now.getTime() + current.company.idleMinutes * 60000),
         },
       });
       await tx.authThrottle.update({
@@ -224,11 +224,12 @@ export class AuthService {
       idleExpiresAt: session.idleExpiresAt.toISOString(),
       offlineUntil:
         permissions.includes('offline:access') &&
+        member.company.offlineMinutes > 0 &&
         !member.user.mustChangePassword &&
         !session.lockedAt
           ? new Date(
               Math.min(
-                now.getTime() + OFFLINE_MS,
+                now.getTime() + member.company.offlineMinutes * 60000,
                 session.expiresAt.getTime(),
                 session.idleExpiresAt.getTime(),
               ),
@@ -367,7 +368,10 @@ export class AuthService {
           lockedAt: null,
           lastSeenAt: now,
           idleExpiresAt: new Date(
-            Math.min(now.getTime() + SESSION_IDLE_MS, result.session.expiresAt.getTime()),
+            Math.min(
+              now.getTime() + result.member.company.idleMinutes * 60000,
+              result.session.expiresAt.getTime(),
+            ),
           ),
         },
       });
@@ -389,6 +393,7 @@ export class AuthService {
   async activity(principal: Principal) {
     return this.store.run(async (tx) => {
       await this.require(tx, principal);
+      const company = await tx.company.findUniqueOrThrow({ where: { id: principal.companyId } });
       const row = await tx.authSession.findUniqueOrThrow({ where: { id: principal.sessionId } }),
         now = new Date();
       await tx.authSession.update({
@@ -396,7 +401,7 @@ export class AuthService {
         data: {
           lastSeenAt: now,
           idleExpiresAt: new Date(
-            Math.min(now.getTime() + SESSION_IDLE_MS, row.expiresAt.getTime()),
+            Math.min(now.getTime() + company.idleMinutes * 60000, row.expiresAt.getTime()),
           ),
         },
       });

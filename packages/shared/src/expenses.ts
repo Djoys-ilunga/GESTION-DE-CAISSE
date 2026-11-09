@@ -5,6 +5,7 @@ import { supportingDocumentSchema } from './receipts.js';
 
 export const expenseDetailsSchema = z
   .object({
+    category: z.string().trim().min(1).max(80).optional(),
     beneficiary: z.string().trim().min(1).max(160),
     reference: z.string().trim().max(160),
     documents: z.array(supportingDocumentSchema).max(3),

@@ -7,6 +7,10 @@ pub use model::*;
 type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("SETTINGS_CONFLICT")]
+    SettingsConflict,
+    #[error("AGENCY_HAS_ACTIVE_CASH")]
+    AgencyHasActiveCash,
     #[error("REPORT_TOO_LARGE")]
     ReportTooLarge,
     #[error("REPORT_DATES_INVALID")]

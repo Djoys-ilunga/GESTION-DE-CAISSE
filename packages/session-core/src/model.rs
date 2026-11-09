@@ -113,6 +113,8 @@ pub struct ReceiptDetails {
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExpenseDetails {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub category: Option<String>,
     pub beneficiary: String,
     pub reference: String,
     pub documents: Vec<SupportingDocument>,

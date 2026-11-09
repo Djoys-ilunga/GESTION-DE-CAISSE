@@ -250,6 +250,7 @@ export function SyncCenter({
       {(editing || inputBuffer) &&
         ((editing?.draft.kind ?? inputBuffer?.kind) === 'receipt' ? (
           <ReceiptForm
+            online={online}
             key={editing?.draft.id ?? inputBuffer?.id}
             gateway={gateway}
             cashes={cash?.data.items ?? []}
@@ -269,6 +270,7 @@ export function SyncCenter({
           />
         ) : (
           <ExpenseForm
+            online={online}
             key={editing?.draft.id ?? inputBuffer?.id}
             gateway={gateway}
             profile={profile}

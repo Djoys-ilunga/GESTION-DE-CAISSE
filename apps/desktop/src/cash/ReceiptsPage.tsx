@@ -290,6 +290,7 @@ export function ReceiptsPage({
         <>
           {open && canWrite && (
             <ReceiptForm
+              online={online}
               key={`${editing?.draft.id ?? 'new'}:${editing?.version ?? 0}`}
               gateway={gateway}
               cashes={cash?.data.items ?? []}

@@ -286,6 +286,7 @@ async fn run(input: Input) -> Result<(), Box<dyn std::error::Error>> {
                     .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
                 receipt_details: None,
                 expense_details: Some(ExpenseDetails {
+                    category: None,
                     beneficiary: "Fournisseur synthétique".into(),
                     reference: "FACTURE-TEST".into(),
                     documents: vec![SupportingDocument {
@@ -398,6 +399,44 @@ async fn run(input: Input) -> Result<(), Box<dyn std::error::Error>> {
             .decode(file["dataBase64"].as_str().unwrap())?;
         assert!(bytes.starts_with(if format == "pdf" { b"%PDF-" } else { b"PK" }));
     }
+    // Étape 9 : répertoires et supervision réels, configuration et exports d'audit autorisés.
+    let admin_generation = Some(administrator.generation);
+    let settings = admin.admin("settings", None, admin_generation).await?;
+    assert_eq!(settings["company"]["id"], profile.company.id.to_string());
+    let category = Uuid::new_v4();
+    admin.admin("category",Some(json!({"id":category,"expectedVersion":null,"code":"CONTRAT","name":"Catégorie synthétique","kind":"EXPENSE","active":true,"confirmed":true})),admin_generation).await?;
+    admin.admin("rate",Some(json!({"id":Uuid::new_v4(),"fromCurrency":"USD","toCurrency":"CDF","rate":"2800.0","source":"Référence synthétique","validFrom":Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis,true),"confirmed":true})),admin_generation).await?;
+    let references = cashier.admin("references", None, generation).await?;
+    assert_eq!(references["categories"][0]["id"], category.to_string());
+    assert_eq!(references["rates"][0]["rate"], "2800.000000000000");
+    let supervision = cashier.admin("supervision", None, generation).await?;
+    assert!(supervision["users"].is_null());
+    assert!(supervision["cash"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|c| c["id"] == cash.to_string()));
+    let journal = admin
+        .admin(
+            "audit",
+            Some(json!({"cashRegisterId":cash})),
+            admin_generation,
+        )
+        .await?;
+    assert!(!journal["items"].as_array().unwrap().is_empty());
+    for format in ["pdf", "xlsx"] {
+        use base64::Engine;
+        let file = admin
+            .admin(
+                &format!("audit-{format}"),
+                Some(json!({"cashRegisterId":cash})),
+                admin_generation,
+            )
+            .await?;
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(file["dataBase64"].as_str().unwrap())?;
+        assert!(bytes.starts_with(if format == "pdf" { b"%PDF-" } else { b"PK" }));
+    }
     // Étape 7 : deux opérateurs distincts et deux caisses, transport réel sans jeton React.
     let destination_cash = Uuid::new_v4();
     admin.cash_action("create",Some(json!({"id":destination_cash,"agencyId":agency,"code":"TRANSFERTS","name":"Destination des transferts","authorizedUserIds":[]})),Some(administrator.generation)).await?;
@@ -480,6 +519,22 @@ async fn run(input: Input) -> Result<(), Box<dyn std::error::Error>> {
             .await?;
         assert_eq!(posted, replay);
     }
+    let transfer_audit = admin
+        .admin(
+            "audit",
+            Some(json!({"cashRegisterId":cash,"action":"TRANSFER_RECEIVED"})),
+            admin_generation,
+        )
+        .await?;
+    assert_eq!(transfer_audit["total"], 0); // The administrator is not assigned to the destination.
+    let transfer_audit = receiver
+        .admin(
+            "audit",
+            Some(json!({"cashRegisterId":cash,"action":"TRANSFER_RECEIVED"})),
+            receiver_generation,
+        )
+        .await?;
+    assert_eq!(transfer_audit["total"], 2);
     let balances = receiver.cash_catalog(receiver_generation).await?;
     let registers = balances["data"]["items"].as_array().unwrap();
     let funds = registers

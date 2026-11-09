@@ -1,3 +1,4 @@
+import { useReferences } from '../ui/use-references';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -25,6 +26,7 @@ export function TransfersPage({
   gateway: AuthGateway;
   online: boolean;
 }) {
+  const references = useReferences(gateway, online);
   const [catalog, setCatalog] = useState<CashSnapshot | null>(null),
     [buffers, setBuffers] = useState<FormBuffer[]>([]),
     [rows, setRows] = useState<TransferView[]>([]);
@@ -268,6 +270,33 @@ export function TransfersPage({
             </label>
             {fx && (
               <>
+                {online && references && (
+                  <label>
+                    Taux de référence publié
+                    <select
+                      defaultValue=""
+                      onChange={(e) => {
+                        const selected = references.rates.find((r) => r.id === e.target.value);
+                        if (selected) {
+                          setRate(selected.rate);
+                          setRateSource(selected.source);
+                        }
+                      }}
+                    >
+                      <option value="">Saisie manuelle ou choix d’un taux</option>
+                      {references.rates
+                        .filter(
+                          (r) => r.fromCurrency === currency && r.toCurrency === targetCurrency,
+                        )
+                        .map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.rate} — {r.source} — {formatDate(r.validFrom)}
+                          </option>
+                        ))}
+                    </select>
+                    <small>Le taux retenu reste à valider explicitement à la remise.</small>
+                  </label>
+                )}
                 <label>
                   Taux : 1 {currency} = … {targetCurrency}
                   <input

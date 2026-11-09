@@ -1,6 +1,8 @@
 # CaissePro
 
-Gestion de caisse d’entreprise : Tauri 2/Rust/React, NestJS, PostgreSQL et Prisma. Étapes 1 à 8 : socle technique, données centrales, authentification, autorisations, caisses, encaissements, dépenses, synchronisation sécurisée, transferts, conversions, tableau de bord et rapports. Les encaissements produisent des reçus après confirmation explicite. Les dépenses disposent d’un circuit de soumission, approbation ou rejet motivé, réservation, paiement explicite et bon de sortie.
+Gestion de caisse d’entreprise : Tauri 2/Rust/React, NestJS, PostgreSQL et Prisma. Étapes 1 à 9 : socle technique, données centrales, authentification, autorisations, caisses, encaissements, dépenses, synchronisation sécurisée, transferts, conversions, tableau de bord, rapports et administration. L’interface française propose des thèmes clair et sombre, une supervision limitée aux caisses autorisées et un journal d’audit exportable. Les encaissements produisent des reçus après confirmation explicite. Les dépenses disposent d’un circuit de soumission, approbation ou rejet motivé, réservation, paiement explicite et bon de sortie.
+
+L’étape 9 et ses limites de qualification sont détaillées dans [Interface et supervision](docs/interface-supervision.md).
 
 Le [centre de synchronisation](docs/synchronisation.md) suit les brouillons, reprises, conflits et copies serveur sans déclencher de traitement financier. Les brouillons non transmis restent temporaires en mémoire et sont perdus à la fermeture ; les copies reçues sont restaurables après connexion.
 

@@ -39,6 +39,27 @@ export function view(p = profile()): NativeSessionView {
 export function fakeGateway(initial: NativeSessionView = anonymous) {
   let current = structuredClone(initial);
   const gateway: AuthGateway = {
+    saveAudit: vi.fn(),
+    settings: vi.fn(),
+    referenceData: vi.fn(async () => ({
+      categories: [],
+      rates: [],
+      generatedAt: new Date().toISOString(),
+    })),
+    supervision: vi.fn(async () => {
+      throw new Error('SERVER_UNAVAILABLE');
+    }),
+    auditLog: vi.fn(async () => ({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 50 as const,
+      generatedAt: new Date().toISOString(),
+    })),
+    configureCompany: vi.fn(),
+    configureAgency: vi.fn(),
+    configureCategory: vi.fn(),
+    publishRate: vi.fn(),
     reportSnapshot: vi.fn(async () => {
       throw new Error('ONLINE_REQUIRED');
     }),

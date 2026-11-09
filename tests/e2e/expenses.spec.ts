@@ -208,13 +208,21 @@ async function installDouble(page: Page, offline = false) {
     { offline },
   );
 }
-async function login(page: Page) {
+async function login(page: Page, offline = false) {
   await page.goto('/');
   await page.getByLabel('Code entreprise').fill('TEST');
   await page.getByLabel('Adresse e-mail').fill('alice@example.test');
   await page.getByLabel('Mot de passe', { exact: true }).fill('Mot-de-passe-synthétique');
   await page.getByRole('button', { name: 'Se connecter', exact: true }).click();
-  await expect(page.getByRole('heading', { name: /Bienvenue, Alice/ })).toBeVisible();
+  await expect(
+    page.getByRole('heading', {
+      name: offline ? 'Votre espace hors connexion' : /Bienvenue, Alice/,
+    }),
+  ).toBeVisible();
+  if (offline)
+    await expect(page.getByText(/Dernière lecture serveur/)).toHaveText(
+      /Ces montants ne sont pas actualisés/,
+    );
   await page.getByRole('button', { name: 'Dépenses', exact: true }).click();
 }
 test('paiement et bon de sortie dans Chromium avec double IPC explicite', async ({ page }) => {
@@ -249,7 +257,7 @@ test('demande hors connexion sans soumission ni paiement dans Chromium avec doub
   page,
 }) => {
   await installDouble(page, true);
-  await login(page);
+  await login(page, true);
   await page.getByRole('button', { name: 'Préparer une demande' }).click();
   await page.getByLabel('Caisse de paiement').selectOption({ label: 'Caisse principale' });
   await page.getByRole('combobox', { name: 'Devise', exact: true }).selectOption('CDF');

@@ -1,4 +1,6 @@
 import { ReportsController } from '../reports/reports.controller';
+import { ManagementController } from '../management/management.controller';
+import { ManagementService } from '../management/management.service';
 import { ReportsService } from '../reports/reports.service';
 import { TransfersService } from '../transfers/transfers.service';
 import { TransfersController } from '../transfers/transfers.controller';
@@ -26,6 +28,7 @@ import { CashService } from '../cash/cash.service';
     ExpensesController,
     TransfersController,
     ReportsController,
+    ManagementController,
   ],
   providers: [
     AuthStore,
@@ -36,6 +39,7 @@ import { CashService } from '../cash/cash.service';
     ExpensesService,
     TransfersService,
     ReportsService,
+    ManagementService,
     { provide: APP_GUARD, useClass: AuthGuard },
   ],
   exports: [AuthService, AuthStore, AdminService, PasswordService],

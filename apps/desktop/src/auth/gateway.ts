@@ -1,5 +1,15 @@
 import {
   reportSnapshotSchema,
+  managementSettingsSchema,
+  referenceDataSchema,
+  supervisionSchema,
+  auditPageSchema,
+  type ManagementSettings,
+  type CompanySettingsInput,
+  type ReferenceData,
+  type Supervision,
+  type AuditQuery,
+  type AuditPage,
   closureViewSchema,
   type ReportQuery,
   type ReportSnapshot,
@@ -103,6 +113,15 @@ export type AccessCatalog = {
   cashRegisters: { id: string; agencyId: string; name: string; code: string }[];
 };
 export interface AuthGateway {
+  settings(): Promise<ManagementSettings>;
+  referenceData(): Promise<ReferenceData>;
+  supervision(): Promise<Supervision>;
+  auditLog(query?: AuditQuery): Promise<AuditPage>;
+  saveAudit(format: 'pdf' | 'xlsx', query: AuditQuery): Promise<{ saved: boolean }>;
+  configureCompany(input: CompanySettingsInput): Promise<{ ok: boolean; sessionsRevoked: boolean }>;
+  configureAgency(id: string, input: unknown): Promise<unknown>;
+  configureCategory(input: unknown): Promise<unknown>;
+  publishRate(input: unknown): Promise<unknown>;
   reportSnapshot(query?: ReportQuery): Promise<ReportSnapshot>;
   saveReport(format: 'pdf' | 'xlsx', query: ReportQuery): Promise<{ saved: boolean }>;
   closeCash(input: CloseCash): Promise<unknown>;
@@ -187,6 +206,41 @@ export interface AuthGateway {
   logs(): Promise<AuthLog[]>;
 }
 export class NativeAuthGateway implements AuthGateway {
+  saveAudit(format: 'pdf' | 'xlsx', query: AuditQuery) {
+    return this.call<{ saved: boolean }>('report_action', {
+      action: 'save-audit-' + format,
+      payload: query,
+    });
+  }
+  async settings() {
+    return managementSettingsSchema.parse(await this.call('admin_request', { action: 'settings' }));
+  }
+  async referenceData() {
+    return referenceDataSchema.parse(await this.call('admin_request', { action: 'references' }));
+  }
+  async supervision() {
+    return supervisionSchema.parse(await this.call('admin_request', { action: 'supervision' }));
+  }
+  async auditLog(query: AuditQuery = {}) {
+    return auditPageSchema.parse(
+      await this.call('admin_request', { action: 'audit', payload: query }),
+    );
+  }
+  configureCompany(input: CompanySettingsInput) {
+    return this.call<{ ok: boolean; sessionsRevoked: boolean }>('admin_request', {
+      action: 'company',
+      payload: input,
+    });
+  }
+  configureAgency(id: string, input: unknown) {
+    return this.call('admin_request', { action: 'agency', payload: { ...(input as object), id } });
+  }
+  configureCategory(input: unknown) {
+    return this.call('admin_request', { action: 'category', payload: input });
+  }
+  publishRate(input: unknown) {
+    return this.call('admin_request', { action: 'rate', payload: input });
+  }
   async reportSnapshot(query: ReportQuery = {}) {
     return reportSnapshotSchema.parse(
       await this.call('report_action', { action: 'snapshot', payload: query }),
@@ -434,6 +488,9 @@ export class NativeAuthGateway implements AuthGateway {
 export function message(error: unknown) {
   const code = error instanceof Error ? error.message : String(error);
   const labels: Record<string, string> = {
+    SETTINGS_CONFLICT: 'Les paramètres ont changé. Actualisez les données avant de réessayer.',
+    AGENCY_HAS_ACTIVE_CASH:
+      'Désactivez les caisses actives de cette agence avant de la désactiver.',
     REPORT_TOO_LARGE:
       'Le rapport dépasse la limite de volume. Réduisez la période ou le périmètre et réessayez.',
     REPORT_DATES_INVALID:

@@ -50,7 +50,7 @@ export class AdminService {
   async accessCatalog(p: Principal) {
     return this.auth.store.run(async (tx) => {
       await this.auth.require(tx, p, 'users:manage');
-      const [agencies, cashRegisters] = await Promise.all([
+      const [agencies, cashRegisters, roles] = await Promise.all([
         tx.agency.findMany({
           where: { companyId: p.companyId, active: true },
           select: { id: true, name: true, code: true },
@@ -59,8 +59,23 @@ export class AdminService {
           where: { companyId: p.companyId, active: true, agency: { active: true } },
           select: { id: true, agencyId: true, name: true, code: true },
         }),
+        tx.role.findMany({
+          where: {
+            companyId: p.companyId,
+            active: true,
+            code: { in: Object.keys(ROLE_PERMISSIONS) },
+          },
+          include: { permissions: true },
+          orderBy: { code: 'asc' },
+        }),
       ]);
-      return { roles: ROLE_PERMISSIONS, agencies, cashRegisters };
+      return {
+        roles: Object.fromEntries(
+          roles.map((r) => [r.code, r.permissions.map((p) => p.permissionCode).sort()]),
+        ),
+        agencies,
+        cashRegisters,
+      };
     });
   }
   async users(p: Principal) {

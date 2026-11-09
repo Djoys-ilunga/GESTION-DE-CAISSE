@@ -10,13 +10,32 @@ pub async fn report_action(
     payload: Option<Value>,
     expected_generation: u64,
 ) -> Reply<Value> {
-    if action == "save-pdf" || action == "save-xlsx" {
+    if ["save-pdf", "save-xlsx", "save-audit-pdf", "save-audit-xlsx"].contains(&action.as_str()) {
         use base64::Engine;
-        let format = if action == "save-pdf" { "pdf" } else { "xlsx" };
-        let result = broker
-            .report_action(format, payload, Some(expected_generation))
-            .await
-            .map_err(safe)?;
+        let audit = action.starts_with("save-audit-");
+        let format = if action.ends_with("-pdf") {
+            "pdf"
+        } else {
+            "xlsx"
+        };
+        let scope = |view: &SessionView| {
+            view.profile.as_ref().map(|p|json!({"user":p.user.id,"company":p.company.id,"version":p.authorization_version,"permissions":p.permissions,"agencies":p.agencies,"cash":p.cash_registers}))
+        };
+        let before = scope(&broker.status().map_err(safe)?);
+        let result = if audit {
+            broker
+                .admin(
+                    &format!("audit-{format}"),
+                    payload,
+                    Some(expected_generation),
+                )
+                .await
+        } else {
+            broker
+                .report_action(format, payload, Some(expected_generation))
+                .await
+        }
+        .map_err(safe)?;
         let name = result["fileName"]
             .as_str()
             .filter(|n| n.starts_with("CaissePro-") && !n.contains(['/', '\\']))
@@ -53,6 +72,19 @@ pub async fn report_action(
             .map_err(safe)?;
         let view = broker.status().map_err(safe)?;
         if view.generation != expected_generation || view.state != "online" {
+            return Err("SESSION_CHANGED".into());
+        }
+        let permission = if audit {
+            "auth:logs:read"
+        } else {
+            "ledger:read"
+        };
+        if before != scope(&view)
+            || !view
+                .profile
+                .as_ref()
+                .is_some_and(|p| p.permissions.iter().any(|v| v == permission))
+        {
             return Err("SESSION_CHANGED".into());
         }
         file.write(&bytes).await.map_err(|_| "REPORT_SAVE_FAILED")?;

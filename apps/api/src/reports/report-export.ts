@@ -27,6 +27,10 @@ export async function exportReport(s: ReportSnapshot, format: 'pdf' | 'xlsx') {
     };
     doc.fontSize(20).text(text(s.company.name));
     doc.fontSize(11).text(text(s.company.code + ' | Rapport financier'));
+    if (s.company.address) line(s.company.address);
+    if (s.company.email || s.company.phone)
+      line([s.company.email, s.company.phone].filter(Boolean).join(' | '));
+    if (s.company.taxId) line('Identification fiscale : ' + s.company.taxId);
     line(s.from + ' au ' + s.to + ' | Africa/Kinshasa');
     line('Genere le ' + s.generatedAt + ' | Perimetre autorise uniquement');
     line('Filtres : ' + JSON.stringify(s.query));
@@ -97,6 +101,10 @@ export async function exportReport(s: ReportSnapshot, format: 'pdf' | 'xlsx') {
       [
         ['Entreprise', s.company.name],
         ['Code', s.company.code],
+        ['Adresse', s.company.address ?? ''],
+        ['Telephone', s.company.phone ?? ''],
+        ['Courriel', s.company.email ?? ''],
+        ['Identification fiscale', s.company.taxId ?? ''],
         ['Debut', s.from],
         ['Fin', s.to],
         ['Fuseau', s.timezone],

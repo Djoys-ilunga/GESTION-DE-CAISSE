@@ -89,7 +89,7 @@ export class ReportsService {
         cashIds = [...new Set(accounts.map((a) => a.cashRegisterId!))];
       const company = await tx.company.findUniqueOrThrow({
         where: { id: ctx.companyId },
-        select: { name: true, code: true },
+        select: { name: true, code: true, address: true, phone: true, email: true, taxId: true },
       });
       const where = {
         companyId: ctx.companyId,
@@ -105,7 +105,7 @@ export class ReportsService {
               creator: true,
               original: { select: { kind: true } },
               cashReceipt: { select: { category: true, number: true } },
-              expense: { select: { description: true } },
+              expense: { select: { description: true, category: true } },
               paymentVoucher: { select: { number: true } },
             },
           },
@@ -170,7 +170,7 @@ export class ReportsService {
             category:
               o.cashReceipt?.category ??
               (o.kind === 'DISBURSEMENT'
-                ? 'Dépenses non catégorisées'
+                ? (o.expense?.category ?? 'Dépenses non catégorisées')
                 : o.kind === 'RECEIPT'
                   ? 'Encaissements non catégorisés'
                   : 'Mouvement interne / correction'),
@@ -415,6 +415,16 @@ export class ReportsService {
           closedById: ctx.userId,
           closedAt,
           snapshot: { USD: input.countedUSD, CDF: input.countedCDF },
+        },
+      });
+      await tx.auditEvent.create({
+        data: {
+          id: randomUUID(),
+          companyId: ctx.companyId,
+          actorId: ctx.userId,
+          action: 'CASH_SESSION_CLOSED',
+          targetType: 'CLOSURE',
+          targetId: row.id,
         },
       });
       return closureViewSchema.parse(row.snapshot);

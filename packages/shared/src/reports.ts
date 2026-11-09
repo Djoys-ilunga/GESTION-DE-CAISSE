@@ -77,7 +77,16 @@ export const closureViewSchema = z
 export const reportSnapshotSchema = z
   .object({
     generatedAt: z.iso.datetime(),
-    company: z.object({ name: z.string(), code: z.string() }).strict(),
+    company: z
+      .object({
+        name: z.string(),
+        code: z.string(),
+        address: z.string().optional(),
+        phone: z.string().optional(),
+        email: z.string().optional(),
+        taxId: z.string().optional(),
+      })
+      .strict(),
     timezone: z.literal('Africa/Kinshasa'),
     from: date,
     to: date,

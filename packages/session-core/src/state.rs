@@ -217,6 +217,13 @@ impl Session {
             }
         }
         if let Some(details) = &draft.expense_details {
+            if details
+                .category
+                .as_ref()
+                .is_some_and(|v| v.trim().is_empty() || v.chars().count() > 80)
+            {
+                return Err(Error::InvalidInput);
+            }
             if draft.kind != "expense-request"
                 || details.beneficiary.trim().is_empty()
                 || details.beneficiary.chars().count() > 160

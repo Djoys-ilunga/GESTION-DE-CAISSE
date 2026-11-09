@@ -1,0 +1,394 @@
+:root {
+  --canvas: #f5f7f6;
+  --surface: #ffffff;
+  --surface-muted: #f0f4f1;
+  --input: #fcfdfb;
+  --ink: #253b36;
+  --muted: #60766b;
+  --line: #dce5df;
+  --accent: #b5cfa0;
+  --accent-deep: #173e32;
+  --on-accent: #ffffff;
+  --success-bg: #eaf3e9;
+  --success-ink: #326548;
+  --warning-bg: #fff4df;
+  --warning-ink: #806128;
+  --danger-bg: #fcecea;
+  --danger-ink: #a33b37;
+}
+:root[data-theme='dark'] {
+  --canvas: #101b19;
+  --surface: #192925;
+  --surface-muted: #22352f;
+  --input: #14221e;
+  --ink: #e3ece7;
+  --muted: #acc0b3;
+  --line: #365046;
+  --accent: #c5dda8;
+  --accent-deep: #c5dda8;
+  --on-accent: #142a1e;
+  --success-bg: #233e2e;
+  --success-ink: #b8d8ab;
+  --warning-bg: #443822;
+  --warning-ink: #f1d18a;
+  --danger-bg: #462b2a;
+  --danger-ink: #ffc1b6;
+  color: var(--ink);
+  background: var(--canvas);
+}
+.app-shell .sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-top: 28px;
+}
+.app-shell .sidebar-bottom {
+  padding-top: 25px;
+}
+.app-shell .workspace {
+  margin-top: 26px;
+  margin-bottom: 20px;
+}
+.nav-group-label {
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: #8daa9d;
+  margin: 20px 15px 9px;
+}
+.app-shell .nav-label {
+  display: none;
+}
+.app-shell .nav-button {
+  font-size: 13px;
+  line-height: 1.5;
+  padding-block: 11px;
+  margin-bottom: 3px;
+}
+.app-shell .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  gap: 15px;
+}
+.app-shell .breadcrumb {
+  min-width: 0;
+  flex-wrap: wrap;
+  line-height: 1.5;
+}
+.app-shell main {
+  padding-bottom: 30px;
+}
+.app-shell table {
+  font-size: 12px;
+  line-height: 1.7;
+}
+.app-shell table th {
+  font-size: 11px;
+  letter-spacing: 0.35px;
+}
+.app-shell .page-heading p:not(.eyebrow) {
+  font-size: 13px;
+  line-height: 1.7;
+}
+.app-shell .editor-form > p,
+.app-shell .panel > p {
+  font-size: 13px;
+  line-height: 1.8;
+}
+.app-shell .panel h2 {
+  font-size: 15px;
+}
+.app-shell .primary-button,
+.app-shell .secondary-button {
+  font-size: 12px;
+}
+.appearance-control {
+  position: fixed;
+  right: 18px;
+  bottom: 14px;
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 9px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 4px 20px #06251a15;
+  font-size: 12px;
+}
+.appearance-control select {
+  min-height: 31px;
+  padding: 4px 20px 4px 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  width: auto;
+  max-width: 150px;
+}
+.appearance-control.embedded {
+  position: static;
+  box-shadow: none;
+  padding: 3px 7px;
+}
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: #041a16aa;
+  backdrop-filter: blur(4px);
+  z-index: 2000;
+  padding: 20px;
+}
+.confirm-dialog {
+  width: min(540px, 100%);
+  max-height: 85vh;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--ink);
+  padding: 30px;
+  box-shadow: 0 22px 80px #031c3355;
+}
+.confirm-dialog > svg {
+  color: var(--muted);
+}
+.confirm-dialog h2 {
+  font-size: 21px;
+  line-height: 1.5;
+  margin: 14px 0;
+}
+.confirmation-copy {
+  font-size: 14px;
+  line-height: 1.8;
+}
+.confirm-dialog .action-buttons {
+  justify-content: flex-end;
+  gap: 12px;
+}
+.confirm-dialog button {
+  margin: 0;
+}
+[data-theme='dark'] .auth-shell,
+[data-theme='dark'] .panel,
+[data-theme='dark'] .topbar,
+[data-theme='dark'] .report-tabs button,
+[data-theme='dark'] .tab-button,
+[data-theme='dark'] .editor-form,
+[data-theme='dark'] .lock-card,
+[data-theme='dark'] .document-viewer {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--line);
+}
+[data-theme='dark'] input:not([type='checkbox']),
+[data-theme='dark'] select,
+[data-theme='dark'] textarea {
+  background: var(--input);
+  color: var(--ink);
+  border-color: var(--line);
+}
+[data-theme='dark'] input::placeholder,
+[data-theme='dark'] textarea::placeholder {
+  color: #a1b5a7;
+}
+[data-theme='dark'] .auth-subtitle,
+[data-theme='dark'] .auth-shell form label,
+[data-theme='dark'] .lock-card form label,
+[data-theme='dark'] .page-heading p:not(.eyebrow),
+[data-theme='dark'] .breadcrumb,
+[data-theme='dark'] .report-caption,
+[data-theme='dark'] .report-stamp,
+[data-theme='dark'] .report-curve span,
+[data-theme='dark'] .report-curve text,
+[data-theme='dark'] .section-description,
+[data-theme='dark'] .security-details p,
+[data-theme='dark'] .editor-form p,
+[data-theme='dark'] .empty-state,
+[data-theme='dark'] table small,
+[data-theme='dark'] .field-hint,
+[data-theme='dark'] .eyebrow {
+  color: var(--muted);
+}
+[data-theme='dark'] .breadcrumb strong,
+[data-theme='dark'] .stat-card,
+[data-theme='dark'] .report-kpi,
+[data-theme='dark'] .report-kpi strong,
+[data-theme='dark'] .report-tabs,
+[data-theme='dark'] .report-doc-header {
+  color: var(--ink);
+  border-color: var(--line);
+}
+[data-theme='dark'] .primary-button {
+  background: var(--accent);
+  color: #173523;
+}
+[data-theme='dark'] .primary-button:hover {
+  background: #d9edbe;
+}
+[data-theme='dark'] .secondary-button {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--line);
+}
+[data-theme='dark'] .text-button {
+  color: var(--accent);
+}
+[data-theme='dark'] .auth-notice,
+[data-theme='dark'] .offline-banner,
+[data-theme='dark'] .connection-badge.offline {
+  background: var(--warning-bg);
+  color: var(--warning-ink);
+  border-color: #665632;
+}
+[data-theme='dark'] .form-error {
+  background: var(--danger-bg);
+  color: var(--danger-ink);
+  border-color: #7c4642;
+}
+[data-theme='dark'] .connection-badge.online,
+[data-theme='dark'] .currency-pill {
+  background: var(--success-bg);
+  color: var(--success-ink);
+}
+[data-theme='dark'] table th {
+  color: var(--muted);
+  background: var(--surface-muted);
+  border-color: var(--line);
+}
+[data-theme='dark'] table td,
+[data-theme='dark'] table tr {
+  border-color: var(--line);
+}
+[data-theme='dark'] table td {
+  color: var(--ink);
+}
+[data-theme='dark'] form label {
+  color: var(--muted);
+}
+.app-shell form label {
+  font-size: 12px;
+  line-height: 1.7;
+}
+[data-theme] .auth-notice[role='status'] {
+  background: var(--success-bg);
+  color: var(--success-ink);
+  border-color: var(--line);
+}
+[data-theme='dark'] .receipt-dialog,
+[data-theme='dark'] .receipt-tools {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--line);
+}
+.official-receipt {
+  --ink: #253b36;
+  --muted: #60766b;
+  --surface: white;
+  --surface-muted: #f0f4f1;
+  --line: #dce5df;
+  --success-bg: #eaf3e9;
+  --success-ink: #326548;
+  color-scheme: light;
+}
+[data-theme='dark'] .report-tabs button[aria-selected='true'],
+[data-theme='dark'] .tab-button.active {
+  background: var(--accent);
+  color: #173523;
+  border-color: var(--accent);
+}
+[data-theme='dark'] .subtle-pill,
+[data-theme='dark'] .auth-form-icon,
+[data-theme='dark'] fieldset,
+[data-theme='dark'] .report-closure {
+  background: var(--surface-muted);
+  color: var(--ink);
+  border-color: var(--line);
+}
+[data-theme='dark'] .report-curve svg text {
+  fill: var(--muted);
+}
+[data-theme='dark'] .report-curve svg path {
+  stroke: var(--line);
+}
+[data-theme='dark'] .report-curve svg polyline {
+  stroke: #bad59e;
+}
+[data-theme='dark'] .appearance-control select {
+  background: transparent;
+}
+@media (max-width: 760px) {
+  .app-shell .nav-button {
+    font-size: 0;
+    padding-block: 14px;
+  }
+  .nav-group-label {
+    display: none;
+  }
+  .app-shell .sidebar-bottom {
+    font-size: 0;
+  }
+  .app-shell .session-actions {
+    display: grid;
+    gap: 12px;
+  }
+  .app-shell .session-actions button {
+    font-size: 0;
+    justify-content: center;
+    min-height: 35px;
+  }
+  .appearance-control {
+    right: 10px;
+    bottom: 10px;
+  }
+  .app-shell .topbar {
+    min-height: 73px;
+    height: auto;
+    padding-block: 13px;
+    flex-wrap: wrap;
+  }
+  .topbar-actions {
+    flex-wrap: wrap;
+  }
+  .app-shell table {
+    font-size: 12px;
+  }
+}
+@media print {
+  :root,
+  :root[data-theme='dark'] {
+    --canvas: white;
+    --surface: white;
+    --surface-muted: white;
+    --input: white;
+    --ink: black;
+    --muted: #37443c;
+    --line: #cbd5ce;
+    color: black !important;
+    background: white !important;
+    color-scheme: light !important;
+  }
+  .appearance-control,
+  .dialog-overlay {
+    display: none !important;
+  }
+  [data-theme='dark'] .panel,
+  [data-theme='dark'] table th,
+  [data-theme='dark'] .report-doc {
+    background: white !important;
+    color: black !important;
+  }
+  [data-theme='dark'] .report-doc * {
+    color: black !important;
+  }
+  [data-theme='dark'] .report-curve svg polyline {
+    stroke: #173e32;
+  }
+}
