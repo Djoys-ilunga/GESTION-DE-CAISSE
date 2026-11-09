@@ -66,6 +66,15 @@ La première fois, la commande récupère l'ancien mot de passe dans le fichier 
 
 Le nouveau mot de passe n'est pas enregistré dans le fichier d'accès. Ce fichier signale que l'administrateur utilise désormais un mot de passe personnalisé. Un changement ultérieur demande le mot de passe actuel de ce compte. Si le résultat réseau du changement est inconnu, essayer d'abord le nouveau mot de passe dans CaissePro ; aucun changement n'est rejoué automatiquement.
 
+Si la commande s'arrête, le message précise désormais l'étape et le code HTTP, sans reprendre le contenu de la réponse serveur. Une erreur de **vérification de disponibilité** survient avant toute demande de mot de passe : vérifier le serveur et PostgreSQL avant de retenter un changement. Un code **503** indique que le serveur n'est pas prêt ; un code **404** signifie que la route attendue n'a pas été trouvée sur le port 3001. Pour un diagnostic sans mot de passe :
+
+```sh
+curl --max-time 5 -s -o /dev/null -w 'HTTP %{http_code}\n' http://127.0.0.1:3001/api/v1/health/ready
+docker compose ps
+```
+
+Ces commandes ne modifient ni les accès ni les données. Transmettre seulement leur résultat et le message d'erreur, sans fichiers privés ni mot de passe.
+
 ## 4. Arrêter et reprendre
 
 Appuyer sur **Ctrl+C** dans Terminal pour arrêter le serveur de démonstration et le développement desktop. PostgreSQL et vos données sont conservés. Fermer la fenêtre seule peut laisser le processus de développement actif : utiliser Ctrl+C pour terminer la session.

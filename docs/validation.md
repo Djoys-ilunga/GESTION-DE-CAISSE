@@ -20,6 +20,12 @@ Validation : **5 nouveaux tests Node réussis**, en complément des 9 contrôles
 
 Un parcours supplémentaire sur **API et PostgreSQL réels**, dans une base temporaire et avec un LOGIN restreint NOINHERIT/NOBYPASSRLS, a confirmé le nouveau mot de passe, le refus de l'ancien, la révocation d'une session antérieure, l'événement `PASSWORD_CHANGED` et l'absence d'opération financière. La base, le rôle et les fichiers temporaires ont été supprimés après le contrôle. Les accès de la démonstration existante sont préservés. La saisie interactive macOS reste à vérifier sur le poste utilisateur.
 
+### Diagnostic d'un refus lors du changement de mot de passe
+
+Le script indique maintenant l'étape de l'appel et le statut HTTP en cas de refus, sans afficher le corps de réponse. Les réponses 404/503 de disponibilité sont distinguées des refus de connexion ou de changement. Les requêtes GET n'envoient plus un en-tête de contenu JSON sans corps ; les POST conservent leur encodage JSON et l'identifiant d'appareil authentifié.
+
+**7 tests du changement de mot de passe réussis**, dont deux nouveaux contrôles des refus avant saisie et de l'absence de secret dans les erreurs. L'absence de rejeu et la préservation du fichier d'accès en cas de refus restent vérifiées. ESLint et formatage ciblés réussis. L'origine du refus signalé sur le Mac utilisateur reste à établir avec son statut HTTP et l'état du service PostgreSQL ; ce diagnostic local ne peut pas être déduit du seul ancien message générique.
+
 ## Étape 9 — interface, administration et supervision
 
 **306 tests distincts ont réussi**, complétés par le parcours intégré Rust/API/PostgreSQL et la compilation du véritable desktop Linux. Les reprises ne sont pas additionnées. L’étape 10 n’est pas commencée.

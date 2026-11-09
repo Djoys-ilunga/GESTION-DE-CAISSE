@@ -83,6 +83,9 @@ test('changes only the matching local demo admin through authentication and save
     assert.deepEqual(JSON.parse(change.body), { currentPassword: f.old, newPassword: f.next });
     assert.equal(change.headers.Authorization, 'Bearer ' + f.token);
     assert.equal(change.headers['X-CaissePro-Device'], JSON.parse(login.body).deviceId);
+    assert.equal(f.calls[0].headers['Content-Type'], undefined);
+    assert.equal(f.calls[0].headers.Accept, 'application/json');
+    assert.equal(login.headers['Content-Type'], 'application/json');
     assert.ok(
       f.calls.every(
         ({ url, redirect }) =>
@@ -112,6 +115,54 @@ test('refuses the wrong deployment before requesting or transmitting a password'
     assert.equal(f.prompts.length, 0);
     assert.equal(f.calls.length, 1);
     assert.equal(f.calls[0].body, undefined);
+  } finally {
+    f.close();
+  }
+});
+
+test('identifies a readiness failure before asking for credentials without printing response contents', async () => {
+  for (const status of [400, 404, 500, 503]) {
+    const f = fixture();
+    try {
+      f.options.request = async (url, init) => {
+        f.calls.push({ url, ...init });
+        return Response.json({ message: f.old }, { status });
+      };
+      await assert.rejects(changeDemoPassword(f.options), (error) => {
+        assert.ok(error.message.includes('Vérification de disponibilité du serveur'));
+        assert.ok(error.message.includes('HTTP ' + status));
+        assert.ok(!error.message.includes(f.old));
+        return true;
+      });
+      assert.equal(f.prompts.length, 0);
+      assert.equal(f.calls.length, 1);
+      assert.equal(f.calls[0].body, undefined);
+      assert.equal(readFileSync(join(f.directory, 'acces-prives.txt'), 'utf8'), f.text);
+    } finally {
+      f.close();
+    }
+  }
+});
+
+test('identifies password rejection while preserving the access file and closing the temporary session', async () => {
+  const f = fixture();
+  try {
+    const request = f.options.request;
+    f.options.request = async (url, init) => {
+      if (url.endsWith('/password')) {
+        f.calls.push({ url, ...init });
+        return Response.json({ message: f.next }, { status: 403 });
+      }
+      return request(url, init);
+    };
+    await assert.rejects(changeDemoPassword(f.options), (error) => {
+      assert.match(error.message, /Modification du mot de passe : HTTP 403/);
+      assert.ok(!error.message.includes(f.next));
+      return true;
+    });
+    assert.equal(f.calls.filter(({ url }) => url.endsWith('/password')).length, 1);
+    assert.ok(f.calls.at(-1).url.endsWith('/logout'));
+    assert.equal(readFileSync(join(f.directory, 'acces-prives.txt'), 'utf8'), f.text);
   } finally {
     f.close();
   }

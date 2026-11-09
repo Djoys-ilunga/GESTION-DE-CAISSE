@@ -61,6 +61,12 @@ export async function changeDemoPassword({
   const deviceId = randomUUID();
 
   const call = async (path, body, token) => {
+    const operation = {
+      '/health/ready': 'Vérification de disponibilité du serveur',
+      '/auth/login': 'Connexion de l’administrateur',
+      '/auth/password': 'Modification du mot de passe',
+      '/auth/logout': 'Fermeture de la session temporaire',
+    }[path];
     let response;
     try {
       response = await request(base + path, {
@@ -68,7 +74,8 @@ export async function changeDemoPassword({
         redirect: 'error',
         signal: AbortSignal.timeout(10000),
         headers: {
-          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          ...(body ? { 'Content-Type': 'application/json' } : {}),
           ...(token ? { Authorization: 'Bearer ' + token, 'X-CaissePro-Device': deviceId } : {}),
         },
         ...(body ? { body: JSON.stringify(body) } : {}),
@@ -82,10 +89,21 @@ export async function changeDemoPassword({
     }
     if (!response.ok) {
       await response.body?.cancel();
-      if (response.status === 401) throw new Error('Mot de passe actuel ou session non valide.');
+      const context = `${operation} : HTTP ${response.status}. `;
+      if (path === '/health/ready') {
+        const detail =
+          response.status === 503
+            ? 'Le serveur n’est pas prêt. Vérifiez Docker Desktop et PostgreSQL, puis relancez la démonstration.'
+            : response.status === 404
+              ? 'La route CaissePro attendue est introuvable sur le port 3001. Vérifiez quel serveur utilise ce port.'
+              : 'Le contrôle du serveur local a échoué. Aucun mot de passe n’a été demandé ou envoyé.';
+        throw new Error(context + detail);
+      }
+      if (response.status === 401)
+        throw new Error(context + 'Mot de passe actuel ou session non valide.');
       if (response.status === 429)
-        throw new Error('Action temporairement limitée. Réessayez plus tard.');
-      throw new Error('Le serveur a refusé la demande ; aucun succès n’est confirmé.');
+        throw new Error(context + 'Action temporairement limitée. Réessayez plus tard.');
+      throw new Error(context + 'Le serveur a refusé la demande ; aucun succès n’est confirmé.');
     }
     try {
       return await response.json();
