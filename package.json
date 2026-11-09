@@ -16,7 +16,7 @@
     "build:desktop": "pnpm --filter @caissepro/shared build && pnpm --filter @caissepro/desktop tauri build",
     "typecheck": "pnpm --filter @caissepro/shared build && pnpm -r --workspace-concurrency=1 typecheck",
     "lint": "eslint . --max-warnings 0",
-    "test": "pnpm --filter @caissepro/shared build && node --test tests/native/permissions.test.mjs && pnpm -r --workspace-concurrency=1 test",
+    "test": "pnpm --filter @caissepro/shared build && node --test tests/native/permissions.test.mjs tests/native/demo-macos.test.mjs && pnpm -r --workspace-concurrency=1 test",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

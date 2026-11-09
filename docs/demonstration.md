@@ -1,12 +1,14 @@
 # Démonstration locale avec des données fictives
 
+Sur **macOS**, commencer par le [guide de lancement local](demonstration-macos.md). Le lanceur `bash scripts/demo-macos.command` prépare l'API locale et ouvre la fenêtre native. Sa qualification sur un vrai Mac reste à effectuer.
+
 Cette démonstration conserve une base PostgreSQL distincte `caissepro_demo_<UUID>`. Elle ne réinitialise pas la base de développement et ne contient aucune donnée réelle. Six comptes sont préparés : administrateur, direction, deux responsables financiers, caisse et audit. Chaque compte dispose des deux caisses fictives (CDF et USD). Les responsables financiers permettent d'essayer une remise puis une réception avec deux personnes distinctes.
 
 ## Préparation et accès
 
 Depuis la racine : `pnpm db:up`, puis `pnpm demo:prepare`. La commande construit les sources, applique les migrations à une nouvelle base isolée et crée les données synthétiques. Les caisses sont ouvertes et chacune reçoit des écritures de fonds fictifs : `1000.00 USD` et `2800000.00 CDF`. Des plafonds de dépenses de démonstration sont définis. Relancer la préparation conserve les données et les identités ; aucune remise à zéro implicite n'est effectuée.
 
-Les accès sont générés aléatoirement et conservés uniquement dans `/workspace/scratch/caissepro-demo/acces-prives.txt`, permissions 0600, hors Git. Ne pas les envoyer dans le chat. Code entreprise : `CAISSEPRO-DEMO`. Ces comptes ne sont pas des comptes par défaut de l'application et ne doivent jamais être créés sur une base réelle. Le fichier `state.json` voisin contient les connexions privées ; ne pas le partager.
+Les accès sont générés aléatoirement et conservés uniquement dans `../scratch/caissepro-demo/acces-prives.txt` par rapport à la racine du dépôt (`/workspace/scratch/caissepro-demo/acces-prives.txt` dans ce cloud), permissions 0600, hors Git. Ne pas les envoyer dans le chat. Code entreprise : `CAISSEPRO-DEMO`. Ces comptes ne sont pas des comptes par défaut de l'application et ne doivent jamais être créés sur une base réelle. Le fichier `state.json` voisin contient les connexions privées ; ne pas le partager.
 
 `pnpm demo:start` démarre l'API sur le port local 3001. Son compte SQL est NOINHERIT, NOSUPERUSER, NOBYPASSRLS et sans droits de création de base/rôle. Les variables de la base de développement restent inchangées. Arrêter la commande avec Ctrl+C ferme uniquement cette API.
 

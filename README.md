@@ -23,6 +23,8 @@ Le module [Transferts et conversions](docs/transferts.md) prépare des brouillon
 
 Pour essayer le projet avec deux caisses et six utilisateurs fictifs, consulter la [démonstration locale](docs/demonstration.md). Les identifiants sont générés aléatoirement hors Git et les données sont isolées dans une base dédiée.
 
+Sur **macOS**, suivre le [guide de lancement sur votre Mac](docs/demonstration-macos.md), puis exécuter `bash scripts/demo-macos.command`. Aucun installateur macOS signé ni site public de connexion n'est encore publié.
+
 Le [tableau de bord et les rapports](docs/rapports.md) affichent les indicateurs serveur par devise, les journaux filtrables, les décisions de dépenses et les PV avec comptage. Les exports PDF/Excel sont enregistrés uniquement à votre demande via le dialogue natif.
 
 Depuis la racine, avec Node 24 et pnpm 11.25.0 :

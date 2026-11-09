@@ -1,5 +1,11 @@
 # Validation de CaissePro — 9 novembre 2026
 
+## Préparation de la démonstration sur Mac
+
+Ajout d'un guide français et du lanceur `bash scripts/demo-macos.command`, avec contrôle préalable `--check`, refus d'un Docker distant et d'une configuration PostgreSQL différente de la base locale attendue, verrou de lancement et arrêt des seuls processus démarrés. Les mots de passe restent générés localement hors Git. Aucun installateur ni serveur public n'est publié.
+
+Validation dans le cloud Linux : syntaxe Bash, ESLint, Prettier et **6 nouveaux tests Node réussis**, plus le contrôle existant des permissions Tauri. Les tests vérifient notamment les connexions refusées, l'absence de préparation avec `--check`, les paramètres publics de l'application, la conservation du fichier d'état et l'arrêt du serveur simulé après réussite ou échec du desktop. Les commandes Mac sont remplacées par des doubles et une API HTTP fictive ; **aucune compilation, ouverture de fenêtre ou impression macOS réelle n'est attestée** par ces tests.
+
 ## Étape 9 — interface, administration et supervision
 
 **306 tests distincts ont réussi**, complétés par le parcours intégré Rust/API/PostgreSQL et la compilation du véritable desktop Linux. Les reprises ne sont pas additionnées. L’étape 10 n’est pas commencée.
