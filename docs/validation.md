@@ -12,6 +12,14 @@ Le lanceur accepte désormais `--db-port=5433` pour une première préparation. 
 
 **9 contrôles Node réussis** (8 du lanceur et 1 des permissions Tauri), ESLint et formatage réussis. Un test Docker/PostgreSQL réel a démarré un projet temporaire sur `127.0.0.1:5433`, vérifié la connexion SQL et constaté que tous les conteneurs préexistants restaient actifs. Seuls le projet et le volume temporaires du test ont ensuite été retirés. La configuration et les données du projet existant n'ont pas été modifiées par cette vérification. Ce test Linux ne qualifie pas l'application native macOS.
 
+### Personnalisation du mot de passe de démonstration
+
+`pnpm demo:password` permet de remplacer le mot de passe du seul compte `admin@demo.caissepro.test` depuis une autre fenêtre de Terminal, pendant que l'API de démonstration tourne. La saisie est masquée et confirmée, avec 12 à 128 caractères. Le mot de passe initial est lu dans le fichier privé pour éviter sa recopie. Le nouveau n'est pas enregistré sur disque. Le fichier d'accès est seulement annoté pour signaler que le mot de passe commun ne convient plus à l'administrateur.
+
+Validation : **5 nouveaux tests Node réussis**, en complément des 9 contrôles du lanceur et des permissions. Ils vérifient l'identité du serveur et du compte, l'identifiant d'appareil requis, les saisies refusées avant authentification, l'absence de secret nouveau dans les fichiers et l'absence de rejeu en cas de réponse incertaine. ESLint, syntaxe et formatage ciblés réussis.
+
+Un parcours supplémentaire sur **API et PostgreSQL réels**, dans une base temporaire et avec un LOGIN restreint NOINHERIT/NOBYPASSRLS, a confirmé le nouveau mot de passe, le refus de l'ancien, la révocation d'une session antérieure, l'événement `PASSWORD_CHANGED` et l'absence d'opération financière. La base, le rôle et les fichiers temporaires ont été supprimés après le contrôle. Les accès de la démonstration existante sont préservés. La saisie interactive macOS reste à vérifier sur le poste utilisateur.
+
 ## Étape 9 — interface, administration et supervision
 
 **306 tests distincts ont réussi**, complétés par le parcours intégré Rust/API/PostgreSQL et la compilation du véritable desktop Linux. Les reprises ne sont pas additionnées. L’étape 10 n’est pas commencée.

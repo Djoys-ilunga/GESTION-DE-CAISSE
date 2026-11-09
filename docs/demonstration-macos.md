@@ -52,6 +52,20 @@ Six profils et deux caisses sont disponibles. Chaque caisse reçoit initialement
 
 L'API locale utilise le port 3001 et l'interface de développement le port 1420. L'accès fonctionnel se fait dans la fenêtre native CaissePro ; ouvrir le port 1420 dans Safari ne permet pas de se connecter.
 
+### Choisir un mot de passe plus facile à retenir
+
+Laisser le Terminal de lancement et Docker Desktop ouverts. Ouvrir **une autre fenêtre de Terminal** avec ⌘+N, puis exécuter depuis le dossier du projet :
+
+```sh
+pnpm demo:password
+```
+
+Choisir un mot de passe personnel de **12 caractères minimum**, puis le saisir une seconde fois pour confirmer. Une phrase facile à retenir convient. La saisie est masquée : aucun caractère ne s'affiche pendant que vous tapez. Ne pas mettre le mot de passe dans la commande ni dans le chat.
+
+La première fois, la commande récupère l'ancien mot de passe dans le fichier privé : vous n'avez pas à le recopier. Elle vérifie le serveur de démonstration et utilise le changement authentifié de l'API. Après confirmation, se reconnecter dans CaissePro avec `CAISSEPRO-DEMO`, `admin@demo.caissepro.test` et le nouveau mot de passe. Les anciennes sessions de ce compte sont révoquées. Les cinq autres comptes conservent leur mot de passe initial.
+
+Le nouveau mot de passe n'est pas enregistré dans le fichier d'accès. Ce fichier signale que l'administrateur utilise désormais un mot de passe personnalisé. Un changement ultérieur demande le mot de passe actuel de ce compte. Si le résultat réseau du changement est inconnu, essayer d'abord le nouveau mot de passe dans CaissePro ; aucun changement n'est rejoué automatiquement.
+
 ## 4. Arrêter et reprendre
 
 Appuyer sur **Ctrl+C** dans Terminal pour arrêter le serveur de démonstration et le développement desktop. PostgreSQL et vos données sont conservés. Fermer la fenêtre seule peut laisser le processus de développement actif : utiliser Ctrl+C pour terminer la session.
