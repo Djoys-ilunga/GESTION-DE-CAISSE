@@ -12,10 +12,13 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { parseEnv } from 'node:util';
 import {
+  databasePort,
   localDockerEndpoint,
   validateDemoState,
   validateLocalConfig,
+  withDatabasePort,
 } from '../../scripts/demo-macos.mjs';
 
 const env = {
@@ -61,6 +64,33 @@ test('refuses remote, redirected or unrelated database connections without revea
 test('refuses remote Docker endpoints', () => {
   for (const endpoint of ['ssh://server', 'tcp://127.0.0.1:2375', 'https://server', ''])
     assert.throws(() => localDockerEndpoint(endpoint));
+});
+
+test('persists a custom local database port without changing passwords or unrelated settings', () => {
+  const original = `# Local configuration\nDATABASE_URL=${env.DATABASE_URL}\nPOSTGRES_PASSWORD=${env.POSTGRES_PASSWORD}\nVITE_API_BASE_URL=http://127.0.0.1:3000\n`;
+  const updated = withDatabasePort(original, '5433');
+  const config = parseEnv(updated);
+  validateLocalConfig(config);
+  assert.equal(new URL(config.DATABASE_URL).port, '5433');
+  assert.equal(config.POSTGRES_PORT, '5433');
+  assert.equal(config.POSTGRES_PASSWORD, env.POSTGRES_PASSWORD);
+  assert.equal(config.VITE_API_BASE_URL, 'http://127.0.0.1:3000');
+  assert.ok(updated.startsWith('# Local configuration\n'));
+  assert.equal(withDatabasePort(updated, '5433'), updated);
+  const custom = {
+    ...state,
+    url: state.url.replace(':5432', ':5433'),
+    runtimeUrl: state.runtimeUrl.replace(':5432', ':5433'),
+  };
+  validateDemoState(custom, '5433');
+  assert.throws(() => validateDemoState(custom, '5432'));
+  assert.throws(() => validateLocalConfig({ ...config, POSTGRES_PORT: '5432' }));
+  assert.throws(() => withDatabasePort(original.replace('127.0.0.1', 'remote.example'), '5433'));
+});
+
+test('rejects invalid and reserved database ports', () => {
+  for (const port of ['0', '80', '1023', '65536', '05433', '5433:5432', '3001', '1420', 'abc'])
+    assert.throws(() => databasePort(port));
 });
 
 test('refuses incomplete, inconsistent or non-local saved demo state', () => {
@@ -172,6 +202,11 @@ process.on('SIGTERM',()=>server.close(()=>process.exit(0)));
         () => process.kill(Number(readFileSync(runEnv.MAC_LAUNCH_TEST_PID, 'utf8')), 0),
         { code: 'ESRCH' },
       );
+      const originalConfig = readFileSync(join(project, '.env'), 'utf8');
+      result = run(['--db-port=5433']);
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /Une démo existe sur un autre port/);
+      assert.equal(readFileSync(join(project, '.env'), 'utf8'), originalConfig);
       commands = readFileSync(log, 'utf8').trim().split('\n').map(JSON.parse);
       const desktop = commands.find(({ cmd, args }) => cmd === 'pnpm' && args[0] === 'dev:desktop');
       assert.equal(desktop.api, 'http://127.0.0.1:3001');
@@ -190,6 +225,23 @@ process.on('SIGTERM',()=>server.close(()=>process.exit(0)));
         () => process.kill(Number(readFileSync(runEnv.MAC_LAUNCH_TEST_PID, 'utf8')), 0),
         { code: 'ESRCH' },
       );
+      delete runEnv.MAC_LAUNCH_TEST_DESKTOP_EXIT;
+      const customState = {
+        ...state,
+        url: state.url.replace(':5432', ':5433'),
+        runtimeUrl: state.runtimeUrl.replace(':5432', ':5433'),
+      };
+      writeFileSync(join(data, 'state.json'), JSON.stringify(customState));
+      result = run(['--db-port=5433', '--check']);
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(readFileSync(join(project, '.env'), 'utf8'), originalConfig);
+      result = run(['--db-port=5433']);
+      assert.equal(result.status, 0, result.stderr);
+      const customConfig = parseEnv(readFileSync(join(project, '.env'), 'utf8'));
+      assert.equal(customConfig.POSTGRES_PORT, '5433');
+      assert.equal(new URL(customConfig.DATABASE_URL).port, '5433');
+      result = run(['--check']);
+      assert.equal(result.status, 0, result.stderr);
     } finally {
       rmSync(fixture, { recursive: true, force: true });
     }

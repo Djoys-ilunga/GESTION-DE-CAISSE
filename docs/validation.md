@@ -6,6 +6,12 @@ Ajout d'un guide français et du lanceur `bash scripts/demo-macos.command`, avec
 
 Validation dans le cloud Linux : syntaxe Bash, ESLint, Prettier et **6 nouveaux tests Node réussis**, plus le contrôle existant des permissions Tauri. Les tests vérifient notamment les connexions refusées, l'absence de préparation avec `--check`, les paramètres publics de l'application, la conservation du fichier d'état et l'arrêt du serveur simulé après réussite ou échec du desktop. Les commandes Mac sont remplacées par des doubles et une API HTTP fictive ; **aucune compilation, ouverture de fenêtre ou impression macOS réelle n'est attestée** par ces tests.
 
+### Coexistence avec une autre base PostgreSQL locale
+
+Le lanceur accepte désormais `--db-port=5433` pour une première préparation. Le port est conservé dans `.env`, avec connexion PostgreSQL et publication Docker cohérentes sur loopback. Les mots de passe et autres paramètres sont préservés. Une démo déjà préparée sur un autre port est refusée avant modification, pour éviter un déplacement implicite de données.
+
+**9 contrôles Node réussis** (8 du lanceur et 1 des permissions Tauri), ESLint et formatage réussis. Un test Docker/PostgreSQL réel a démarré un projet temporaire sur `127.0.0.1:5433`, vérifié la connexion SQL et constaté que tous les conteneurs préexistants restaient actifs. Seuls le projet et le volume temporaires du test ont ensuite été retirés. La configuration et les données du projet existant n'ont pas été modifiées par cette vérification. Ce test Linux ne qualifie pas l'application native macOS.
+
 ## Étape 9 — interface, administration et supervision
 
 **306 tests distincts ont réussi**, complétés par le parcours intégré Rust/API/PostgreSQL et la compilation du véritable desktop Linux. Les reprises ne sont pas additionnées. L’étape 10 n’est pas commencée.

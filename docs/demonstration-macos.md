@@ -75,7 +75,8 @@ bash scripts/demo-macos.command --check
 
 - **Commande manquante** : installer le prérequis indiqué, puis ouvrir un nouveau Terminal.
 - **Docker indisponible** : ouvrir Docker Desktop. Un contexte Docker distant est refusé. Choisir le contexte local dans Docker Desktop.
-- **Port 3001 ou 1420 occupé** : terminer l'ancien lancement avec Ctrl+C. Le lanceur ne tue aucun processus préexistant. Le port PostgreSQL 5432 doit aussi être disponible ou déjà utilisé par le service Compose de ce projet.
+- **Port 3001 ou 1420 occupé** : terminer l'ancien lancement avec Ctrl+C. Le lanceur ne tue aucun processus préexistant.
+- **Port PostgreSQL 5432 déjà utilisé par un autre projet** : pour une première préparation, utiliser `bash scripts/demo-macos.command --db-port=5433`. Le lanceur met à jour uniquement le port de la connexion locale et `POSTGRES_PORT` dans `.env`, sans afficher ni remplacer les mots de passe. Le service reste lié à `127.0.0.1`. Les lancements suivants sans option conservent ce port. Le port choisi doit être libre. Une démo déjà préparée sur un autre port est refusée avant toute modification : diagnostiquer son déplacement en conservant les données. Ne pas arrêter ni supprimer la base de l'autre projet.
 - **Configuration locale refusée** : conserver la configuration existante et utiliser une copie dédiée à la démo dans un autre dossier. Ne pas remplacer une configuration de serveur réel pour contourner ce contrôle.
 - **Lancement précédent interrompu brutalement** : vérifier qu'aucune démo ne tourne encore. Seulement dans ce cas, retirer le verrou vide avec `rmdir "$HOME/CaissePro/scratch/caissepro-demo/lancement-macos.lock"`, puis relancer. Ne pas supprimer la base ou les fichiers d'état.
 - **API indisponible** : son journal est dans `~/CaissePro/scratch/caissepro-demo/api-macos.log`. Ne pas transmettre de secrets ou tout le fichier sans vérification.

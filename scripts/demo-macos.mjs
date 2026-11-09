@@ -1,6 +1,14 @@
 // Local native demo only; no public deployment, reset or production migration.
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, openSync, closeSync, readFileSync, rmdirSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  openSync,
+  closeSync,
+  readFileSync,
+  rmdirSync,
+  writeFileSync,
+} from 'node:fs';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -15,6 +23,38 @@ function localQuery(url) {
   return [...url.searchParams].every(([key, value]) => key === 'schema' && value === 'public');
 }
 
+export function databasePort(value = '5432') {
+  const port = String(value);
+  if (
+    !/^[1-9][0-9]{3,4}$/.test(port) ||
+    Number(port) < 1024 ||
+    Number(port) > 65535 ||
+    ['1420', '3000', '3001'].includes(port)
+  )
+    throw new Error('Port PostgreSQL local invalide ou réservé par CaissePro. ' + guide);
+  return port;
+}
+
+export function withDatabasePort(text, port) {
+  port = databasePort(port);
+  const config = parseEnv(text);
+  validateLocalConfig(config);
+  const url = new URL(config.DATABASE_URL);
+  url.port = port;
+  let updated = text.replace(
+    /^[ \t]*(?:export[ \t]+)?DATABASE_URL[ \t]*=.*$/gm,
+    () => 'DATABASE_URL=' + url.toString(),
+  );
+  if (/^[ \t]*(?:export[ \t]+)?POSTGRES_PORT[ \t]*=/m.test(updated))
+    updated = updated.replace(
+      /^[ \t]*(?:export[ \t]+)?POSTGRES_PORT[ \t]*=.*$/gm,
+      () => 'POSTGRES_PORT=' + port,
+    );
+  else updated += '\nPOSTGRES_PORT=' + port + '\n';
+  validateLocalConfig(parseEnv(updated));
+  return updated;
+}
+
 export function localDockerEndpoint(endpoint) {
   if (!/^unix:\/\/\//.test(endpoint.trim()))
     throw new Error('Docker distant refusé : choisissez Docker Desktop local. ' + guide);
@@ -22,6 +62,7 @@ export function localDockerEndpoint(endpoint) {
 }
 
 export function validateLocalConfig(env) {
+  const port = databasePort(env.POSTGRES_PORT);
   let url;
   try {
     url = new URL(env.DATABASE_URL);
@@ -31,7 +72,7 @@ export function validateLocalConfig(env) {
   if (
     url.protocol !== 'postgresql:' ||
     !['127.0.0.1', 'localhost'].includes(url.hostname) ||
-    (url.port && url.port !== '5432') ||
+    (url.port || '5432') !== port ||
     url.pathname !== '/caissepro' ||
     url.username !== 'caissepro' ||
     !localQuery(url) ||
@@ -43,7 +84,8 @@ export function validateLocalConfig(env) {
     );
 }
 
-export function validateDemoState(state) {
+export function validateDemoState(state, port = '5432') {
+  port = databasePort(port);
   if (state.ready !== true || state.port !== 3001)
     throw new Error('Démonstration incomplète : conserver les données et diagnostiquer. ' + guide);
   const admin = new URL(state.url);
@@ -55,7 +97,7 @@ export function validateDemoState(state) {
         url.protocol === 'postgresql:' &&
         url.hostname === '127.0.0.1' &&
         localQuery(url) &&
-        (url.port === '' || url.port === '5432') &&
+        (url.port || '5432') === port &&
         url.pathname === admin.pathname,
     )
   )
@@ -89,11 +131,22 @@ async function available(port) {
 
 async function main() {
   if (process.platform !== 'darwin') throw new Error('Ce lanceur nécessite macOS. ' + guide);
-  if (process.argv.slice(2).some((arg) => arg !== '--check'))
-    throw new Error('Option inconnue. Utilisez --check ou aucune option.');
+  const args = process.argv.slice(2);
+  if (
+    args.some((arg) => arg !== '--check' && !/^--db-port=\d+$/.test(arg)) ||
+    args.filter((arg) => arg.startsWith('--db-port=')).length > 1
+  )
+    throw new Error('Options : --check et/ou --db-port=5433.');
+  const requestedPort = args.find((arg) => arg.startsWith('--db-port='))?.split('=')[1];
+  if (requestedPort) databasePort(requestedPort);
   if (!/^24\./.test(process.versions.node) || Number(process.versions.node.split('.')[1]) < 11)
     throw new Error('Installez Node.js 24.11 ou plus récent dans la branche 24 LTS. ' + guide);
   const env = { ...process.env };
+  if (requestedPort && (env.DATABASE_URL || env.POSTGRES_PORT))
+    throw new Error(
+      'Retirez les variables DATABASE_URL et POSTGRES_PORT exportées du Terminal avant de changer le port local. ' +
+        guide,
+    );
   if (command('pnpm', ['--version'], env, true) !== '11.25.0')
     throw new Error('Installez pnpm 11.25.0. ' + guide);
   command('xcode-select', ['-p'], env, true);
@@ -130,8 +183,19 @@ async function main() {
     ? { ...parseEnv(readFileSync(join(root, '.env'), 'utf8')), ...env }
     : env;
   if (config.DATABASE_URL || config.POSTGRES_PASSWORD) validateLocalConfig(config);
+  const port = databasePort(requestedPort ?? config.POSTGRES_PORT);
   const statePath = join(directory, 'state.json');
-  if (existsSync(statePath)) validateDemoState(JSON.parse(readFileSync(statePath, 'utf8')));
+  if (existsSync(statePath)) {
+    if (
+      requestedPort &&
+      (new URL(JSON.parse(readFileSync(statePath, 'utf8')).url).port || '5432') !== port
+    )
+      throw new Error(
+        'Une démo existe sur un autre port ; aucune donnée ni connexion modifiée. Diagnostiquer avant de déplacer la base. ' +
+          guide,
+      );
+    validateDemoState(JSON.parse(readFileSync(statePath, 'utf8')), port);
+  }
   await available(3001);
   await available(1420);
   if (process.argv.includes('--check')) {
@@ -168,13 +232,21 @@ async function main() {
     console.info('Préparation locale. La première compilation peut prendre plusieurs minutes.');
     command('pnpm', ['install', '--frozen-lockfile'], env);
     command('pnpm', ['setup:env'], env);
+    if (requestedPort) {
+      const envPath = join(root, '.env');
+      const updated = withDatabasePort(readFileSync(envPath, 'utf8'), port);
+      writeFileSync(envPath, updated, { mode: 0o600 });
+      console.info(
+        `PostgreSQL CaissePro : port local ${port}, configuration conservée pour les prochains lancements.`,
+      );
+    }
     validateLocalConfig({ ...parseEnv(readFileSync(join(root, '.env'), 'utf8')), ...env });
     command('pnpm', ['db:generate'], env);
     command('pnpm', ['db:up'], env);
     env.VITE_API_BASE_URL = 'http://127.0.0.1:3001';
     env.VITE_API_DEPLOYMENT_ID = 'caissepro-demo';
     command('pnpm', ['demo:prepare'], env);
-    validateDemoState(JSON.parse(readFileSync(statePath, 'utf8')));
+    validateDemoState(JSON.parse(readFileSync(statePath, 'utf8')), port);
     if (interrupted) return;
     // Both ports must still be free after the potentially lengthy first build.
     await available(3001);
