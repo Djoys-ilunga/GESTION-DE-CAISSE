@@ -151,6 +151,25 @@ export function ReportsPage({
     }; /* initial fetch, explicit Apply for subsequent filters */
   }, [online, gateway, profile.authorizationVersion]);
   const authorized = profile.permissions.includes('ledger:read');
+  async function prepareClosure() {
+    if (!online || busy || !profile.permissions.includes('session:manage')) return;
+    const seq = ++generation.current;
+    setBusy(true);
+    setError('');
+    setCash(null);
+    setCloseId('');
+    setCountUSD('');
+    setCountCDF('');
+    setConfirmed(false);
+    try {
+      const value = await gateway.cashCatalog();
+      if (alive.current && seq === generation.current && onlineRef.current) setCash(value);
+    } catch (e) {
+      if (alive.current && seq === generation.current) setError(message(e));
+    } finally {
+      if (alive.current && seq === generation.current) setBusy(false);
+    }
+  }
   async function save(format: 'pdf' | 'xlsx') {
     if (!data || !online || busy) return;
     setBusy(true);
@@ -762,14 +781,7 @@ export function ReportsPage({
                         <button
                           className="secondary-button"
                           disabled={busy}
-                          onClick={() => {
-                            void gateway
-                              .cashCatalog()
-                              .then((v) => {
-                                if (alive.current && onlineRef.current) setCash(v);
-                              })
-                              .catch((e) => setError(message(e)));
-                          }}
+                          onClick={() => void prepareClosure()}
                         >
                           Préparer une clôture avec comptage
                         </button>
@@ -780,7 +792,16 @@ export function ReportsPage({
                               <select
                                 required
                                 value={closeId}
-                                onChange={(e) => setCloseId(e.target.value)}
+                                onChange={(e) => {
+                                  if (e.target.value === closeId) return;
+                                  setCloseId(e.target.value);
+                                  setCountUSD('');
+                                  setCountCDF('');
+                                  setConfirmed(false);
+                                  setNotice(
+                                    'Le choix de la caisse exige un nouveau comptage et une nouvelle confirmation.',
+                                  );
+                                }}
                               >
                                 <option value="">Choisir une session ouverte</option>
                                 {cash.data.items

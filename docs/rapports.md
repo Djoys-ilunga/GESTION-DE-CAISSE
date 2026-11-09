@@ -29,6 +29,8 @@ Les filtres sont appliqués après **Appliquer**. Le journal propose une recherc
 
 Un utilisateur `session:manage` peut sélectionner une session ouverte, saisir les USD et CDF **physiquement comptés** et confirmer explicitement la clôture. Le serveur verrouille les comptes et la session, refuse les réservations encore actives, ferme la session et crée le PV dans la même transaction. Une défaillance annule tout. Le comptage ne crée pas d'écriture et ne corrige jamais le solde : l'écart reste un constat, à traiter par les procédures comptables autorisées.
 
+Changer de caisse efface les montants comptés et l'attestation ; actualiser les sessions efface aussi la sélection. Il faut refaire le comptage et confirmer la session choisie. Une réponse de catalogue arrivée après un changement de contexte est ignorée : aucun ancien comptage n'est réaffecté à une nouvelle session.
+
 Le PV fige le nom de caisse, le responsable, la date, la référence unique, le solde comptable et les montants comptés par devise. SQL construit l'instantané, vérifie les droits/périmètres et empêche mise à jour/suppression. La clé de session déduplique les reprises ; un autre comptage ou un autre auteur sur une clôture déjà enregistrée est refusé. Après une réponse réseau incertaine, consulter d'abord les PV ; ne pas ouvrir une nouvelle session pour répéter aveuglément une clôture.
 
 Les anciennes sessions fermées sans comptage sont signalées séparément. Ce module ne leur attribue ni comptage rétroactif ni écart fabriqué. Le PV atteste le comptage déclaré par l'utilisateur, pas une mesure matérielle automatique.

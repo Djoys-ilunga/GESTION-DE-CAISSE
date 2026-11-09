@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { ReportSnapshot } from '@caissepro/shared';
+import type { CashView, ReportSnapshot } from '@caissepro/shared';
 import { profile, fakeGateway, view } from '../auth/test-fixture';
 import { ReportsPage } from './ReportsPage';
 function fixture() {
@@ -78,7 +78,94 @@ function fixture() {
   vi.mocked(gateway.reportSnapshot).mockResolvedValue(data);
   return { p, gateway, data, id };
 }
+function closureFixture() {
+  const s = fixture();
+  s.p.permissions.push('session:manage');
+  const items: CashView[] = ['A', 'B'].map((name) => ({
+    id: crypto.randomUUID(),
+    agency: s.p.agencies[0]!,
+    code: name,
+    name: 'Caisse ' + name,
+    active: true,
+    version: 1,
+    session: { id: crypto.randomUUID(), openedAt: new Date().toISOString() },
+    funds: [],
+  }));
+  s.p.cashRegisters = items.map((c) => ({
+    id: c.id,
+    agencyId: c.agency.id,
+    code: c.code,
+    name: c.name,
+  }));
+  const catalog = {
+    data: { items, synchronizedAt: new Date().toISOString(), expiresAt: s.p.offlineUntil },
+    stale: false,
+  };
+  vi.mocked(s.gateway.cashCatalog).mockResolvedValue(catalog);
+  return { ...s, items, catalog };
+}
+async function prepareClosure() {
+  await screen.findByText('Trésorerie actuelle');
+  await userEvent.click(screen.getByRole('tab', { name: 'Clôtures et écarts' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Préparer une clôture avec comptage' }));
+  await screen.findByLabelText('Caisse à clôturer');
+}
+async function fillCounts(usd = '1000.00', cdf = '280000.00') {
+  fireEvent.change(screen.getByLabelText('USD comptés'), { target: { value: usd } });
+  fireEvent.change(screen.getByLabelText('CDF comptés'), { target: { value: cdf } });
+  await userEvent.click(screen.getByRole('checkbox', { name: /Je confirme le comptage physique/ }));
+}
 describe('Rapports avec passerelle simulée', () => {
+  it('exige un nouveau comptage et une confirmation après changement de caisse avant de clôturer', async () => {
+    const s = closureFixture();
+    vi.mocked(s.gateway.closeCash).mockResolvedValue({});
+    render(<ReportsPage profile={s.p} gateway={s.gateway} online reports />);
+    await prepareClosure();
+    await userEvent.selectOptions(screen.getByLabelText('Caisse à clôturer'), s.items[0]!.id);
+    await fillCounts();
+    expect(screen.getByRole('button', { name: 'Clôturer et établir le PV' })).toBeEnabled();
+    await userEvent.selectOptions(screen.getByLabelText('Caisse à clôturer'), s.items[1]!.id);
+    expect(screen.getByLabelText('USD comptés')).toHaveValue('');
+    expect(screen.getByLabelText('CDF comptés')).toHaveValue('');
+    expect(screen.getByRole('checkbox')).not.toBeChecked();
+    expect(screen.getByRole('button', { name: 'Clôturer et établir le PV' })).toBeDisabled();
+    expect(s.gateway.closeCash).not.toHaveBeenCalled();
+    await fillCounts('12.34', '500.00');
+    await userEvent.click(screen.getByRole('button', { name: 'Clôturer et établir le PV' }));
+    await waitFor(() =>
+      expect(s.gateway.closeCash).toHaveBeenCalledExactlyOnceWith({
+        cashRegisterId: s.items[1]!.id,
+        sessionId: s.items[1]!.session!.id,
+        confirmed: true,
+        countedUSD: '12.34',
+        countedCDF: '500.00',
+      }),
+    );
+    expect(await screen.findByText(/Clôture et procès-verbal enregistrés/)).toBeVisible();
+  });
+  it('ne réaffecte pas un comptage à une session nouvellement ouverte après actualisation', async () => {
+    const s = closureFixture();
+    const ui = render(<ReportsPage profile={s.p} gateway={s.gateway} online reports />);
+    await prepareClosure();
+    await userEvent.selectOptions(screen.getByLabelText('Caisse à clôturer'), s.items[0]!.id);
+    await fillCounts();
+    const refreshed = structuredClone(s.catalog);
+    refreshed.data.items[0]!.session!.id = crypto.randomUUID();
+    vi.mocked(s.gateway.cashCatalog).mockResolvedValue(refreshed);
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Préparer une clôture avec comptage' }),
+    );
+    await waitFor(() => expect(s.gateway.cashCatalog).toHaveBeenCalledTimes(2));
+    expect(await screen.findByLabelText('Caisse à clôturer')).toHaveValue('');
+    expect(screen.getByLabelText('USD comptés')).toHaveValue('');
+    expect(screen.getByLabelText('CDF comptés')).toHaveValue('');
+    expect(screen.getByRole('checkbox')).not.toBeChecked();
+    expect(s.gateway.closeCash).not.toHaveBeenCalled();
+    ui.rerender(<ReportsPage profile={s.p} gateway={s.gateway} online={false} reports />);
+    expect(
+      screen.queryByRole('button', { name: 'Clôturer et établir le PV' }),
+    ).not.toBeInTheDocument();
+  });
   it('ne remplace pas un serveur indisponible par des chiffres fictifs', async () => {
     const s = fixture();
     vi.mocked(s.gateway.reportSnapshot).mockRejectedValue(new Error('SERVER_UNAVAILABLE'));

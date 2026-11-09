@@ -113,6 +113,42 @@ describe('Rapports et clôtures sur PostgreSQL réel', () => {
       disbursements: '0.00',
     });
     expect(r.body.rows.filter((r: { kind: string }) => r.kind === 'TRANSFER')).toHaveLength(2);
+    const rateId = randomUUID();
+    await db.exchangeRate.create({
+      data: {
+        id: rateId,
+        companyId: s.f.companyId,
+        fromCurrency: 'USD',
+        toCurrency: 'CDF',
+        rate: '2600.13',
+        effectiveAt: new Date(Date.now() - 10000),
+        source: 'TEST_REPORT',
+      },
+    });
+    await s.ledger.convert(s.ctx, {
+      agencyId: s.f.agencyId,
+      sourceAccountId: s.f.usd,
+      destinationAccountId: s.f.cdf,
+      sourceCounterId: s.f.clearingUsd,
+      destinationCounterId: s.f.clearingCdf,
+      sourceSessionId: s.f.sessionId,
+      destinationSessionId: s.f.sessionId,
+      exchangeRateId: rateId,
+      amount: '5.00',
+      idempotencyKey: randomUUID(),
+    });
+    const converted = reportSnapshotSchema.parse((await get(s).expect(200)).body);
+    expect(converted.totals.find((t) => t.currency === 'USD')).toMatchObject({
+      balance: '95.00',
+      receipts: '100.00',
+      disbursements: '0.00',
+    });
+    expect(converted.totals.find((t) => t.currency === 'CDF')).toMatchObject({
+      balance: '293000.65',
+      receipts: '280000.00',
+      disbursements: '0.00',
+    });
+    expect(converted.rows.filter((r) => r.kind === 'FX')).toHaveLength(2);
   });
   it('reflète les contre-écritures dans les indicateurs nets et les soldes', async () => {
     const s = await setup();
