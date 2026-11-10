@@ -131,7 +131,9 @@ test(
       const scripts = join(project, 'scripts');
       const bin = join(fixture, 'bin');
       const data = join(fixture, 'scratch', 'caissepro-demo');
-      for (const directory of [scripts, bin, data]) mkdirSync(directory, { recursive: true });
+      const apiDirectory = join(project, 'apps/api/dist');
+      for (const directory of [scripts, bin, data, apiDirectory])
+        mkdirSync(directory, { recursive: true });
       const launcher = join(scripts, 'demo-macos.mjs');
       copyFileSync(new URL('../../scripts/demo-macos.mjs', import.meta.url), launcher);
       writeFileSync(
@@ -149,17 +151,25 @@ const {basename}=require('node:path');
 const cmd=basename(process.argv[1]), args=process.argv.slice(2);
 appendFileSync(process.env.MAC_LAUNCH_TEST_LOG,JSON.stringify({cmd,args,api:process.env.VITE_API_BASE_URL,deployment:process.env.VITE_API_DEPLOYMENT_ID,host:process.env.DOCKER_HOST,override:process.env.CAISSEPRO_DEMO_DB_HOST})+'\\n');
 if(cmd==='pnpm' && args[0]==='--version') console.log('11.25.0');
-if(cmd==='pnpm' && args[0]==='dev:desktop') setTimeout(()=>process.exit(Number(process.env.MAC_LAUNCH_TEST_DESKTOP_EXIT || 0)),200);
+if(cmd==='pnpm' && args[0]==='dev:desktop') {
+  if(process.env.MAC_LAUNCH_TEST_SIGNAL) {
+    const {readFileSync}=require('node:fs');
+    setTimeout(()=>process.kill(Number(readFileSync(process.env.MAC_LAUNCH_TEST_SIGNAL==='interrupt'?process.env.MAC_LAUNCH_TEST_OWNER:process.env.MAC_LAUNCH_TEST_PID,'utf8')),process.env.MAC_LAUNCH_TEST_SIGNAL==='interrupt'?'SIGINT':'SIGTERM'),200);
+    setInterval(()=>{},1000);
+  } else setTimeout(()=>process.exit(Number(process.env.MAC_LAUNCH_TEST_DESKTOP_EXIT || 0)),200);
+}
 if(cmd==='docker' && args[0]==='context') console.log(process.env.MAC_LAUNCH_TEST_ENDPOINT);
 `;
       for (const cmd of ['pnpm', 'xcode-select', 'xcrun', 'perl', 'rustup', 'docker', 'open'])
         writeFileSync(join(bin, cmd), stub, { mode: 0o700 });
       writeFileSync(
-        join(scripts, 'demo.mjs'),
+        join(apiDirectory, 'main.js'),
         `
 import {createServer} from 'node:http';
 import {writeFileSync} from 'node:fs';
 writeFileSync(process.env.MAC_LAUNCH_TEST_PID,String(process.pid));
+writeFileSync(process.env.MAC_LAUNCH_TEST_OWNER,String(process.ppid));
+if(process.env.API_DEPLOYMENT_ID!=='caissepro-demo'||process.env.API_PORT!=='3001'||new URL(process.env.DATABASE_URL).username!=='runtime') throw new Error('Incorrect demo API environment');
 const server=createServer((req,res)=>{res.statusCode=req.url==='/api/v1/health/ready'?200:404;res.end();});
 server.listen(3001,'127.0.0.1');
 process.on('SIGTERM',()=>server.close(()=>process.exit(0)));
@@ -173,6 +183,7 @@ process.on('SIGTERM',()=>server.close(()=>process.exit(0)));
         MAC_LAUNCH_TEST_ENDPOINT: 'unix:///test/docker.sock',
         MAC_LAUNCH_TEST_LOG: log,
         MAC_LAUNCH_TEST_PID: join(fixture, 'api.pid'),
+        MAC_LAUNCH_TEST_OWNER: join(fixture, 'owner.pid'),
         CAISSEPRO_DEMO_DB_HOST: 'remote.invalid',
       };
       for (const key of ['DATABASE_URL', 'POSTGRES_PASSWORD']) delete runEnv[key];
@@ -242,6 +253,21 @@ process.on('SIGTERM',()=>server.close(()=>process.exit(0)));
       assert.equal(new URL(customConfig.DATABASE_URL).port, '5433');
       result = run(['--check']);
       assert.equal(result.status, 0, result.stderr);
+      runEnv.MAC_LAUNCH_TEST_SIGNAL = 'interrupt';
+      result = run();
+      assert.equal(result.status, 0, result.stderr);
+      assert.doesNotMatch(result.stderr, /serveur démo s’est arrêté/);
+      assert.ok(!existsSync(join(data, 'lancement-macos.lock')));
+      assert.throws(
+        () => process.kill(Number(readFileSync(runEnv.MAC_LAUNCH_TEST_PID, 'utf8')), 0),
+        { code: 'ESRCH' },
+      );
+      runEnv.MAC_LAUNCH_TEST_SIGNAL = 'api-exit';
+      result = run();
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /serveur démo s’est arrêté de façon inattendue/);
+      assert.match(result.stderr, /api-macos.log/);
+      assert.ok(!existsSync(join(data, 'lancement-macos.lock')));
     } finally {
       rmSync(fixture, { recursive: true, force: true });
     }

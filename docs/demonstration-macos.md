@@ -86,6 +86,14 @@ cd "$HOME/CaissePro/GESTION-DE-CAISSE"
 bash scripts/demo-macos.command
 ```
 
+Si un ancien lancement conserve le port 3001 ou 1420, utiliser la commande d'arrêt ciblé avant de relancer :
+
+```sh
+pnpm demo:stop && bash scripts/demo-macos.command
+```
+
+`demo:stop` contrôle les deux ports, le programme Node, sa commande, son dossier de travail et son identité de processus. Il demande seulement l'arrêt gracieux des services API/Vite reconnus de cette copie du dépôt. Un processus d'un autre projet entraîne un refus avant tout signal. La commande attend aussi la fin du verrou du lanceur. Elle n'arrête pas PostgreSQL et ne réinitialise ni les données ni les mots de passe. Si l'arrêt gracieux échoue ou si un verrou reste présent, elle s'arrête avec un message explicite, sans suppression automatique.
+
 La préparation réutilise la même base et conserve vos essais comptabilisés ou transmis. Les brouillons restés uniquement en mémoire sont perdus à la fermeture. Ne pas supprimer les volumes Docker, `.env`, le dossier `scratch/caissepro-demo` ou son fichier `state.json`. Le fichier d'état contient des secrets de connexion ; ne pas le partager.
 
 ## En cas de blocage
@@ -98,11 +106,12 @@ bash scripts/demo-macos.command --check
 
 - **Commande manquante** : installer le prérequis indiqué, puis ouvrir un nouveau Terminal.
 - **Docker indisponible** : ouvrir Docker Desktop. Un contexte Docker distant est refusé. Choisir le contexte local dans Docker Desktop.
-- **Port 3001 ou 1420 occupé** : terminer l'ancien lancement avec Ctrl+C. Le lanceur ne tue aucun processus préexistant.
+- **Port 3001 ou 1420 occupé** : terminer l'ancien lancement avec Ctrl+C, ou utiliser `pnpm demo:stop && bash scripts/demo-macos.command` pour les anciens services reconnus de ce dossier. Un processus inconnu reste protégé et doit être identifié séparément.
 - **Port PostgreSQL 5432 déjà utilisé par un autre projet** : pour une première préparation, utiliser `bash scripts/demo-macos.command --db-port=5433`. Le lanceur met à jour uniquement le port de la connexion locale et `POSTGRES_PORT` dans `.env`, sans afficher ni remplacer les mots de passe. Le service reste lié à `127.0.0.1`. Les lancements suivants sans option conservent ce port. Le port choisi doit être libre. Une démo déjà préparée sur un autre port est refusée avant toute modification : diagnostiquer son déplacement en conservant les données. Ne pas arrêter ni supprimer la base de l'autre projet.
 - **Configuration locale refusée** : conserver la configuration existante et utiliser une copie dédiée à la démo dans un autre dossier. Ne pas remplacer une configuration de serveur réel pour contourner ce contrôle.
 - **Lancement précédent interrompu brutalement** : vérifier qu'aucune démo ne tourne encore. Seulement dans ce cas, retirer le verrou vide avec `rmdir "$HOME/CaissePro/scratch/caissepro-demo/lancement-macos.lock"`, puis relancer. Ne pas supprimer la base ou les fichiers d'état.
 - **API indisponible** : son journal est dans `~/CaissePro/scratch/caissepro-demo/api-macos.log`. Ne pas transmettre de secrets ou tout le fichier sans vérification.
+- **Arrêt du lanceur** : un Ctrl+C volontaire termine normalement. Un arrêt inattendu de l'API ferme la session de développement et indique le journal privé ; il ne doit plus être confondu avec une interruption demandée. Le lanceur Mac démarre directement son processus API et le suit jusqu'à son arrêt.
 - **Échec de compilation ou d'ouverture** : transmettre le message d'erreur et préciser Apple Silicon ou Intel ainsi que la version de macOS. Ne pas désactiver les protections de macOS.
 
 Les protections financières, les permissions et le verrou de qualification du stockage sensible restent actifs. Cette préparation ne constitue pas une qualification native macOS ; les tests Linux déjà effectués ne la remplacent pas.

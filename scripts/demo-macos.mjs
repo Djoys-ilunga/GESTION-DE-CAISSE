@@ -1,5 +1,6 @@
 // Local native demo only; no public deployment, reset or production migration.
 import { spawn, spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import {
   existsSync,
   mkdirSync,
@@ -212,6 +213,7 @@ async function main() {
   }
   const children = [];
   let interrupted = false;
+  let closing = false;
   const stop = (signal = 'SIGTERM') => {
     for (const child of children) {
       if (!child.pid) continue;
@@ -253,9 +255,17 @@ async function main() {
     await available(1420);
     const logPath = join(directory, 'api-macos.log');
     const log = openSync(logPath, 'a', 0o600);
-    const api = spawn(process.execPath, ['scripts/demo.mjs', 'start'], {
+    const state = JSON.parse(readFileSync(statePath, 'utf8'));
+    const api = spawn(process.execPath, ['apps/api/dist/main.js'], {
       cwd: root,
-      env,
+      env: {
+        ...env,
+        DATABASE_URL: state.runtimeUrl,
+        API_HOST: '127.0.0.1',
+        API_PORT: '3001',
+        API_DEPLOYMENT_ID: 'caissepro-demo',
+        AUTH_RATE_LIMIT_SECRET: randomBytes(32).toString('hex'),
+      },
       detached: true,
       stdio: ['ignore', log, log],
     });
@@ -303,13 +313,19 @@ async function main() {
       desktop.once('error', reject);
       desktop.once('exit', (status) => resolve(status));
       api.once('exit', () => {
+        if (interrupted || closing) return;
         stop();
-        reject(new Error('Le serveur démo s’est arrêté. ' + guide));
+        reject(
+          new Error(
+            `Le serveur démo s’est arrêté de façon inattendue. Journal privé : ${logPath}. ${guide}`,
+          ),
+        );
       });
     });
     if (!interrupted && code !== 0)
       throw new Error('La compilation ou le lancement natif a échoué. ' + guide);
   } finally {
+    closing = true;
     stop();
     if (children.length) {
       await delay(1500);

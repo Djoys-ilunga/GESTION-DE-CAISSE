@@ -26,6 +26,14 @@ Le script indique maintenant l'étape de l'appel et le statut HTTP en cas de ref
 
 **7 tests du changement de mot de passe réussis**, dont deux nouveaux contrôles des refus avant saisie et de l'absence de secret dans les erreurs. L'absence de rejeu et la préservation du fichier d'accès en cas de refus restent vérifiées. ESLint et formatage ciblés réussis. L'origine du refus signalé sur le Mac utilisateur reste à établir avec son statut HTTP et l'état du service PostgreSQL ; ce diagnostic local ne peut pas être déduit du seul ancien message générique.
 
+### Reprise après un ancien serveur restant sur le port 3001
+
+Ajout de `pnpm demo:stop` pour les services API/Vite des ports 3001/1420 reconnus dans ce checkout. La commande inspecte les deux ports avant d'envoyer un signal, vérifie les commandes, les exécutables et les répertoires, puis revalide l'identité de chaque processus. Elle utilise uniquement SIGTERM et attend les ports libres et la fin du verrou ; aucune suppression de verrou, arrêt forcé, action Docker ou réinitialisation des données/mots de passe n'est effectuée.
+
+Le lanceur Mac démarre désormais directement l'API compilée avec son compte SQL restreint, sans processus Node intermédiaire. Les interruptions volontaires et les arrêts inattendus sont distingués ; ces derniers indiquent le journal privé.
+
+**21 tests Node réussis** : 8 du lanceur, 7 du changement de mot de passe, 5 de l'arrêt ciblé et 1 des permissions Tauri. Le parcours du lanceur avec commandes simulées couvre aussi Ctrl+C et un arrêt inattendu du serveur, avec libération du verrou et arrêt des processus créés. Un essai supplémentaire sous **Linux avec de vrais processus Node et de vrais sockets** a confirmé le refus d'un autre projet avant tout signal, l'arrêt gracieux des deux services reconnus et la libération des ports, avec chemins contenant des espaces. ESLint et formatage ciblés réussis. Ces résultats ne constituent pas une qualification de l'ouverture native macOS ; le cas exact du poste utilisateur reste à confirmer après mise à jour.
+
 ## Étape 9 — interface, administration et supervision
 
 **306 tests distincts ont réussi**, complétés par le parcours intégré Rust/API/PostgreSQL et la compilation du véritable desktop Linux. Les reprises ne sont pas additionnées. L’étape 10 n’est pas commencée.
