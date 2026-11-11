@@ -1,0 +1,458 @@
+categorie	fichier	ligne	extrait
+documentation	AGENTS.md	6	- PostgreSQL est l'unique vérité financière. Séparer strictement CDF et USD. Montants/taux décimaux exacts ; échanges sous forme de chaînes, jamais de calcul financier en flottants binaires.
+documentation	AGENTS.md	24	- Rapports : agréger côté serveur sur les caisses autorisées ; CDF/USD séparés, transferts/FX exclus des recettes/dépenses, contre-écritures prises en compte. Ne pas inventer de comptage ou d’écart nul ; PV et comptage immuables à la clôture, sans correction automatique du solde. Les exports sont explicites, bornés et soumis à revalidation de session.
+documentation	README.md	22	Le module [Transferts et conversions](docs/transferts.md) prépare des brouillons hors connexion, réserve les fonds à la remise et comptabilise après réception explicite par un autre utilisateur autorisé. Les quatre sens CDF/USD sont pris en charge, avec taux validé et bordereau immuable.
+documentation	README.md	42	Pour les dépenses, configurer d’abord les plafonds CDF et USD dans **Dépenses → Plafonds et règles** avec l’administrateur, puis suivre le [circuit d’approbation et de paiement](docs/depenses.md). Aucun plafond n’est activé par défaut. La synchronisation d’un brouillon ne soumet ni ne paie une demande.
+migrations-historiques	apps/api/prisma/migrations/20261104000100_central/migration.sql	6	"CREATE TYPE ""Currency"" AS ENUM ('CDF', 'USD');"
+schema-prisma	apps/api/prisma/schema.prisma	12	CDF
+schema-prisma	apps/api/prisma/schema.prisma	13	USD
+api	apps/api/src/cash/cash.service.ts	170	data: (['CDF', 'USD'] as const).flatMap((currency) => [
+api	apps/api/src/cash/cash.service.ts	272	currency: 'CDF' | 'USD';
+api	apps/api/src/reports/reports.service.ts	196	for (const currency of ['CDF', 'USD'] as const) {
+api	apps/api/src/reports/reports.service.ts	242	currency: 'USD' | 'CDF';
+api	apps/api/src/reports/reports.service.ts	330	pending: ['CDF', 'USD'].map((currency) => {
+api	apps/api/src/reports/reports.service.ts	347	discrepancies: (['CDF', 'USD'] as const).map((currency) => {
+api	apps/api/src/reports/reports.service.ts	389	view.counts.find((c) => c.currency === 'USD')!.counted !== input.countedUSD ||
+api	apps/api/src/reports/reports.service.ts	390	view.counts.find((c) => c.currency === 'CDF')!.counted !== input.countedCDF
+api	apps/api/src/reports/reports.service.ts	417	snapshot: { USD: input.countedUSD, CDF: input.countedCDF },
+api	apps/api/src/transfers/transfers.service.ts	75	const find = async (cashRegisterId: string, currency: 'USD' | 'CDF') => {
+api	apps/api/src/transfers/transfers.service.ts	274	const counter = async (currency: 'USD' | 'CDF') => {
+tests	apps/api/test/integration/auth.spec.ts	328	accountId: f.otherUsd,
+tests	apps/api/test/integration/auth.spec.ts	329	currency: 'USD',
+tests	apps/api/test/integration/auth.spec.ts	434	currency: 'USD',
+tests	apps/api/test/integration/cash-configurations.spec.ts	61	currency: 'USD' | 'CDF',
+tests	apps/api/test/integration/cash-configurations.spec.ts	127	).toEqual(['CDF', 'USD']);
+tests	apps/api/test/integration/cash-configurations.spec.ts	128	await receipt(f, user.headers, f.registerId, 'USD', '10.50').then((r) =>
+tests	apps/api/test/integration/cash-configurations.spec.ts	131	await receipt(f, user.headers, f.registerId, 'CDF', '25.00').then((r) =>
+tests	apps/api/test/integration/cash-configurations.spec.ts	137	accountId: f.usd,
+tests	apps/api/test/integration/cash-configurations.spec.ts	138	currency: 'USD',
+tests	apps/api/test/integration/cash-configurations.spec.ts	146	counterAccountId: f.clearingUsd,
+tests	apps/api/test/integration/cash-configurations.spec.ts	158	expect((await ledger.balance(ctx, f.usd)).balance).toBe('6.50');
+tests	apps/api/test/integration/cash-configurations.spec.ts	159	expect((await ledger.balance(ctx, f.cdf)).balance).toBe('25.00');
+tests	apps/api/test/integration/cash-configurations.spec.ts	179	const rejected = await receipt(f, user.headers, f.registerId, 'USD', '1.00');
+tests	apps/api/test/integration/cash-configurations.spec.ts	182	expect((await ledger.balance(ctx, f.usd)).balance).toBe('6.50');
+tests	apps/api/test/integration/cash-configurations.spec.ts	188	expect((await receipt(f, user.headers, f.registerId, 'USD', '12.34')).status).toBe(201);
+tests	apps/api/test/integration/cash-configurations.spec.ts	234	{ currency: 'CDF', balance: '0.00', reserved: '0.00', available: '0.00' },
+tests	apps/api/test/integration/cash-configurations.spec.ts	235	{ currency: 'USD', balance: '0.00', reserved: '0.00', available: '0.00' },
+tests	apps/api/test/integration/cash-configurations.spec.ts	241	.funds.find((v: { currency: string }) => v.currency === 'USD').balance,
+tests	apps/api/test/integration/cash.spec.ts	85	function payload(amount = '12.34', currency: 'CDF' | 'USD' = 'USD') {
+tests	apps/api/test/integration/cash.spec.ts	170	{ currency: 'CDF', balance: '0.00', reserved: '0.00', available: '0.00' },
+tests	apps/api/test/integration/cash.spec.ts	171	{ currency: 'USD', balance: '0.00', reserved: '0.00', available: '0.00' },
+tests	apps/api/test/integration/cash.spec.ts	226	expect((await ledger.balance(f.ctx, f.usd)).balance).toBe('12.34');
+tests	apps/api/test/integration/cash.spec.ts	227	expect((await ledger.balance(f.ctx, f.cdf)).balance).toBe('0.00');
+tests	apps/api/test/integration/cash.spec.ts	247	it('alloue des numéros uniques en concurrence et additionne exactement CDF/USD', async () => {
+tests	apps/api/test/integration/cash.spec.ts	251	['0.10', 'USD'],
+tests	apps/api/test/integration/cash.spec.ts	252	['0.10', 'USD'],
+tests	apps/api/test/integration/cash.spec.ts	253	['0.10', 'USD'],
+tests	apps/api/test/integration/cash.spec.ts	254	['300.00', 'CDF'],
+tests	apps/api/test/integration/cash.spec.ts	261	expect((await ledger.balance(f.ctx, f.usd)).balance).toBe('0.30');
+tests	apps/api/test/integration/cash.spec.ts	262	expect((await ledger.balance(f.ctx, f.cdf)).balance).toBe('300.00');
+tests	apps/api/test/integration/cash.spec.ts	340	expect((await app.get(LedgerService).balance(f.ctx, f.usd)).balance).toBe('12.34');
+tests	apps/api/test/integration/cash.spec.ts	352	currency: 'USD' as const,
+tests	apps/api/test/integration/cash.spec.ts	378	await confirm(headers, (await prepare(headers, payload('10.00', 'USD'))).row.id).expect(201);
+tests	apps/api/test/integration/cash.spec.ts	379	await confirm(headers, (await prepare(headers, payload('200.00', 'CDF'))).row.id).expect(201);
+tests	apps/api/test/integration/cash.spec.ts	382	.query({ currency: 'USD', category: 'VENTE', search: 'FACT-2026' })
+tests	apps/api/test/integration/cash.spec.ts	386	expect(results.body.items[0].currency).toBe('USD');
+tests	apps/api/test/integration/cash.spec.ts	541	accountId: f.usd,
+tests	apps/api/test/integration/cash.spec.ts	542	counterAccountId: f.clearingUsd,
+tests	apps/api/test/integration/cash.spec.ts	544	currency: 'USD',
+tests	apps/api/test/integration/expenses.spec.ts	78	for (const currency of ['USD', 'CDF'])
+tests	apps/api/test/integration/expenses.spec.ts	89	for (const currency of ['USD', 'CDF'] as const)
+tests	apps/api/test/integration/expenses.spec.ts	93	accountId: currency === 'USD' ? f.usd : f.cdf,
+tests	apps/api/test/integration/expenses.spec.ts	94	counterAccountId: currency === 'USD' ? f.clearingUsd : f.clearingCdf,
+tests	apps/api/test/integration/expenses.spec.ts	106	currency = 'USD',
+tests	apps/api/test/integration/expenses.spec.ts	173	async function pending(s: Setup, amount = '20.00', currency = 'USD') {
+tests	apps/api/test/integration/expenses.spec.ts	182	expect((await app.get(LedgerService).balance(s.ctx, s.f.usd)).balance).toBe('100.00');
+tests	apps/api/test/integration/expenses.spec.ts	230	expect(await app.get(LedgerService).balance(s.ctx, s.f.usd)).toMatchObject({
+tests	apps/api/test/integration/expenses.spec.ts	254	expect(await app.get(LedgerService).balance(s.ctx, s.f.usd)).toMatchObject({
+tests	apps/api/test/integration/expenses.spec.ts	259	expect((await app.get(LedgerService).balance(s.ctx, s.f.cdf)).balance).toBe('100.00');
+tests	apps/api/test/integration/expenses.spec.ts	288	expect((await app.get(LedgerService).balance(s.ctx, s.f.usd)).balance).toBe('100.00');
+tests	apps/api/test/integration/expenses.spec.ts	323	.put('/api/v1/expenses/policies/USD')
+tests	apps/api/test/integration/expenses.spec.ts	341	.put('/api/v1/expenses/policies/USD')
+tests	apps/api/test/integration/expenses.spec.ts	358	expect((await app.get(LedgerService).balance(s.ctx, s.f.usd)).balance).toBe('100.00');
+tests	apps/api/test/integration/expenses.spec.ts	362	.put('/api/v1/expenses/policies/USD')
+tests	apps/api/test/integration/expenses.spec.ts	367	.put('/api/v1/expenses/policies/USD')
+tests	apps/api/test/integration/expenses.spec.ts	381	expect((await app.get(LedgerService).balance(s.ctx, s.f.usd)).balance).toBe('10.00');
+tests	apps/api/test/integration/expenses.spec.ts	398	expect((await app.get(LedgerService).balance(s.ctx, s.f.usd)).balance).toBe('30.00');
+tests	apps/api/test/integration/expenses.spec.ts	400	it('paie deux ordres concurrents, numérote les bons une seule fois et sépare CDF/USD', async () => {
+tests	apps/api/test/integration/expenses.spec.ts	402	a = await pending(s, '60.00', 'USD'),
+tests	apps/api/test/integration/expenses.spec.ts	403	b = await pending(s, '40.00', 'USD'),
+tests	apps/api/test/integration/expenses.spec.ts	404	cdf = await pending(s, '25.00', 'CDF');
+tests	apps/api/test/integration/expenses.spec.ts	407	await decide(s, cdf.id).expect(201);
+tests	apps/api/test/integration/expenses.spec.ts	408	const results = await Promise.all([pay(s, a.id), pay(s, b.id), pay(s, cdf.id)]);
+tests	apps/api/test/integration/expenses.spec.ts	411	expect((await app.get(LedgerService).balance(s.ctx, s.f.usd)).balance).toBe('0.00');
+tests	apps/api/test/integration/expenses.spec.ts	412	expect((await app.get(LedgerService).balance(s.ctx, s.f.cdf)).balance).toBe('75.00');
+tests	apps/api/test/integration/expenses.spec.ts	469	expect(await app.get(LedgerService).balance(s.ctx, s.f.usd)).toMatchObject({
+tests	apps/api/test/integration/expenses.spec.ts	491	expect(await app.get(LedgerService).balance(s.ctx, s.f.usd)).toMatchObject({
+tests	apps/api/test/integration/expenses.spec.ts	502	currency: 'USD',
+tests	apps/api/test/integration/expenses.spec.ts	528	expect((await app.get(LedgerService).balance(s.ctx, s.f.usd)).balance).toBe('100.00');
+tests	apps/api/test/integration/fixture.ts	16	const usd = id(),
+tests	apps/api/test/integration/fixture.ts	17	cdf = id(),
+tests	apps/api/test/integration/fixture.ts	18	otherUsd = id(),
+tests	apps/api/test/integration/fixture.ts	19	clearingUsd = id(),
+tests	apps/api/test/integration/fixture.ts	20	clearingCdf = id(),
+tests	apps/api/test/integration/fixture.ts	88	id: usd,
+tests	apps/api/test/integration/fixture.ts	93	currency: 'USD',
+tests	apps/api/test/integration/fixture.ts	97	id: cdf,
+tests	apps/api/test/integration/fixture.ts	102	currency: 'CDF',
+tests	apps/api/test/integration/fixture.ts	108	id: otherUsd,
+tests	apps/api/test/integration/fixture.ts	113	currency: 'USD' as const,
+tests	apps/api/test/integration/fixture.ts	118	{ id: clearingUsd, companyId, agencyId, code: 'CLEAR', currency: 'USD', kind: 'CLEARING' },
+tests	apps/api/test/integration/fixture.ts	119	{ id: clearingCdf, companyId, agencyId, code: 'CLEAR', currency: 'CDF', kind: 'CLEARING' },
+tests	apps/api/test/integration/fixture.ts	149	usd,
+tests	apps/api/test/integration/fixture.ts	150	cdf,
+tests	apps/api/test/integration/fixture.ts	151	otherUsd,
+tests	apps/api/test/integration/fixture.ts	152	clearingUsd,
+tests	apps/api/test/integration/fixture.ts	153	clearingCdf,
+tests	apps/api/test/integration/integrity.spec.ts	32	const receipt = (amount: string, currency: 'USD' | 'CDF' = 'USD', key = id()) =>
+tests	apps/api/test/integration/integrity.spec.ts	35	accountId: currency === 'USD' ? f.usd : f.cdf,
+tests	apps/api/test/integration/integrity.spec.ts	36	counterAccountId: currency === 'USD' ? f.clearingUsd : f.clearingCdf,
+tests	apps/api/test/integration/integrity.spec.ts	45	accountId: f.usd,
+tests	apps/api/test/integration/integrity.spec.ts	46	currency: 'USD',
+tests	apps/api/test/integration/integrity.spec.ts	50	const pay = (expenseRequestId: string, counterAccountId = f.clearingUsd, key = id()) =>
+tests	apps/api/test/integration/integrity.spec.ts	61	sourceAccountId: f.usd,
+tests	apps/api/test/integration/integrity.spec.ts	62	destinationAccountId: f.otherUsd,
+tests	apps/api/test/integration/integrity.spec.ts	65	currency: 'USD',
+tests	apps/api/test/integration/integrity.spec.ts	72	await receipt('100.25', 'CDF');
+tests	apps/api/test/integration/integrity.spec.ts	73	expect((await ledger.balance(f.ctx, f.usd)).balance).toBe('0.30');
+tests	apps/api/test/integration/integrity.spec.ts	74	expect((await ledger.balance(f.ctx, f.cdf)).balance).toBe('100.25');
+tests	apps/api/test/integration/integrity.spec.ts	79	expect((await ledger.balance(f.ctx, f.usd)).balance).toBe('9007199254740993.02');
+tests	apps/api/test/integration/integrity.spec.ts	83	const rows = await Promise.all(Array.from({ length: 6 }, () => receipt('10.00', 'USD', key)));
+tests	apps/api/test/integration/integrity.spec.ts	86	await expect(receipt('11.00', 'USD', key)).rejects.toThrow('IDEMPOTENCY_CONFLICT');
+tests	apps/api/test/integration/integrity.spec.ts	92	expect((await ledger.balance(f.ctx, f.usd)).balance).toBe('20.00');
+tests	apps/api/test/integration/integrity.spec.ts	93	expect((await ledger.balance(f.ctx, f.otherUsd)).balance).toBe('80.00');
+tests	apps/api/test/integration/integrity.spec.ts	109	currency: 'USD',
+tests	apps/api/test/integration/integrity.spec.ts	125	expect(await ledger.balance(f.ctx, f.usd)).toEqual({
+tests	apps/api/test/integration/integrity.spec.ts	126	currency: 'USD',
+tests	apps/api/test/integration/integrity.spec.ts	138	const a = await pay(ex.expenseRequestId, f.clearingUsd, key),
+tests	apps/api/test/integration/integrity.spec.ts	139	b = await pay(ex.expenseRequestId, f.clearingUsd, key);
+tests	apps/api/test/integration/integrity.spec.ts	141	expect((await ledger.balance(f.ctx, f.usd)).balance).toBe('60.00');
+tests	apps/api/test/integration/integrity.spec.ts	142	expect((await ledger.balance(f.ctx, f.usd)).reserved).toBe('0.00');
+tests	apps/api/test/integration/integrity.spec.ts	148	await expect(pay(ex.expenseRequestId, f.clearingCdf)).rejects.toThrow();
+tests	apps/api/test/integration/integrity.spec.ts	149	expect(await ledger.balance(f.ctx, f.usd)).toEqual({
+tests	apps/api/test/integration/integrity.spec.ts	150	currency: 'USD',
+tests	apps/api/test/integration/integrity.spec.ts	169	db.treasuryAccount.update({ where: { id: f.usd }, data: { currency: 'CDF' } }),
+tests	apps/api/test/integration/integrity.spec.ts	181	accountId: f.usd,
+tests	apps/api/test/integration/integrity.spec.ts	184	currency: 'USD',
+tests	apps/api/test/integration/integrity.spec.ts	202	currency: 'USD',
+tests	apps/api/test/integration/integrity.spec.ts	217	sessions: { [f.usd]: f.sessionId },
+tests	apps/api/test/integration/integrity.spec.ts	221	expect((await ledger.balance(f.ctx, f.usd)).balance).toBe('0.00');
+tests	apps/api/test/integration/integrity.spec.ts	232	fromCurrency: 'USD',
+tests	apps/api/test/integration/integrity.spec.ts	233	toCurrency: 'CDF',
+tests	apps/api/test/integration/integrity.spec.ts	241	sourceAccountId: f.usd,
+tests	apps/api/test/integration/integrity.spec.ts	242	destinationAccountId: f.cdf,
+tests	apps/api/test/integration/integrity.spec.ts	243	sourceCounterId: f.clearingUsd,
+tests	apps/api/test/integration/integrity.spec.ts	244	destinationCounterId: f.clearingCdf,
+tests	apps/api/test/integration/integrity.spec.ts	251	expect((await ledger.balance(f.ctx, f.usd)).balance).toBe('8.75');
+tests	apps/api/test/integration/integrity.spec.ts	252	expect((await ledger.balance(f.ctx, f.cdf)).balance).toBe('3250.16');
+tests	apps/api/test/integration/integrity.spec.ts	261	fromCurrency: 'USD',
+tests	apps/api/test/integration/integrity.spec.ts	262	toCurrency: 'CDF',
+tests	apps/api/test/integration/integrity.spec.ts	270	sourceAccountId: f.usd,
+tests	apps/api/test/integration/integrity.spec.ts	271	destinationAccountId: f.cdf,
+tests	apps/api/test/integration/integrity.spec.ts	272	sourceCounterId: f.clearingUsd,
+tests	apps/api/test/integration/integrity.spec.ts	273	destinationCounterId: f.clearingCdf,
+tests	apps/api/test/integration/integrity.spec.ts	280	expect((await ledger.balance(f.ctx, f.usd)).balance).toBe('0.00');
+tests	apps/api/test/integration/integrity.spec.ts	281	expect((await ledger.balance(f.ctx, f.cdf)).balance).toBe('4503599629667332.31');
+tests	apps/api/test/integration/integrity.spec.ts	288	await expect(ledger.balance(f.ctx, other.usd)).rejects.toThrow('ACCOUNT_NOT_FOUND');
+tests	apps/api/test/integration/integrity.spec.ts	292	ledger.balance({ companyId: f.companyId, userId: f.viewerId }, f.usd),
+tests	apps/api/test/integration/integrity.spec.ts	323	currency: 'USD',
+tests	apps/api/test/integration/integrity.spec.ts	338	expect((await ledger.balance(f.ctx, f.usd)).balance).toBe('0.00');
+tests	apps/api/test/integration/management.spec.ts	189	fromCurrency: 'USD',
+tests	apps/api/test/integration/management.spec.ts	190	toCurrency: 'CDF',
+tests	apps/api/test/integration/management.spec.ts	220	currency: 'USD',
+tests	apps/api/test/integration/management.spec.ts	225	[s.f.usd, s.f.sessionId, s.f.agencyId, s.f.clearingUsd, '10.00'],
+tests	apps/api/test/integration/management.spec.ts	226	[s.f.otherUsd, s.f.otherSessionId, s.f.otherAgencyId, otherCounter.id, '20.00'],
+tests	apps/api/test/integration/management.spec.ts	234	currency: 'USD',
+tests	apps/api/test/integration/management.spec.ts	264	accountId: s.f.usd,
+tests	apps/api/test/integration/management.spec.ts	265	currency: 'USD',
+tests	apps/api/test/integration/reports.spec.ts	58	for (const currency of ['USD', 'CDF'] as const)
+tests	apps/api/test/integration/reports.spec.ts	62	accountId: currency === 'USD' ? f.usd : f.cdf,
+tests	apps/api/test/integration/reports.spec.ts	63	counterAccountId: currency === 'USD' ? f.clearingUsd : f.clearingCdf,
+tests	apps/api/test/integration/reports.spec.ts	66	amount: currency === 'USD' ? amount : '280000.00',
+tests	apps/api/test/integration/reports.spec.ts	75	const close = (s: S, USD = '99.50', CDF = '280000.00') =>
+tests	apps/api/test/integration/reports.spec.ts	80	countedUSD: USD,
+tests	apps/api/test/integration/reports.spec.ts	81	countedCDF: CDF,
+tests	apps/api/test/integration/reports.spec.ts	87	expect(report.totals.find((t) => t.currency === 'USD')?.balance).toBe('9999999999999999.99');
+tests	apps/api/test/integration/reports.spec.ts	88	expect(report.totals.find((t) => t.currency === 'CDF')?.balance).toBe('280000.00');
+tests	apps/api/test/integration/reports.spec.ts	102	sourceAccountId: s.f.usd,
+tests	apps/api/test/integration/reports.spec.ts	103	destinationAccountId: s.f.otherUsd,
+tests	apps/api/test/integration/reports.spec.ts	106	currency: 'USD',
+tests	apps/api/test/integration/reports.spec.ts	110	expect(r.body.totals.find((t: { currency: string }) => t.currency === 'USD')).toMatchObject({
+tests	apps/api/test/integration/reports.spec.ts	121	fromCurrency: 'USD',
+tests	apps/api/test/integration/reports.spec.ts	122	toCurrency: 'CDF',
+tests	apps/api/test/integration/reports.spec.ts	130	sourceAccountId: s.f.usd,
+tests	apps/api/test/integration/reports.spec.ts	131	destinationAccountId: s.f.cdf,
+tests	apps/api/test/integration/reports.spec.ts	132	sourceCounterId: s.f.clearingUsd,
+tests	apps/api/test/integration/reports.spec.ts	133	destinationCounterId: s.f.clearingCdf,
+tests	apps/api/test/integration/reports.spec.ts	141	expect(converted.totals.find((t) => t.currency === 'USD')).toMatchObject({
+tests	apps/api/test/integration/reports.spec.ts	146	expect(converted.totals.find((t) => t.currency === 'CDF')).toMatchObject({
+tests	apps/api/test/integration/reports.spec.ts	156	where: { companyId: s.f.companyId, currency: 'USD' },
+tests	apps/api/test/integration/reports.spec.ts	163	sessions: { [s.f.usd]: s.f.sessionId },
+tests	apps/api/test/integration/reports.spec.ts	166	expect(r.body.totals.find((t: { currency: string }) => t.currency === 'USD')).toMatchObject({
+tests	apps/api/test/integration/reports.spec.ts	205	accountId: s.f.usd,
+tests	apps/api/test/integration/reports.spec.ts	206	currency: 'USD',
+tests	apps/api/test/integration/reports.spec.ts	224	expect(r.body.pending.find((p: { currency: string }) => p.currency === 'USD')).toMatchObject({
+tests	apps/api/test/integration/reports.spec.ts	248	expect(r.body.totals.find((t: { currency: string }) => t.currency === 'USD')).toMatchObject({
+tests	apps/api/test/integration/reports.spec.ts	265	expect(r.body.counts.find((v: { currency: string }) => v.currency === 'USD')).toEqual({
+tests	apps/api/test/integration/reports.spec.ts	266	currency: 'USD',
+tests	apps/api/test/integration/reports.spec.ts	271	expect((await s.ledger.balance(s.ctx, s.f.usd)).balance).toBe('100.00');
+tests	apps/api/test/integration/reports.spec.ts	278	report.body.discrepancies.find((d: { currency: string }) => d.currency === 'USD'),
+tests	apps/api/test/integration/reports.spec.ts	302	accountId: s.f.usd,
+tests	apps/api/test/integration/reports.spec.ts	303	currency: 'USD',
+tests	apps/api/test/integration/synchronization.spec.ts	68	currency: 'USD',
+tests	apps/api/test/integration/transfers.spec.ts	62	currency: 'CDF',
+tests	apps/api/test/integration/transfers.spec.ts	73	for (const currency of ['USD', 'CDF'] as const)
+tests	apps/api/test/integration/transfers.spec.ts	77	accountId: currency === 'USD' ? f.usd : f.cdf,
+tests	apps/api/test/integration/transfers.spec.ts	78	counterAccountId: currency === 'USD' ? f.clearingUsd : f.clearingCdf,
+tests	apps/api/test/integration/transfers.spec.ts	87	sourceCurrency: 'USD',
+tests	apps/api/test/integration/transfers.spec.ts	88	destinationCurrency: 'USD',
+tests	apps/api/test/integration/transfers.spec.ts	106	async function balance(s: S, accountId = s.f.usd) {
+tests	apps/api/test/integration/transfers.spec.ts	109	it.each(['USD', 'CDF'])(
+tests	apps/api/test/integration/transfers.spec.ts	122	const account = currency === 'USD' ? s.f.usd : s.f.cdf;
+tests	apps/api/test/integration/transfers.spec.ts	164	{ from: 'USD', to: 'CDF', rate: '2800.125', amount: '1.00', target: '2800.13' },
+tests	apps/api/test/integration/transfers.spec.ts	165	{ from: 'CDF', to: 'USD', rate: '0.000357142857', amount: '2800.00', target: '1.00' },
+tests	apps/api/test/integration/transfers.spec.ts	192	for (const currency of ['USD', 'CDF']) {
+tests	apps/api/test/integration/transfers.spec.ts	204	destinationCurrency: 'CDF',
+tests	apps/api/test/integration/transfers.spec.ts	212	expect(await balance(s, s.f.cdf)).toMatchObject({ balance: '56100.00', reserved: '0.00' });
+tests	apps/api/test/integration/transfers.spec.ts	217	Object.assign(s.body, { destinationCurrency: 'CDF', rate: '2800', rateSource: 'Guichet' });
+tests	apps/api/test/integration/transfers.spec.ts	245	sourceCurrency: 'CDF',
+tests	apps/api/test/integration/transfers.spec.ts	246	destinationCurrency: 'USD',
+tests	apps/api/test/integration/transfers.spec.ts	265	destinationCurrency: 'CDF',
+tests	apps/api/test/integration/transfers.spec.ts	273	destinationCurrency: 'CDF',
+tests	apps/api/test/integration/transfers.spec.ts	322	accountId: s.f.usd,
+tests	apps/api/test/integration/transfers.spec.ts	323	currency: 'USD',
+interface	apps/desktop/src/App.tsx	299	<span>CDF</span>
+interface	apps/desktop/src/App.tsx	300	<span>USD</span>
+interface	apps/desktop/src/auth/gateway.ts	102	currency: 'CDF' | 'USD';
+interface	apps/desktop/src/auth/gateway.ts	155	currency: 'CDF' | 'USD',
+interface	apps/desktop/src/auth/gateway.ts	329	async configureExpensePolicy(currency: 'CDF' | 'USD', input: ExpensePolicyInput) {
+interface	apps/desktop/src/cash/CashPage.tsx	65	<p>Des fonds distincts en CDF et en USD, issus des seules écritures comptabilisées.</p>
+interface	apps/desktop/src/cash/CashPage.tsx	122	{(['CDF', 'USD'] as const).map((currency) => {
+interface	apps/desktop/src/cash/CashPage.tsx	248	'Caisse créée avec des fonds CDF/USD distincts. Les utilisateurs nouvellement affectés doivent se reconnecter.',
+interface	apps/desktop/src/cash/ReceiptForm.tsx	56	[currency, setCurrency] = useState<'CDF' | 'USD'>(
+interface	apps/desktop/src/cash/ReceiptForm.tsx	57	(fields.currency === 'USD' || fields.currency === 'CDF'
+interface	apps/desktop/src/cash/ReceiptForm.tsx	59	: editing?.draft.currency) ?? 'CDF',
+interface	apps/desktop/src/cash/ReceiptForm.tsx	193	<option>CDF</option>
+interface	apps/desktop/src/cash/ReceiptForm.tsx	194	<option>USD</option>
+interface	apps/desktop/src/cash/ReceiptsPage.tsx	196	...(filterCurrency ? { currency: filterCurrency as 'CDF' | 'USD' } : {}),
+interface	apps/desktop/src/cash/ReceiptsPage.tsx	584	"<option value="""">CDF et USD séparés</option>"
+interface	apps/desktop/src/cash/ReceiptsPage.tsx	585	<option>CDF</option>
+interface	apps/desktop/src/cash/ReceiptsPage.tsx	586	<option>USD</option>
+tests	apps/desktop/src/cash/receipts.test.tsx	22	{ currency: 'CDF', balance: '0.00', reserved: '0.00', available: '0.00' },
+tests	apps/desktop/src/cash/receipts.test.tsx	23	{ currency: 'USD', balance: '10.00', reserved: '0.00', available: '10.00' },
+tests	apps/desktop/src/cash/receipts.test.tsx	38	currency: 'USD',
+tests	apps/desktop/src/cash/receipts.test.tsx	58	currency: 'USD',
+tests	apps/desktop/src/cash/receipts.test.tsx	85	await userEvent.selectOptions(screen.getByLabelText('Devise'), 'USD');
+tests	apps/desktop/src/cash/receipts.test.tsx	103	expect(screen.getByText(/Solde consulté dans cette devise/)).toHaveTextContent('10,00 USD');
+tests	apps/desktop/src/cash/receipts.test.tsx	148	await userEvent.selectOptions(screen.getByLabelText('Devise'), 'USD');
+tests	apps/desktop/src/cash/receipts.test.tsx	153	currency: 'USD',
+tests	apps/desktop/src/cash/receipts.test.tsx	189	it('présente les soldes CDF/USD datés sans les agréger hors connexion', async () => {
+tests	apps/desktop/src/cash/receipts.test.tsx	195	expect(screen.getByText('CDF')).toBeInTheDocument();
+tests	apps/desktop/src/cash/receipts.test.tsx	196	expect(screen.getByText('USD')).toBeInTheDocument();
+tests	apps/desktop/src/cash/receipts.test.tsx	250	draft: { amount: '12.34', currency: 'USD' },
+interface	apps/desktop/src/expenses/ExpenseForm.tsx	44	[currency, setCurrency] = useState<'USD' | 'CDF'>(
+interface	apps/desktop/src/expenses/ExpenseForm.tsx	45	(fields.currency === 'USD' || fields.currency === 'CDF'
+interface	apps/desktop/src/expenses/ExpenseForm.tsx	47	: source?.draft.currency) ?? 'USD',
+interface	apps/desktop/src/expenses/ExpenseForm.tsx	194	<option>USD</option>
+interface	apps/desktop/src/expenses/ExpenseForm.tsx	195	<option>CDF</option>
+interface	apps/desktop/src/expenses/ExpensePolicies.tsx	24	[currency, setCurrency] = useState<'CDF' | 'USD'>('USD'),
+interface	apps/desktop/src/expenses/ExpensePolicies.tsx	31	[pending, setPending] = useState<{ currency: 'CDF' | 'USD'; input: ExpensePolicyInput } | null>(
+interface	apps/desktop/src/expenses/ExpensePolicies.tsx	142	<option>USD</option>
+interface	apps/desktop/src/expenses/ExpensePolicies.tsx	143	<option>CDF</option>
+interface	apps/desktop/src/expenses/ExpensesPage.tsx	71	...(currency ? { currency: currency as 'CDF' | 'USD' } : {}),
+interface	apps/desktop/src/expenses/ExpensesPage.tsx	106	...(currency ? { currency: currency as 'CDF' | 'USD' } : {}),
+interface	apps/desktop/src/expenses/ExpensesPage.tsx	468	"<option value="""">CDF et USD séparés</option>"
+interface	apps/desktop/src/expenses/ExpensesPage.tsx	469	<option>CDF</option>
+interface	apps/desktop/src/expenses/ExpensesPage.tsx	470	<option>USD</option>
+tests	apps/desktop/src/expenses/expenses.test.tsx	21	{ currency: 'USD', balance: '100.00', reserved: '20.00', available: '80.00' },
+tests	apps/desktop/src/expenses/expenses.test.tsx	22	{ currency: 'CDF', balance: '0.00', reserved: '0.00', available: '0.00' },
+tests	apps/desktop/src/expenses/expenses.test.tsx	41	currency: 'USD',
+tests	apps/desktop/src/expenses/expenses.test.tsx	65	currency: 'USD',
+tests	apps/desktop/src/expenses/expenses.test.tsx	98	currency: 'USD',
+tests	apps/desktop/src/expenses/expenses.test.tsx	109	expect(screen.getByRole('dialog')).toHaveTextContent('Devise : USD');
+tests	apps/desktop/src/expenses/expenses.test.tsx	112	expect(s.gateway.configureExpensePolicy).toHaveBeenCalledWith('USD', {
+tests	apps/desktop/src/expenses/expenses.test.tsx	127	await userEvent.selectOptions(screen.getByLabelText('Devise'), 'CDF');
+tests	apps/desktop/src/expenses/expenses.test.tsx	139	currency: 'CDF',
+tests	apps/desktop/src/expenses/expenses.test.tsx	160	currency: 'USD' as const,
+tests	apps/desktop/src/hybrid/hybrid.test.ts	6	createLocalDraft({ kind: 'receipt', currency: 'USD', amount: '10.20', description: 'Brouillon' });
+tests	apps/desktop/src/hybrid/synchronization.test.tsx	18	currency: 'USD',
+interface	apps/desktop/src/management/SettingsPage.tsx	673	[from, setFrom] = useState<'CDF' | 'USD'>('USD'),
+interface	apps/desktop/src/management/SettingsPage.tsx	678	const to = from === 'USD' ? 'CDF' : 'USD';
+interface	apps/desktop/src/management/SettingsPage.tsx	721	<option>USD</option>
+interface	apps/desktop/src/management/SettingsPage.tsx	722	<option>CDF</option>
+tests	apps/desktop/src/management/management.test.tsx	239	funds: [{ currency: 'USD', balance: '12.34', reserved: '0.00', available: '12.34' }],
+interface	apps/desktop/src/reports/ReportsPage.tsx	41	function Curve({ data, currency }: { data: ReportSnapshot['daily']; currency: 'USD' | 'CDF' }) {
+interface	apps/desktop/src/reports/ReportsPage.tsx	74	stroke={currency === 'USD' ? '#17634d' : '#9c7b3b'}
+interface	apps/desktop/src/reports/ReportsPage.tsx	123	[countUSD, setCountUSD] = useState(''),
+interface	apps/desktop/src/reports/ReportsPage.tsx	124	[countCDF, setCountCDF] = useState(''),
+interface	apps/desktop/src/reports/ReportsPage.tsx	172	setCountUSD('');
+interface	apps/desktop/src/reports/ReportsPage.tsx	173	setCountCDF('');
+interface	apps/desktop/src/reports/ReportsPage.tsx	211	countedUSD: countUSD,
+interface	apps/desktop/src/reports/ReportsPage.tsx	212	countedCDF: countCDF,
+interface	apps/desktop/src/reports/ReportsPage.tsx	216	setCountUSD('');
+interface	apps/desktop/src/reports/ReportsPage.tsx	217	setCountCDF('');
+interface	apps/desktop/src/reports/ReportsPage.tsx	433	période. Aucun total ne mélange CDF et USD.
+interface	apps/desktop/src/reports/ReportsPage.tsx	484	"<Curve data={data.daily} currency=""CDF"" />"
+interface	apps/desktop/src/reports/ReportsPage.tsx	485	"<Curve data={data.daily} currency=""USD"" />"
+interface	apps/desktop/src/reports/ReportsPage.tsx	591	"<option value=""ALL"">CDF et USD séparés</option>"
+interface	apps/desktop/src/reports/ReportsPage.tsx	592	<option>CDF</option>
+interface	apps/desktop/src/reports/ReportsPage.tsx	593	<option>USD</option>
+interface	apps/desktop/src/reports/ReportsPage.tsx	813	setCountUSD('');
+interface	apps/desktop/src/reports/ReportsPage.tsx	814	setCountCDF('');
+interface	apps/desktop/src/reports/ReportsPage.tsx	832	USD comptés
+interface	apps/desktop/src/reports/ReportsPage.tsx	836	value={countUSD}
+interface	apps/desktop/src/reports/ReportsPage.tsx	837	onChange={(e) => setCountUSD(e.target.value)}
+interface	apps/desktop/src/reports/ReportsPage.tsx	842	CDF comptés
+interface	apps/desktop/src/reports/ReportsPage.tsx	846	value={countCDF}
+interface	apps/desktop/src/reports/ReportsPage.tsx	847	onChange={(e) => setCountCDF(e.target.value)}
+tests	apps/desktop/src/reports/reports.test.tsx	20	totals: ['CDF', 'USD'].map((c) => ({
+tests	apps/desktop/src/reports/reports.test.tsx	21	currency: c as 'CDF' | 'USD',
+tests	apps/desktop/src/reports/reports.test.tsx	22	balance: c === 'CDF' ? '280000.00' : '1000.00',
+tests	apps/desktop/src/reports/reports.test.tsx	24	available: c === 'CDF' ? '280000.00' : '1000.00',
+tests	apps/desktop/src/reports/reports.test.tsx	26	closing: c === 'CDF' ? '280000.00' : '1000.00',
+tests	apps/desktop/src/reports/reports.test.tsx	27	receipts: c === 'CDF' ? '280000.00' : '1000.00',
+tests	apps/desktop/src/reports/reports.test.tsx	38	currency: 'USD',
+tests	apps/desktop/src/reports/reports.test.tsx	44	daily: [{ date: '2026-11-01', currency: 'USD', balance: '1000.00' }],
+tests	apps/desktop/src/reports/reports.test.tsx	57	currency: 'USD',
+tests	apps/desktop/src/reports/reports.test.tsx	66	{ currency: 'USD', count: 1, amount: '25.00' },
+tests	apps/desktop/src/reports/reports.test.tsx	67	{ currency: 'CDF', count: 0, amount: '0.00' },
+tests	apps/desktop/src/reports/reports.test.tsx	72	{ currency: 'CDF', measured: 0, count: 0, net: null },
+tests	apps/desktop/src/reports/reports.test.tsx	73	{ currency: 'USD', measured: 0, count: 0, net: null },
+tests	apps/desktop/src/reports/reports.test.tsx	113	async function fillCounts(usd = '1000.00', cdf = '280000.00') {
+tests	apps/desktop/src/reports/reports.test.tsx	114	fireEvent.change(screen.getByLabelText('USD comptés'), { target: { value: usd } });
+tests	apps/desktop/src/reports/reports.test.tsx	115	fireEvent.change(screen.getByLabelText('CDF comptés'), { target: { value: cdf } });
+tests	apps/desktop/src/reports/reports.test.tsx	128	expect(screen.getByLabelText('USD comptés')).toHaveValue('');
+tests	apps/desktop/src/reports/reports.test.tsx	129	expect(screen.getByLabelText('CDF comptés')).toHaveValue('');
+tests	apps/desktop/src/reports/reports.test.tsx	140	countedUSD: '12.34',
+tests	apps/desktop/src/reports/reports.test.tsx	141	countedCDF: '500.00',
+tests	apps/desktop/src/reports/reports.test.tsx	160	expect(screen.getByLabelText('USD comptés')).toHaveValue('');
+tests	apps/desktop/src/reports/reports.test.tsx	161	expect(screen.getByLabelText('CDF comptés')).toHaveValue('');
+tests	apps/desktop/src/reports/reports.test.tsx	196	expect(screen.getByRole('img', { name: /Évolution observée.*USD/ })).toBeInTheDocument();
+interface	apps/desktop/src/transfers/TransfersPage.tsx	41	const [currency, setCurrency] = useState<'CDF' | 'USD'>('USD'),
+interface	apps/desktop/src/transfers/TransfersPage.tsx	42	[targetCurrency, setTargetCurrency] = useState<'CDF' | 'USD'>('USD');
+interface	apps/desktop/src/transfers/TransfersPage.tsx	245	onChange={(e) => setCurrency(e.target.value as 'CDF' | 'USD')}
+interface	apps/desktop/src/transfers/TransfersPage.tsx	247	<option>USD</option>
+interface	apps/desktop/src/transfers/TransfersPage.tsx	248	<option>CDF</option>
+interface	apps/desktop/src/transfers/TransfersPage.tsx	255	onChange={(e) => setTargetCurrency(e.target.value as 'CDF' | 'USD')}
+interface	apps/desktop/src/transfers/TransfersPage.tsx	257	<option>USD</option>
+interface	apps/desktop/src/transfers/TransfersPage.tsx	258	<option>CDF</option>
+tests	apps/desktop/src/transfers/transfers.test.tsx	29	{ currency: 'USD', balance: '100.00', reserved: '0.00', available: '100.00' },
+tests	apps/desktop/src/transfers/transfers.test.tsx	30	{ currency: 'CDF', balance: '0.00', reserved: '0.00', available: '0.00' },
+tests	apps/desktop/src/transfers/transfers.test.tsx	41	sourceCurrency: 'USD',
+tests	apps/desktop/src/transfers/transfers.test.tsx	42	destinationCurrency: 'USD',
+tests	apps/desktop/src/transfers/transfers.test.tsx	95	expect(screen.getByText(/Disponible non actualisé/)).toHaveTextContent('100,00 USD');
+tests	apps/desktop/src/transfers/transfers.test.tsx	109	destinationCurrency: 'CDF',
+documentation	docs/architecture.md	16	Une opération comporte au moins deux écritures et doit être équilibrée par devise. Un débit augmente un compte de trésorerie ; un crédit le diminue. Les comptes CLEARING/EQUITY servent de contreparties techniques : cette fondation de trésorerie n’est pas un plan comptable réglementaire complet. Les conversions comportent quatre écritures équilibrées séparément en USD et CDF. L’arrondi cible est au centime, à mi-chemin en s’éloignant de zéro (`ROUND_HALF_UP`), avec un taux immuable, daté et traçable.
+documentation	docs/authentification.md	38	La commande demande un mot de passe de 12 à 128 caractères, avec saisie masquée. Ne pas le transmettre dans le chat ni dans la ligne de commande. Elle crée l’entreprise, les six modèles de rôles, une agence et une caisse principales, leurs comptes USD/CDF et un administrateur. Aucun mouvement ni solde initial n’est inventé. Elle refuse une entreprise ou une adresse déjà enregistrée. À la première connexion, le mot de passe doit être renouvelé ; une nouvelle connexion est ensuite nécessaire.
+documentation	docs/configuration-caisses.md	5	Le modèle multicaisse accepte déjà une entreprise avec une seule caisse. La commande de création du premier administrateur initialise une agence et une caisse principales, avec des comptes CDF et USD distincts. Il n’existe aucune obligation de créer une deuxième caisse.
+documentation	docs/configuration-caisses.md	11	Pour démarrer avec une seule caisse, conserver la caisse principale et modifier son nom dans **Caisses → Configuration des caisses** si nécessaire. Affecter explicitement les utilisateurs et leurs rôles dans **Utilisateurs**. Une caisse unique n’accorde aucun droit supplémentaire et conserve ses fonds CDF/USD séparés.
+documentation	docs/configuration-caisses.md	19	- **Encaissement :** lorsqu’une seule caisse active est autorisée, afficher son nom et son agence sans demander un choix inutile. La devise CDF/USD reste toujours sélectionnable.
+documentation	docs/configuration-caisses.md	35	Les tests sur PostgreSQL réel exercent les encaissements CDF/USD, le refus de dépense sans approbation et d’auto-approbation, le paiement approuvé, l’ouverture et la fermeture de session dans les deux configurations. Un test compare les opérations, écritures, reçus et compteurs avant/après ajout de la deuxième caisse : ils restent identiques. Il vérifie aussi qu’un utilisateur demeurant affecté à une seule caisse ne reçoit toujours que celle-ci.
+documentation	docs/demonstration-macos.md	51	Six profils et deux caisses sont disponibles. Chaque caisse reçoit initialement **1 000,00 USD** et **2 800 000,00 CDF** fictifs. Consulter le tableau de bord, changer de thème, explorer les rapports et l'administration, puis essayer les [parcours de démonstration](demonstration.md#parcours-à-essayer). Les droits restent différents selon les profils ; utiliser deux responsables financiers distincts pour remettre puis réceptionner un transfert.
+documentation	docs/demonstration.md	5	Cette démonstration conserve une base PostgreSQL distincte `caissepro_demo_<UUID>`. Elle ne réinitialise pas la base de développement et ne contient aucune donnée réelle. Six comptes sont préparés : administrateur, direction, deux responsables financiers, caisse et audit. Chaque compte dispose des deux caisses fictives (CDF et USD). Les responsables financiers permettent d'essayer une remise puis une réception avec deux personnes distinctes.
+documentation	docs/demonstration.md	9	Depuis la racine : `pnpm db:up`, puis `pnpm demo:prepare`. La commande construit les sources, applique les migrations à une nouvelle base isolée et crée les données synthétiques. Les caisses sont ouvertes et chacune reçoit des écritures de fonds fictifs : `1000.00 USD` et `2800000.00 CDF`. Des plafonds de dépenses de démonstration sont définis. Relancer la préparation conserve les données et les identités ; aucune remise à zéro implicite n'est effectuée.
+documentation	docs/depenses.md	7	1. Avec un administrateur, ouvrir **Dépenses → Plafonds et règles**. Configurer séparément USD et CDF : plafonds par opération pour les demandes, approbations et paiements, et exigence de justificatif.
+documentation	docs/encaissements.md	20	1. **Administrateur : « Caisses → Configuration des caisses ».** Créer les agences, puis leurs caisses et les utilisateurs autorisés initialement. Chaque caisse reçoit deux comptes de trésorerie distincts, CDF et USD, et leurs contreparties techniques. Aucun solde initial n’est créé. L’agence et le code de caisse restent fixes ; le nom et l’activation se modifient avec contrôle de version.
+documentation	docs/encaissements.md	28	Les soldes de l’écran « Caisses » sont relus auprès du serveur toutes les **5 secondes** en ligne, et ceux du parcours d’encaissement après confirmation. C’est un rafraîchissement périodique, sans promesse de diffusion WebSocket instantanée. Chaque consultation affiche sa date. CDF et USD ne sont jamais agrégés en un montant commun.
+documentation	docs/interface-supervision.md	15	Les soldes, mouvements, courbes, demandes et écarts gardent les calculs de l’[étape 8](rapports.md), avec CDF et USD séparés. La supervision ajoute l’état actif/désactivé et l’ouverture de session de chaque caisse effectivement autorisée. Les administrateurs peuvent aussi consulter l’état des utilisateurs affectés à ces caisses et leurs sessions serveur valides. Une session valide ne prouve pas une présence en temps réel. Les autres rôles ne reçoivent pas ces informations sur les utilisateurs.
+documentation	docs/rapports.md	9	- Solde, réservé et disponible de chaque caisse et total du **périmètre autorisé**, séparément en CDF et USD. Le disponible inclut les réservations de dépenses et de transferts en cours de remise.
+documentation	docs/rapports.md	30	Un utilisateur `session:manage` peut sélectionner une session ouverte, saisir les USD et CDF **physiquement comptés** et confirmer explicitement la clôture. Le serveur verrouille les comptes et la session, refuse les réservations encore actives, ferme la session et crée le PV dans la même transaction. Une défaillance annule tout. Le comptage ne crée pas d'écriture et ne corrige jamais le solde : l'écart reste un constat, à traiter par les procédures comptables autorisées.
+documentation	docs/rapports.md	56	`GET /api/v1/reports`, `/reports/pdf` et `/reports/xlsx` acceptent `period`, `date`, `from`, `to`, `agencyId`, `cashRegisterId`, `userId`, `category`, `kind`. Aucun `companyId` ou acteur affirmé n'est admis. `POST /api/v1/reports/close` exige les UUID de caisse/session, `confirmed: true`, `countedUSD` et `countedCDF` sous forme de chaînes à deux décimales.
+documentation	docs/transferts.md	18	- CDF → CDF et USD → USD : deux caisses distinctes, deux écritures de même montant, crédit source / débit destination, opération `TRANSFER`.
+documentation	docs/transferts.md	19	- CDF → USD et USD → CDF : les caisses peuvent être distinctes ou identiques. Une seule caisse à deux devises reste une seule caisse, et une conversion interne reste possible.
+documentation	docs/transferts.md	22	- Calcul à 60 chiffres de précision : `destination = montant_source × taux`, **un seul arrondi final HALF_UP à deux décimales**. Exemple : `1.00 USD × 2800.125 CDF/USD = 2800.13 CDF`. Les résultats nuls après arrondi et les dépassements de capacité sont refusés.
+documentation	docs/validation.md	65	Le contrôle natif final a ouvert la vraie fenêtre Tauri 1280 × 900, connecté un administrateur de démonstration à l’API réelle et affiché le tableau de bord puis les paramètres en thèmes clair et sombre. Les captures `native-test-results/stage9-native-dashboard-clair.png`, `stage9-native-dashboard-sombre.png` et `stage9-native-administration-sombre.png` portent toutes la mention DONNÉES FICTIVES de l’entreprise ; les identifiants privés ne sont pas affichés. Le tableau de bord affiche les fonds synthétiques réellement présents en base, soit `5600000.00 CDF` et `2000.00 USD`, sans encaissement/décaissement le jour du contrôle. Aucune configuration ni opération financière n’a été enregistrée par ce contrôle graphique. La sauvegarde PostgreSQL de démonstration a aussi été restaurée dans une base jetable : toutes les tables publiques sont identiques à l’instantané source, avec leurs métadonnées. L’archive de données reste privée hors Git.
+documentation	docs/validation.md	88	Les rapports agrègent les écritures et les réservations sur les caisses effectivement autorisées, dans une transaction sérialisable. Les tests prouvent la précision d'un solde `9999999999999999.99`, la séparation CDF/USD, l'exclusion des transferts des encaissements, les contre-écritures nettes, le périmètre entreprise/agence/caisse, la révocation, les filtres, les demandes en attente et les décisions distinctes des paiements. Ils couvrent également les périodes impossibles, le changement de jour à Kinshasa, les semaines ISO et février bissextile.
+documentation	docs/validation.md	94	Le contrôle graphique utilise des données synthétiques clairement identifiées. Le tableau de bord natif a affiché `5600000.00 CDF` et `2000.00 USD`, correspondant aux quatre opérations initiales de fonds fictifs, et aucun encaissement/décaissement le jour du contrôle. Le PDF `native-test-results/stage8-report.pdf` contient l'identité d'entreprise et une page A4 ; le fichier `stage8-report.xlsx` contient quatre mouvements de trésorerie et le total USD exact en texte. Les deux fichiers ont été choisis via le dialogue natif, pas écrits par une simulation de téléchargement. Captures : `stage8-dashboard.png`, `stage8-journal.png`, `stage8-save-dialog.png`, `stage8-excel-dialog.png`.
+documentation	docs/validation.md	98	La revue avant sauvegarde GitHub a reproduit deux défauts d'interface : un changement de caisse conservait le comptage et l'attestation, et une actualisation pouvait les rattacher à une nouvelle session. Les deux tests échouaient avant correction et réussissent après : les saisies et confirmations sont maintenant retirées lors du changement de caisse ; la sélection est également retirée lors d'une nouvelle préparation. Le chargement des sessions est borné au contexte courant. Le test de rapport multidevise vérifie également une vraie conversion de `5.00 USD` en `13000.65 CDF` : les soldes changent exactement, sans recette ni dépense supplémentaire.
+documentation	docs/validation.md	116	| Rust → API → PostgreSQL réels      | Réussi sous LOGIN NOINHERIT/NOBYPASSRLS : deux responsables financiers distincts, transfert USD, conversion USD/CDF, bordereaux et réception idempotente                 |
+documentation	docs/validation.md	119	Les quinze scénarios financiers nouveaux couvrent CDF/CDF, USD/USD, CDF/USD et USD/CDF, conversion dans une même caisse, grands montants calculés sans arrondi intermédiaire (oracle entier indépendant), montants/taux invalides, destinataire hors périmètre, sessions/révocations, auteur et réceptionnaire distincts, UUID stable, quatre remises/réceptions simultanées dédupliquées, insuffisance de fonds en concurrence, protection des réservations malgré un périmètre destination retiré, fermeture de session, transitions SQL forgées et rollback après écritures et insertion du taux lorsque la création du bordereau échoue. Les tests négatifs ne désactivent aucune contrainte.
+documentation	docs/validation.md	121	Le parcours intégré conserve les contrôles antérieurs d’encaissement, dépense et révocation puis vérifie les nouveaux mouvements avec de vrais courtiers natifs. Résultat SQL final contrôlé : **4 opérations, 10 écritures, 1 reçu, 1 dépense payée, 1 bon, 2 brouillons d’encaissement/dépense et 2 transferts reçus**. Solde source final `7.00 USD`, destination `2.00 USD` et `2800.00 CDF`. Les bases et rôles LOGIN de test sont supprimés.
+documentation	docs/validation.md	153	Le parcours intégré utilise les vrais composants et une base temporaire. Il vérifie le manifeste, le journal, la restauration via le moteur après nouvelle authentification et l’actualisation du cache sans modifier de solde. Il rejoue ensuite le circuit existant d’encaissement et de dépense avec actions explicites et approbateur distinct. SQL final inchangé : **2 opérations, 4 écritures, 1 reçu, 1 dépense payée, 1 bon, 1 justificatif de dépense et 2 brouillons** ; solde final `10.00 USD` et `0.00 CDF`. Base et rôle de test sont supprimés.
+documentation	docs/validation.md	184	Les tests de dépenses vérifient les permissions, l’interdiction d’auto-approbation et de paiement sans approbation, le rejet motivé, les versions et brouillons figés, les politiques absentes et les plafonds réévalués à chaque action. Ils couvrent l’insuffisance de fonds sans approbation partielle, deux réservations concurrentes, six paiements simultanés d’une même demande, plusieurs bons concurrents, la séparation CDF/USD, les sessions de caisse fermées, l’isolation des auteurs/entreprises, la révocation, les justificatifs et le rollback total si la génération du bon échoue.
+documentation	docs/validation.md	186	Le parcours natif intégré utilise le véritable courtier Rust, l’API compilée et une base temporaire. Il configure des plafonds, encaisse `12.34 USD`, transmet un brouillon de dépense sans soumettre, le soumet explicitement, le fait approuver par un directeur distinct, constate `12.34 USD` de solde et `2.34 USD` réservés, puis confirme le paiement. Un second courtier authentifié réessaie sur la même demande et retrouve le même bon. Le solde final est `10.00 USD` et `0.00 CDF`. SQL final : **2 opérations, 4 écritures, 1 reçu, 1 dépense payée, 1 bon, 1 justificatif de dépense et 2 brouillons**. Verrouillage et révocation restent vérifiés, puis base et rôle de test sont supprimés.
+documentation	docs/validation.md	194	Pour utiliser les dépenses, il reste à configurer les plafonds CDF et USD avec un administrateur dans **Dépenses → Plafonds et règles**. Aucun plafond ni paiement n’a été créé automatiquement.
+documentation	docs/validation.md	214	Les nouveaux tests PostgreSQL exercent les encaissements CDF/USD, les soldes exacts, le refus de paiement sans approbation et d’auto-approbation, le paiement approuvé, ainsi que l’ouverture et la fermeture de session dans les deux configurations. L’ajout d’une deuxième caisse conserve exactement les opérations, écritures, reçus et compteurs existants ; ses nouveaux fonds commencent à zéro. Le périmètre d’un utilisateur restant affecté à une seule caisse ne s’élargit pas.
+documentation	docs/validation.md	241	Les nouveaux tests PostgreSQL couvrent la création idempotente d’agence/caisse et les affectations, les droits de configuration, la séparation CDF/USD, le caractère non financier de la transmission, l’attestation obligatoire, six confirmations concurrentes et une reprise après reconnexion, les numéros uniques sur plusieurs encaissements concurrents, les montants exacts, le rollback après préparation des écritures, les justificatifs et leur cohérence SQL, l’immuabilité du reçu et du brouillon confirmé, les filtres, RLS, la révocation, l’ouverture concurrente d’une session de caisse, la consultation après désactivation, les versions de configuration et la concurrence entre modification et confirmation.
+documentation	docs/validation.md	243	Le parcours intégré utilise la véritable API et la véritable bibliothèque Rust. Il configure une agence/caisse via un compte API restreint, transmet un brouillon sans modifier les fonds, le reprend dans un **nouveau courtier authentifié** avec le même UUID, confirme explicitement, réessaie la confirmation, puis vérifie le reçu, l’historique et les soldes `12.34 USD` / `0.00 CDF`. Le contrôle SQL final compte **1 opération, 2 écritures, 1 reçu et 1 brouillon**, sans doublon. Le test termine par les contrôles de verrouillage et de révocation. Base et rôle de test sont supprimés ensuite.
+natif-et-stockage-local	packages/local-store/migrations/001_local.sql	2	CREATE TABLE drafts(id TEXT PRIMARY KEY,kind TEXT NOT NULL CHECK(kind IN('receipt','expense-request')),currency TEXT NOT NULL CHECK(currency IN('CDF','USD')),amount TEXT NOT NULL,description TEXT NOT NULL CHECK(length(description) BETWEEN 1 AND 500),version INTEGER NOT NULL CHECK(version>0),state TEXT NOT NULL CHECK(state IN('local','synced','conflict','error')),created_at INTEGER NOT NULL,expires_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,CHECK(expires_at>created_at AND expires_at-created_at<=900000));
+natif-et-stockage-local	packages/local-store/src/lib.rs	225	"|| ![""CDF"", ""USD""].contains(&draft.currency.as_str())"
+tests	packages/local-store/src/tests.rs	40	"currency: ""USD"".into(),"
+tests	packages/session-core/examples/api_contract.rs	74	"admin.expense_action(""configure"",Some(json!({""currency"":""USD"",""data"":{""expectedVersion"":null,""requireEvidence"":true,""limits"":[{""role"":""CASHIER"",""action"":""REQUEST"",""maximum"":""1000.00""},{""role"":""CASHIER"",""action"":""PAY"",""maximum"":""1000.00""},{""role"":""DIRECTOR"",""action"":""APPROVE"",""maximum"":""1000.00""}]}})),Some(administrator.generation)).await?;"
+tests	packages/session-core/examples/api_contract.rs	141	"currency: ""USD"".into(),"
+tests	packages/session-core/examples/api_contract.rs	261	"funds.iter().find(|f| f[""currency""] == ""USD"").unwrap()[""balance""],"
+tests	packages/session-core/examples/api_contract.rs	265	"funds.iter().find(|f| f[""currency""] == ""CDF"").unwrap()[""balance""],"
+tests	packages/session-core/examples/api_contract.rs	270	".cash_action(""history"", Some(json!({""currency"":""USD""})), generation)"
+tests	packages/session-core/examples/api_contract.rs	281	"currency: ""USD"".into(),"
+tests	packages/session-core/examples/api_contract.rs	330	".find(|f| f[""currency""] == ""USD"")"
+tests	packages/session-core/examples/api_contract.rs	369	".find(|f| f[""currency""] == ""USD"")"
+tests	packages/session-core/examples/api_contract.rs	388	".find(|t| t[""currency""] == ""USD"")"
+tests	packages/session-core/examples/api_contract.rs	408	"admin.admin(""rate"",Some(json!({""id"":Uuid::new_v4(),""fromCurrency"":""USD"",""toCurrency"":""CDF"",""rate"":""2800.0"",""source"":""Référence synthétique"",""validFrom"":Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis,true),""confirmed"":true})),admin_generation).await?;"
+tests	packages/session-core/examples/api_contract.rs	484	"(""USD"", ""2.00"", """", """"),"
+tests	packages/session-core/examples/api_contract.rs	485	"(""CDF"", ""1.00"", ""2800"", ""Guichet synthétique""),"
+tests	packages/session-core/examples/api_contract.rs	488	"sender.synchronization_action(""buffer-save"",Some(json!({""id"":id,""kind"":""transfer"",""agencyId"":agency,""cashRegisterId"":cash,""expectedLocalVersion"":null,""fields"":{""amount"":amount,""currency"":""USD"",""destinationCurrency"":destination_currency,""destinationCashRegisterId"":destination_cash.to_string(),""rate"":rate,""rateSource"":rate_source,""description"":""Transfert intégré synthétique""}})),sender_generation).await?;"
+tests	packages/session-core/examples/api_contract.rs	547	"funds.iter().find(|f| f[""currency""] == ""USD"").unwrap()[""balance""],"
+tests	packages/session-core/examples/api_contract.rs	557	"target.iter().find(|f| f[""currency""] == ""USD"").unwrap()[""balance""],"
+tests	packages/session-core/examples/api_contract.rs	561	"target.iter().find(|f| f[""currency""] == ""CDF"").unwrap()[""balance""],"
+natif-et-stockage-local	packages/session-core/src/broker.rs	269	".filter(|s| [""CDF"", ""USD""].contains(s))"
+natif-et-stockage-local	packages/session-core/src/state.rs	256	"|| ![""CDF"", ""USD""].contains(&draft.currency.as_str())"
+tests	packages/session-core/src/tests.rs	75	"currency: ""USD"".into(),"
+tests	packages/session-core/src/transport_tests.rs	257	"currency: ""USD"".into(),"
+tests	packages/session-core/src/transport_tests.rs	907	"""fields"":{""amount"":""12.34"",""currency"":""USD"",""destinationCurrency"":""CDF"",""destinationCashRegisterId"":destination.to_string(),""rate"":""2800"",""rateSource"":""Guichet"",""description"":""Transfert local""}});"
+tests	packages/shared/src/expenses.test.ts	14	currency: 'CDF',
+tests	packages/shared/src/index.test.ts	16	currency: 'USD',
+tests	packages/shared/src/management.test.ts	37	fromCurrency: 'USD',
+tests	packages/shared/src/management.test.ts	38	toCurrency: 'CDF',
+tests	packages/shared/src/management.test.ts	49	{ toCurrency: 'USD' },
+contrats-partages	packages/shared/src/money.ts	2	export const currencySchema = z.enum(['CDF', 'USD']);
+tests	packages/shared/src/receipts.test.ts	61	currency: 'USD',
+tests	packages/shared/src/reports.test.ts	15	countedUSD: '0.00',
+tests	packages/shared/src/reports.test.ts	16	countedCDF: '12.00',
+tests	packages/shared/src/reports.test.ts	21	{ countedUSD: 12 },
+tests	packages/shared/src/reports.test.ts	22	{ countedCDF: '-1.00' },
+contrats-partages	packages/shared/src/reports.ts	174	countedUSD: amountSchema,
+contrats-partages	packages/shared/src/reports.ts	175	countedCDF: amountSchema,
+tests	packages/shared/src/transfers.test.ts	7	sourceCurrency: 'USD',
+tests	packages/shared/src/transfers.test.ts	8	destinationCurrency: 'USD',
+tests	packages/shared/src/transfers.test.ts	16	for (const c of ['USD', 'CDF'])
+tests	packages/shared/src/transfers.test.ts	22	['USD', 'CDF'],
+tests	packages/shared/src/transfers.test.ts	23	['CDF', 'USD'],
+tests	packages/shared/src/transfers.test.ts	40	destinationCurrency: 'CDF',
+tests	packages/shared/src/transfers.test.ts	49	destinationCurrency: 'CDF',
+tests	packages/shared/src/transfers.test.ts	76	destinationCurrency: 'CDF',
+outils	scripts/bootstrap-admin.mjs	106	data: ['CDF', 'USD'].flatMap((currency) => [
+outils	scripts/demo.mjs	134	for (const currency of ['USD', 'CDF'])
+outils	scripts/demo.mjs	189	for (const currency of ['USD', 'CDF'])
+outils	scripts/demo.mjs	201	amount: currency === 'USD' ? '1000.00' : '2800000.00',
+outils	scripts/demo.mjs	205	for (const currency of ['USD', 'CDF'])
+outils	scripts/demo.mjs	213	maximum: currency === 'USD' ? '500.00' : '1400000.00',
+tests	scripts/test-auth-desktop.mjs	189	'1 parcours Rust → API réelle → PostgreSQL réussi avec LOGIN restreint NOINHERIT/NOBYPASSRLS : authentification, brouillon transmis sans solde modifié, confirmation explicite unique, reçu numéroté, historique, soumission de dépense distincte, approbation par un directeur, réservation sans paiement, paiement explicite unique, bon de sortie, verrouillage et révocation. Rapports serveur, PDF et Excel vérifiés par le courtier natif. Supervision, catégories et taux de référence, paramètres et journal d’audit PDF/Excel vérifiés en transport réel. Transfert USD et conversion USD/CDF avec remise, réception distincte, bordereaux et rejeu idempotent réussis. SQL final : 4 opérations, 10 écritures, 1 reçu, 1 dépense payée, 1 bon, 2 brouillons de recette/dépense et 2 transferts reçus.',
+tests	tests/e2e/expenses.spec.ts	61	currency: 'USD',
+tests	tests/e2e/expenses.spec.ts	85	currency: 'USD',
+tests	tests/e2e/expenses.spec.ts	172	currency: 'USD',
+tests	tests/e2e/expenses.spec.ts	177	{ currency: 'CDF', balance: '0.00', reserved: '0.00', available: '0.00' },
+tests	tests/e2e/expenses.spec.ts	263	await page.getByRole('combobox', { name: 'Devise', exact: true }).selectOption('CDF');
+tests	tests/e2e/expenses.spec.ts	268	await expect(page.getByRole('cell', { name: '125,50 CDF' })).toBeVisible();
+tests	tests/e2e/receipts.spec.ts	112	const usd = receipts[0]?.amount ?? '0.00';
+tests	tests/e2e/receipts.spec.ts	125	{ currency: 'CDF', balance: '0.00', reserved: '0.00', available: '0.00' },
+tests	tests/e2e/receipts.spec.ts	126	{ currency: 'USD', balance: usd, reserved: '0.00', available: usd },
+tests	tests/e2e/receipts.spec.ts	336	await page.getByRole('combobox', { name: 'Devise', exact: true }).selectOption('USD');
+tests	tests/e2e/receipts.spec.ts	364	await expect(page.locator('.official-receipt')).toContainText('12,34 USD');
+tests	tests/e2e/reports.spec.ts	48	currency: 'USD',
+tests	tests/e2e/reports.spec.ts	54	totals: (['CDF', 'USD'] as const).map((currency) => ({
+tests	tests/e2e/reports.spec.ts	56	balance: currency === 'USD' ? '1234.56' : '2800000.00',
+tests	tests/e2e/reports.spec.ts	58	available: currency === 'USD' ? '1234.56' : '2800000.00',
+tests	tests/e2e/reports.spec.ts	62	closing: currency === 'USD' ? '1234.56' : '2800000.00',
+tests	tests/e2e/reports.spec.ts	66	daily: (['CDF', 'USD'] as const).flatMap((currency) => [
+tests	tests/e2e/reports.spec.ts	68	{ currency, date: '2026-11-02', balance: currency === 'USD' ? '1234.56' : '2800000.00' },
+tests	tests/e2e/reports.spec.ts	82	currency: 'USD',
+tests	tests/e2e/reports.spec.ts	91	{ currency: 'USD', count: 2, amount: '50.00' },
+tests	tests/e2e/reports.spec.ts	92	{ currency: 'CDF', count: 0, amount: '0.00' },
+tests	tests/e2e/reports.spec.ts	97	{ currency: 'CDF', measured: 0, count: 0, net: null },
+tests	tests/e2e/reports.spec.ts	98	{ currency: 'USD', measured: 0, count: 0, net: null },
+tests	tests/e2e/reports.spec.ts	233	await expect(page.getByRole('img', { name: /trésorerie en USD/ })).toBeVisible();
+tests	tests/e2e/reports.spec.ts	234	await expect(page.getByRole('img', { name: /trésorerie en CDF/ })).toBeVisible();
+tests	tests/e2e/transfers.spec.ts	55	sourceCurrency: 'USD',
+tests	tests/e2e/transfers.spec.ts	56	destinationCurrency: 'CDF',
+tests	tests/e2e/transfers.spec.ts	122	{ currency: 'USD', balance: '100.00', reserved: '20.00', available: '80.00' },
+tests	tests/e2e/transfers.spec.ts	123	{ currency: 'CDF', balance: '0.00', reserved: '0.00', available: '0.00' },

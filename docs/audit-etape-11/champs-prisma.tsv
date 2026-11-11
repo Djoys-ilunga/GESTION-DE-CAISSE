@@ -1,0 +1,37 @@
+modele	ligne	declaration
+TreasuryAccount	229	currency       Currency
+FinancialOperation	270	currency         Currency?
+FinancialOperation	279	sourceAmount     Decimal?            @db.Decimal(18, 2)
+FinancialOperation	280	targetAmount     Decimal?            @db.Decimal(18, 2)
+LedgerEntry	307	currency      Currency
+LedgerEntry	309	amount        Decimal            @db.Decimal(18, 2)
+ExpenseRequest	333	currency            Currency
+ExpenseRequest	334	amount              Decimal              @db.Decimal(18, 2)
+ExpenseApproval	358	currency         Currency
+ExpenseApproval	359	amount           Decimal          @db.Decimal(18, 2)
+FundReservation	372	currency         Currency
+FundReservation	373	amount           Decimal          @db.Decimal(18, 2)
+Transfer	389	currency             Currency
+Transfer	390	amount               Decimal            @db.Decimal(18, 2)
+ExchangeRate	401	fromCurrency Currency
+ExchangeRate	402	toCurrency   Currency
+ExchangeRate	403	rate         Decimal              @db.Decimal(24, 12)
+ImportedDraft	447	expenseDetails    Json?
+ImportedDraft	464	currency          Currency
+ImportedDraft	465	amount            Decimal         @db.Decimal(18, 2)
+CashReceipt	497	currency           Currency
+CashReceipt	498	amount             Decimal            @db.Decimal(18, 2)
+ExpensePolicy	592	currency        Currency
+ExpensePolicy	595	limits          Json
+PaymentVoucher	634	currency         Currency
+PaymentVoucher	635	amount           Decimal            @db.Decimal(18, 2)
+TransferOrder	689	sourceCurrency            Currency
+TransferOrder	690	destinationCurrency       Currency
+TransferOrder	691	amount                    Decimal   @db.Decimal(18, 2)
+TransferOrder	692	targetAmount              Decimal   @db.Decimal(18, 2)
+TransferOrder	693	rate                      Decimal?  @db.Decimal(24, 12)
+TransferOrder	705	slip                      Json?
+CashClosureReport	718	snapshot       Json
+ReferenceExchangeRate	738	fromCurrency  Currency
+ReferenceExchangeRate	739	toCurrency    Currency
+ReferenceExchangeRate	740	rate          Decimal  @db.Decimal(24, 12)

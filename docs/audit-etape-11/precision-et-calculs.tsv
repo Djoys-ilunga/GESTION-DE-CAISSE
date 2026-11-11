@@ -1,0 +1,150 @@
+categorie	fichier	ligne	extrait
+migrations-historiques	apps/api/prisma/migrations/20261104000200_integrity/migration.sql	100	"IF rate.id IS NULL OR rate.""effectiveAt"">o.""postedAt"" OR n<>4 OR o.""targetAmount""<>round(o.""sourceAmount""*rate.rate,2) OR (SELECT count(DISTINCT currency) FROM ""LedgerEntry"" WHERE ""operationId""=op)<>2 OR (SELECT count(*) FROM ""LedgerEntry"" e JOIN ""TreasuryAccount"" a ON a.id=e.""accountId"" WHERE e.""operationId""=op AND a.kind='TREASURY')<>2 OR NOT EXISTS(SELECT FROM ""LedgerEntry"" e JOIN ""TreasuryAccount"" a ON a.id=e.""accountId"" WHERE e.""operationId""=op AND a.kind='TREASURY' AND e.side='CREDIT' AND e.currency=rate.""fromCurrency"" AND e.amount=o.""sourceAmount"" AND a.""agencyId""=o.""agencyId"") OR NOT EXISTS(SELECT FROM ""LedgerEntry"" e JOIN ""TreasuryAccount"" a ON a.id=e.""accountId"" WHERE e.""operationId""=op AND a.kind='TREASURY' AND e.side='DEBIT' AND e.currency=rate.""toCurrency"" AND e.amount=o.""targetAmount"") THEN RAISE EXCEPTION 'CAISSEPRO_FX_INVALID' USING ERRCODE='23514'; END IF;"
+migrations-historiques	apps/api/prisma/migrations/20261105000500_expense_guards/migration.sql	13	"ALTER TABLE ""ExpensePolicy"" ADD CHECK(version>0 AND ""payloadHash"" ~ '^[a-f0-9]{64}$' AND jsonb_typeof(limits)='array' AND jsonb_array_length(limits)<=18);"
+migrations-historiques	apps/api/prisma/migrations/20261105000500_expense_guards/migration.sql	29	IF (item->>'role') IS NULL OR (item->>'role') NOT IN('ADMINISTRATOR','DIRECTOR','FINANCE_MANAGER','ACCOUNTANT','CASHIER','AUDITOR') OR (item->>'action') IS NULL OR (item->>'action') NOT IN('REQUEST','APPROVE','PAY') OR (item->>'maximum') IS NULL OR (item->>'maximum') !~ '^(0|[1-9][0-9]{0,15})\.[0-9]{2}$' OR (item->>'maximum')::numeric<=0 OR k=ANY(seen) THEN RAISE EXCEPTION 'CAISSEPRO_POLICY_INVALID' USING ERRCODE='23514'; END IF;
+migrations-historiques	apps/api/prisma/migrations/20261105000500_expense_guards/migration.sql	98	"SELECT jsonb_array_length(d.""expenseDetails""->'documents') INTO expected FROM ""ImportedDraft"" d WHERE d.""companyId""=NEW.""companyId"" AND d.id=NEW.""sourceDraftId"";"
+migrations-historiques	apps/api/prisma/migrations/20261107000100_transfer_workflow/migration.sql	8	"amount numeric(18,2) NOT NULL CHECK(amount>0), ""targetAmount"" numeric(18,2) NOT NULL CHECK(""targetAmount"">0),"
+migrations-historiques	apps/api/prisma/migrations/20261107000100_transfer_workflow/migration.sql	9	"rate numeric(24,12), ""rateSource"" varchar(100) NOT NULL, description varchar(500) NOT NULL CHECK(length(trim(description))>0),"
+migrations-historiques	apps/api/prisma/migrations/20261107000100_transfer_workflow/migration.sql	23	"(""sourceCurrency""<>""destinationCurrency"" AND rate IS NOT NULL AND rate>0 AND length(trim(""rateSource""))>0 AND ""targetAmount""=round(amount*rate,2))),"
+migrations-historiques	apps/api/prisma/migrations/20261107000100_transfer_workflow/migration.sql	95	"'receivedAt',to_char(NEW.""receivedAt"" AT TIME ZONE 'UTC','YYYY-MM-DD""T""HH24:MI:SS.MS""Z""'),'rounding','HALF_UP_2') INTO NEW.slip"
+migrations-historiques	apps/api/prisma/migrations/20261109000100_closure_reports/migration.sql	19	IF (NEW.snapshot->>f.currency::text) IS NULL OR (NEW.snapshot->>f.currency::text)!~'^(0|[1-9][0-9]{0,15})\.[0-9]{2}$' THEN RAISE EXCEPTION 'CAISSEPRO_CLOSURE_INVALID'; END IF;
+migrations-historiques	apps/api/prisma/migrations/20261109000100_closure_reports/migration.sql	21	counts:=counts||jsonb_build_array(jsonb_build_object('currency',f.currency,'book',round(f.balance,2)::text,'counted',counted::numeric(18,2)::text,'difference',round(counted-f.balance,2)::text));
+migrations-historiques	apps/api/prisma/migrations/20261109000100_closure_reports/migration.sql	23	IF jsonb_array_length(counts)<>2 THEN RAISE EXCEPTION 'CAISSEPRO_CLOSURE_INVALID'; END IF;
+migrations-historiques	apps/api/prisma/migrations/20261109000200_management/migration.sql	9	"CREATE TABLE ""ReferenceExchangeRate""(id uuid PRIMARY KEY,""companyId"" uuid NOT NULL REFERENCES ""Company""(id),""fromCurrency"" ""Currency"" NOT NULL,""toCurrency"" ""Currency"" NOT NULL,rate numeric(24,12) NOT NULL CHECK(rate>0),source varchar(100) NOT NULL,""validFrom"" timestamptz(3) NOT NULL,""publishedAt"" timestamptz(3) NOT NULL DEFAULT now(),""publishedById"" uuid NOT NULL REFERENCES ""User""(id),CHECK(""fromCurrency""<>""toCurrency""));"
+schema-prisma	apps/api/prisma/schema.prisma	279	sourceAmount     Decimal?            @db.Decimal(18, 2)
+schema-prisma	apps/api/prisma/schema.prisma	280	targetAmount     Decimal?            @db.Decimal(18, 2)
+schema-prisma	apps/api/prisma/schema.prisma	309	amount        Decimal            @db.Decimal(18, 2)
+schema-prisma	apps/api/prisma/schema.prisma	334	amount              Decimal              @db.Decimal(18, 2)
+schema-prisma	apps/api/prisma/schema.prisma	359	amount           Decimal          @db.Decimal(18, 2)
+schema-prisma	apps/api/prisma/schema.prisma	373	amount           Decimal          @db.Decimal(18, 2)
+schema-prisma	apps/api/prisma/schema.prisma	390	amount               Decimal            @db.Decimal(18, 2)
+schema-prisma	apps/api/prisma/schema.prisma	403	rate         Decimal              @db.Decimal(24, 12)
+schema-prisma	apps/api/prisma/schema.prisma	465	amount            Decimal         @db.Decimal(18, 2)
+schema-prisma	apps/api/prisma/schema.prisma	498	amount             Decimal            @db.Decimal(18, 2)
+schema-prisma	apps/api/prisma/schema.prisma	635	amount           Decimal            @db.Decimal(18, 2)
+schema-prisma	apps/api/prisma/schema.prisma	691	amount                    Decimal   @db.Decimal(18, 2)
+schema-prisma	apps/api/prisma/schema.prisma	692	targetAmount              Decimal   @db.Decimal(18, 2)
+schema-prisma	apps/api/prisma/schema.prisma	693	rate                      Decimal?  @db.Decimal(24, 12)
+schema-prisma	apps/api/prisma/schema.prisma	740	rate          Decimal  @db.Decimal(24, 12)
+api	apps/api/src/cash/cash.service.ts	30	amount: row.amount.toFixed(2),
+api	apps/api/src/cash/cash.service.ts	273	balance: Prisma.Decimal;
+api	apps/api/src/cash/cash.service.ts	274	reserved: Prisma.Decimal;
+api	apps/api/src/cash/cash.service.ts	275	available: Prisma.Decimal;
+api	apps/api/src/cash/cash.service.ts	298	balance: f.balance.toFixed(2),
+api	apps/api/src/cash/cash.service.ts	299	reserved: f.reserved.toFixed(2),
+api	apps/api/src/cash/cash.service.ts	300	available: f.available.toFixed(2),
+api	apps/api/src/cash/cash.service.ts	361	amount: r.amount.toFixed(2),
+api	apps/api/src/cash/cash.service.ts	395	amount: r.amount.toFixed(2),
+api	apps/api/src/cash/cash.service.ts	483	amount: draft.amount.toFixed(2),
+api	apps/api/src/data/ledger.service.ts	8	const ExactDecimal = Prisma.Decimal.clone({
+api	apps/api/src/data/ledger.service.ts	10	rounding: Prisma.Decimal.ROUND_HALF_UP,
+api	apps/api/src/data/ledger.service.ts	197	balance: Prisma.Decimal;
+api	apps/api/src/data/ledger.service.ts	198	reserved: Prisma.Decimal;
+api	apps/api/src/data/ledger.service.ts	199	available: Prisma.Decimal;
+api	apps/api/src/data/ledger.service.ts	205	balance: row.balance.toFixed(2),
+api	apps/api/src/data/ledger.service.ts	206	reserved: row.reserved.toFixed(2),
+api	apps/api/src/data/ledger.service.ts	207	available: row.available.toFixed(2),
+api	apps/api/src/data/ledger.service.ts	389	amount: ex.amount.toFixed(2),
+api	apps/api/src/data/ledger.service.ts	396	amount: ex.amount.toFixed(2),
+api	apps/api/src/data/ledger.service.ts	420	const target = new ExactDecimal(input.amount)
+api	apps/api/src/data/ledger.service.ts	422	.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
+api	apps/api/src/data/ledger.service.ts	423	.toFixed(2);
+api	apps/api/src/data/ledger.service.ts	487	amount: e.amount.toFixed(2),
+api	apps/api/src/data/synchronization.service.ts	211	amount: r.amount.toFixed(2),
+api	apps/api/src/expenses/expenses.service.ts	45	amount: r.amount.toFixed(2),
+api	apps/api/src/expenses/expenses.service.ts	73	amount: r.amount.toFixed(2),
+api	apps/api/src/expenses/expenses.service.ts	125	amount: Prisma.Decimal,
+api	apps/api/src/expenses/expenses.service.ts	221	amount: r.amount.toFixed(2),
+api	apps/api/src/expenses/expenses.service.ts	256	amount: r.amount.toFixed(2),
+api	apps/api/src/expenses/expenses.service.ts	461	const year = Number(
+api	apps/api/src/management/management.service.ts	29	rate: Prisma.Decimal;
+api	apps/api/src/management/management.service.ts	37	rate: r.rate.toFixed(12),
+api	apps/api/src/management/management.service.ts	287	message: `${e.amount.toFixed(2)} ${e.currency} — consulter la demande.`,
+api	apps/api/src/reports/reports.service.ts	13	const D = Prisma.Decimal.clone({ precision: 60 });
+api	apps/api/src/reports/reports.service.ts	31	new Date(Date.UTC(Number(anchor.slice(0, 4)), Number(anchor.slice(5, 7)), 1))
+api	apps/api/src/reports/reports.service.ts	138	{ balance: Prisma.Decimal; reserved: Prisma.Decimal; available: Prisma.Decimal }[]
+api	apps/api/src/reports/reports.service.ts	146	balance: funds!.balance.toFixed(2),
+api	apps/api/src/reports/reports.service.ts	147	reserved: funds!.reserved.toFixed(2),
+api	apps/api/src/reports/reports.service.ts	148	available: funds!.available.toFixed(2),
+api	apps/api/src/reports/reports.service.ts	169	amount: e.amount.toFixed(2),
+api	apps/api/src/reports/reports.service.ts	187	const signed = (e: { side: string; amount: Prisma.Decimal }) =>
+api	apps/api/src/reports/reports.service.ts	212	daily.push({ date, currency, balance: balance.toFixed(2) });
+api	apps/api/src/reports/reports.service.ts	216	current.reduce((s, c) => s.plus(c[field]), new D(0)).toFixed(2);
+api	apps/api/src/reports/reports.service.ts	223	opening: first.toFixed(2),
+api	apps/api/src/reports/reports.service.ts	224	closing: balance.toFixed(2),
+api	apps/api/src/reports/reports.service.ts	225	receipts: flow(period, 'RECEIPT').toFixed(2),
+api	apps/api/src/reports/reports.service.ts	226	disbursements: flow(period, 'DISBURSEMENT').toFixed(2),
+api	apps/api/src/reports/reports.service.ts	230	).toFixed(2),
+api	apps/api/src/reports/reports.service.ts	234	).toFixed(2),
+api	apps/api/src/reports/reports.service.ts	243	incoming: Prisma.Decimal;
+api	apps/api/src/reports/reports.service.ts	244	outgoing: Prisma.Decimal;
+api	apps/api/src/reports/reports.service.ts	327	incoming: g.incoming.toFixed(2),
+api	apps/api/src/reports/reports.service.ts	328	outgoing: g.outgoing.toFixed(2),
+api	apps/api/src/reports/reports.service.ts	332	return { currency, count: p?._count ?? 0, amount: p?._sum.amount?.toFixed(2) ?? '0.00' };
+api	apps/api/src/reports/reports.service.ts	340	amount: d.amount.toFixed(2),
+api	apps/api/src/reports/reports.service.ts	356	? values.reduce((s, v) => s.plus(v.difference), new D(0)).toFixed(2)
+api	apps/api/src/reports/reports.service.ts	389	view.counts.find((c) => c.currency === 'USD')!.counted !== input.countedUSD ||
+api	apps/api/src/reports/reports.service.ts	390	view.counts.find((c) => c.currency === 'CDF')!.counted !== input.countedCDF
+api	apps/api/src/reports/reports.service.ts	417	snapshot: { USD: input.countedUSD, CDF: input.countedCDF },
+api	apps/api/src/transfers/transfers.service.ts	14	const Decimal = Prisma.Decimal.clone({ precision: 60, rounding: Prisma.Decimal.ROUND_HALF_UP });
+api	apps/api/src/transfers/transfers.service.ts	29	amount: row.amount.toFixed(2),
+api	apps/api/src/transfers/transfers.service.ts	30	targetAmount: row.targetAmount.toFixed(2),
+api	apps/api/src/transfers/transfers.service.ts	31	rate: row.rate?.toFixed(12) ?? null,
+api	apps/api/src/transfers/transfers.service.ts	62	rate: input.rate ? new Decimal(input.rate).toFixed(12) : null,
+api	apps/api/src/transfers/transfers.service.ts	91	? new Decimal(input.amount).mul(input.rate).toDecimalPlaces(2).toFixed(2)
+api	apps/api/src/transfers/transfers.service.ts	95	{ available: Prisma.Decimal }[]
+api	apps/api/src/transfers/transfers.service.ts	189	{ available: Prisma.Decimal }[]
+api	apps/api/src/transfers/transfers.service.ts	254	amount: row.amount.toFixed(2),
+tests	apps/api/test/integration/cash.spec.ts	230	expect(lines.map((l) => l.amount.toFixed(2))).toEqual(['12.34', '12.34']);
+tests	apps/api/test/integration/expenses.spec.ts	315	(await db.expenseRequest.findUniqueOrThrow({ where: { id: ex.id } })).amount.toFixed(2),
+tests	apps/api/test/integration/reports.spec.ts	80	countedUSD: USD,
+tests	apps/api/test/integration/reports.spec.ts	81	countedCDF: CDF,
+tests	apps/api/test/integration/transfers.spec.ts	144	expect(lines.map((l) => l.amount.toFixed(2))).toEqual(['20.00', '20.00']);
+tests	apps/api/test/integration/transfers.spec.ts	190	expect(op.targetAmount!.toFixed(2)).toBe(c.target);
+tests	apps/api/test/integration/transfers.spec.ts	195	.map((e) => e.amount.toFixed(2));
+interface	apps/desktop/src/cash/CashPage.tsx	287	minLength={2}
+interface	apps/desktop/src/cash/CashPage.tsx	336	minLength={2}
+interface	apps/desktop/src/cash/CashPage.tsx	446	minLength={2}
+interface	apps/desktop/src/cash/ReceiptForm.tsx	205	"pattern=""(?:0|[1-9][0-9]{0,15})[.,][0-9]{2}"""
+interface	apps/desktop/src/management/SettingsPage.tsx	369	onChange={(e) => setFields({ ...fields, [f.key]: Number(e.target.value) })}
+interface	apps/desktop/src/management/SettingsPage.tsx	500	minLength={2}
+interface	apps/desktop/src/reports/ReportsPage.tsx	54	`${20 + (i * 560) / Math.max(1, amounts.length - 1)},${max === min ? 85 : 145 - Number(((v - min) * 12000n) / (max - min)) / 100}`,
+interface	apps/desktop/src/reports/ReportsPage.tsx	211	countedUSD: countUSD,
+interface	apps/desktop/src/reports/ReportsPage.tsx	212	countedCDF: countCDF,
+interface	apps/desktop/src/reports/ReportsPage.tsx	835	"pattern=""[0-9]+\.[0-9]{2}"""
+interface	apps/desktop/src/reports/ReportsPage.tsx	845	"pattern=""[0-9]+\.[0-9]{2}"""
+tests	apps/desktop/src/reports/reports.test.tsx	140	countedUSD: '12.34',
+tests	apps/desktop/src/reports/reports.test.tsx	141	countedCDF: '500.00',
+tests	apps/desktop/src/transfers/transfers.test.tsx	177	rounding: 'HALF_UP_2',
+natif-et-stockage-local	packages/local-store/src/lib.rs	102	&& fraction.len() == 2
+natif-et-stockage-local	packages/session-core/src/broker.rs	490	Value::Number(n) => n.to_string(),
+natif-et-stockage-local	packages/session-core/src/broker.rs	1222	.all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+natif-et-stockage-local	packages/session-core/src/state.rs	136	.all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+natif-et-stockage-local	packages/session-core/src/state.rs	251	&& b.len() == 2
+contrats-partages	packages/shared/src/money.ts	4	export const amountSchema = z.string().regex(/^(?:0|[1-9]\d{0,15})\.\d{2}$/);
+contrats-partages	packages/shared/src/receipts.ts	17	.regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/),
+contrats-partages	packages/shared/src/receipts.ts	77	.regex(/^(?:0|[1-9]\d*)\.\d{2}$/);
+tests	packages/shared/src/reports.test.ts	15	countedUSD: '0.00',
+tests	packages/shared/src/reports.test.ts	16	countedCDF: '12.00',
+tests	packages/shared/src/reports.test.ts	21	{ countedUSD: 12 },
+tests	packages/shared/src/reports.test.ts	22	{ countedCDF: '-1.00' },
+contrats-partages	packages/shared/src/reports.ts	5	.regex(/^\d{4}-\d{2}-\d{2}$/)
+contrats-partages	packages/shared/src/reports.ts	21	const decimal = z.string().regex(/^-?(?:0|[1-9]\d*)\.\d{2}$/);
+contrats-partages	packages/shared/src/reports.ts	74	.length(2),
+contrats-partages	packages/shared/src/reports.ts	94	totals: z.array(totals).length(2),
+contrats-partages	packages/shared/src/reports.ts	111	.max(732),
+contrats-partages	packages/shared/src/reports.ts	163	.length(2),
+contrats-partages	packages/shared/src/reports.ts	174	countedUSD: amountSchema,
+contrats-partages	packages/shared/src/reports.ts	175	countedCDF: amountSchema,
+contrats-partages	packages/shared/src/transfers.ts	64	rounding: z.literal('HALF_UP_2'),
+outils	scripts/demo-macos.mjs	31	Number(port) < 1024 ||
+outils	scripts/demo-macos.mjs	32	Number(port) > 65535 ||
+outils	scripts/demo-macos.mjs	143	if (!/^24\./.test(process.versions.node) || Number(process.versions.node.split('.')[1]) < 11)
+tests	tests/e2e/transfers.spec.ts	167	rounding: 'HALF_UP_2',
+tests	tests/native/demo-macos.test.mjs	157	setTimeout(()=>process.kill(Number(readFileSync(process.env.MAC_LAUNCH_TEST_SIGNAL==='interrupt'?process.env.MAC_LAUNCH_TEST_OWNER:process.env.MAC_LAUNCH_TEST_PID,'utf8')),process.env.MAC_LAUNCH_TEST_SIGNAL==='interrupt'?'SIGINT':'SIGTERM'),200);
+tests	tests/native/demo-macos.test.mjs	159	} else setTimeout(()=>process.exit(Number(process.env.MAC_LAUNCH_TEST_DESKTOP_EXIT || 0)),200);
+tests	tests/native/demo-macos.test.mjs	213	() => process.kill(Number(readFileSync(runEnv.MAC_LAUNCH_TEST_PID, 'utf8')), 0),
+tests	tests/native/demo-macos.test.mjs	236	() => process.kill(Number(readFileSync(runEnv.MAC_LAUNCH_TEST_PID, 'utf8')), 0),
+tests	tests/native/demo-macos.test.mjs	262	() => process.kill(Number(readFileSync(runEnv.MAC_LAUNCH_TEST_PID, 'utf8')), 0),
+tests	tests/native/demo-stop.test.mjs	38	const port = Number(args.find((arg) => arg.startsWith('-iTCP:')).slice(6));
+tests	tests/native/demo-stop.test.mjs	45	(record) => record.pid === Number(args[args.indexOf('-p') + 1]) && record.alive,
