@@ -1,3 +1,5 @@
+import { moneyText } from '../data/money';
+import type { Currency } from '@caissepro/shared';
 import { Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import {
@@ -12,7 +14,7 @@ import {
   type ExpenseView,
   type PaymentVoucher as VoucherView,
 } from '@caissepro/shared';
-import type { Prisma, Currency, PaymentVoucher } from '../generated/prisma/client';
+import type { Prisma, PaymentVoucher } from '../generated/prisma/client';
 import { CentralAccess, DataError, type DataContext, type Tx } from '../data/central-access';
 import { LedgerService, fingerprint } from '../data/ledger.service';
 import { decodeEvidence } from '../data/receipt-evidence';
@@ -42,7 +44,7 @@ function view(r: Row): ExpenseView {
     requestedById: r.requestedById,
     requesterName: r.requester.displayName,
     currency: r.currency,
-    amount: r.amount.toFixed(2),
+    amount: moneyText(r.amount, r.currency),
     description: r.description,
     beneficiary: r.beneficiary,
     reference: r.reference,
@@ -70,7 +72,7 @@ function voucherView(r: PaymentVoucher): VoucherView {
     operationId: r.operationId,
     number: r.number,
     currency: r.currency,
-    amount: r.amount.toFixed(2),
+    amount: moneyText(r.amount, r.currency),
     beneficiary: r.beneficiary,
     description: r.description,
     reference: r.reference,
@@ -218,7 +220,7 @@ export class ExpensesService {
             cashRegisterId: r.cashRegisterId,
             version: r.version,
             currency: r.currency,
-            amount: r.amount.toFixed(2),
+            amount: moneyText(r.amount, r.currency),
             description: r.description,
             beneficiary: details?.beneficiary ?? null,
             reference: details?.reference ?? null,
@@ -253,7 +255,7 @@ export class ExpensesService {
         cashRegisterId: r.cashRegisterId,
         version: r.version,
         currency: r.currency,
-        amount: r.amount.toFixed(2),
+        amount: moneyText(r.amount, r.currency),
         description: r.description,
         expenseDetails: r.expenseDetails ? expenseDetailsSchema.parse(r.expenseDetails) : null,
       };

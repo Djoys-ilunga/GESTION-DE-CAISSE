@@ -75,13 +75,60 @@ async function installNativeDouble(page: Page) {
       },
       financialCalls: () => financialCalls,
     };
+    let preferences = {
+      displayCurrency: null as string | null,
+      favoriteCurrency: null as string | null,
+      locale: 'fr-FR',
+      version: 0,
+    };
     host.__TAURI_INTERNALS__ = {
       invoke: async (command, args) => {
+        if (command === 'admin_request' && args.action === 'money-preferences') {
+          const input = args.payload as {
+            expectedVersion: number;
+            displayCurrency: string | null;
+            favoriteCurrency: string | null;
+            locale: string;
+          };
+          if (input.expectedVersion !== preferences.version) throw new Error('SETTINGS_CONFLICT');
+          preferences = {
+            displayCurrency: input.displayCurrency,
+            favoriteCurrency: input.favoriteCurrency,
+            locale: input.locale,
+            version: preferences.version + 1,
+          };
+        }
+        if (
+          command === 'admin_request' &&
+          ['money-context', 'money-preferences'].includes(args.action as string)
+        )
+          return {
+            currencies: ['CDF', 'USD', 'JPY', 'KWD'].map((code) => ({
+              code,
+              numericCode: (
+                { CDF: '976', USD: '840', JPY: '392', KWD: '414' } as Record<string, string>
+              )[code]!,
+              name: code,
+              symbol: code,
+              precision: code === 'JPY' ? 0 : code === 'KWD' ? 3 : 2,
+              active: true,
+              bccRateStatus: 'UNVERIFIED',
+              sourceDate: '2024-06-25',
+            })),
+            companyCurrencies: ['CDF', 'USD', 'JPY', 'KWD'].map((code) => ({
+              code,
+              active: true,
+              version: 1,
+            })),
+            preferences,
+            reporting: { currency: null, version: 1 },
+            generatedAt: new Date().toISOString(),
+          };
         if (command === 'auth_health') {
           if (offline) throw new Error('SERVER_UNAVAILABLE');
           return {
             service: 'caissepro-api',
-            protocolVersion: 1,
+            protocolVersion: 2,
             deploymentId: 'caissepro-development',
             status: 'ready',
           };
@@ -428,4 +475,38 @@ test('centre de synchronisation sans confirmation financière avec double IPC ex
     ),
   ).toBe(0);
   expect(await page.evaluate(() => localStorage.length + sessionStorage.length)).toBe(0);
+});
+
+test('préférences monétaires individuelles et brouillon JPY, sans conversion ni écriture (IPC simulé)', async ({
+  page,
+}) => {
+  await installNativeDouble(page);
+  await login(page);
+  await page.getByRole('button', { name: 'Devises et préférences', exact: true }).click();
+  await page.getByLabel('Devise d’affichage préférée').selectOption('USD');
+  await page.getByLabel('Devise favorite des nouveaux formulaires').selectOption('JPY');
+  await page.getByLabel('Format monétaire').selectOption('en-US');
+  await page.getByRole('button', { name: 'Enregistrer mes préférences' }).click();
+  await expect(page.getByText('Configuration enregistrée sur le serveur.')).toBeVisible();
+  await page.screenshot({
+    path: 'test-results/caissepro-devises-preferences-synthetiques.png',
+    fullPage: true,
+  });
+  await page.getByRole('button', { name: 'Encaissements', exact: true }).click();
+  await page.getByRole('button', { name: 'Nouveau brouillon d’encaissement' }).click();
+  await expect(page.getByRole('combobox', { name: 'Devise', exact: true })).toHaveValue('JPY');
+  await page.getByLabel('Montant', { exact: true }).fill('123');
+  await page.getByLabel('Provenance / payeur').fill('Client japonais fictif');
+  await page.getByLabel('Catégorie', { exact: true }).fill('Test synthétique');
+  await page.getByLabel('Motif', { exact: true }).fill('Brouillon JPY sans écriture');
+  await page.getByRole('button', { name: 'Enregistrer le brouillon' }).click();
+  await expect(page.getByText('123 JPY', { exact: false }).first()).toBeVisible();
+  expect(await page.evaluate(() => localStorage.length)).toBe(0);
+  expect(
+    await page.evaluate(() =>
+      (
+        window as unknown as { receiptDouble: { financialCalls(): number } }
+      ).receiptDouble.financialCalls(),
+    ),
+  ).toBe(0);
 });

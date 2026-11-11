@@ -1,3 +1,6 @@
+import { currencyPrecision } from '@caissepro/shared';
+import { ValuationPanel } from '../money/ValuationPanel';
+import { useMoney } from '../money/MoneyContext';
 import { SupervisionPanel } from '../management/Supervision';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
@@ -18,7 +21,6 @@ import type {
   Supervision,
 } from '@caissepro/shared';
 import { message, type AuthGateway } from '../auth/gateway';
-import { formatMoney } from '../cash/CashPage';
 import './reports.css';
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleString('fr-FR', { timeZone: 'Africa/Kinshasa' });
@@ -30,15 +32,21 @@ const labels = {
   REVERSAL: 'Contre-écriture',
 };
 function cents(v: string) {
-  return BigInt(v.replace('.', ''));
+  const negative = v.startsWith('-');
+  const [whole, fraction = ''] = v.replace('-', '').split('.');
+  return BigInt(whole! + fraction.padEnd(4, '0')) * (negative ? -1n : 1n);
 }
-function axisMoney(n: bigint) {
+function axisMoney(n: bigint, currency: string) {
   const abs = n < 0n ? -n : n;
+  const precision = currencyPrecision(currency);
   return (
-    (n < 0n ? '-' : '') + (abs / 100n).toString() + '.' + (abs % 100n).toString().padStart(2, '0')
+    (n < 0n ? '-' : '') +
+    (abs / 10000n).toString() +
+    (precision === 0 ? '' : '.' + (abs % 10000n).toString().padStart(4, '0').slice(0, precision))
   );
 }
-function Curve({ data, currency }: { data: ReportSnapshot['daily']; currency: 'USD' | 'CDF' }) {
+function Curve({ data, currency }: { data: ReportSnapshot['daily']; currency: string }) {
+  const { format: formatMoney } = useMoney();
   const values = data.filter((p) => p.currency === currency);
   if (!values.length) return <p>Aucun point observé pour cette période.</p>;
   const amounts = values.map((p) => cents(p.balance));
@@ -82,7 +90,8 @@ function Curve({ data, currency }: { data: ReportSnapshot['daily']; currency: 'U
         <span>{values.at(-1)!.date}</span>
       </div>
       <small>
-        Amplitude : {formatMoney(axisMoney(min))} à {formatMoney(axisMoney(max))} {currency}
+        Amplitude : {formatMoney(axisMoney(min, currency))} à{' '}
+        {formatMoney(axisMoney(max, currency))} {currency}
       </small>
     </figure>
   );
@@ -102,6 +111,8 @@ export function ReportsPage({
   supervision?: Supervision | null;
   supervisionError?: string;
 }) {
+  const { format: formatMoney } = useMoney();
+  const money = useMoney();
   const [data, setData] = useState<ReportSnapshot | null>(null),
     [query, setQuery] = useState<ReportQuery>({ period: 'month' }),
     [draft, setDraft] = useState<ReportQuery>({ period: 'month' }),
@@ -111,7 +122,7 @@ export function ReportsPage({
   const [tab, setTab] = useState<
       'journal' | 'category' | 'agency' | 'user' | 'decisions' | 'closures'
     >('journal'),
-    [currency, setCurrency] = useState('ALL'),
+    [currency, setCurrency] = useState(money.data.preferences.displayCurrency ?? 'ALL'),
     [search, setSearch] = useState(''),
     [page, setPage] = useState(1);
   const generation = useRef(0),
@@ -120,8 +131,7 @@ export function ReportsPage({
   onlineRef.current = online;
   const [cash, setCash] = useState<CashSnapshot | null>(null),
     [closeId, setCloseId] = useState(''),
-    [countUSD, setCountUSD] = useState(''),
-    [countCDF, setCountCDF] = useState(''),
+    [counts, setCounts] = useState<Record<string, string>>({}),
     [confirmed, setConfirmed] = useState(false);
   useEffect(() => {
     alive.current = true;
@@ -169,8 +179,7 @@ export function ReportsPage({
     setError('');
     setCash(null);
     setCloseId('');
-    setCountUSD('');
-    setCountCDF('');
+    setCounts({});
     setConfirmed(false);
     try {
       const value = await gateway.cashCatalog();
@@ -208,13 +217,14 @@ export function ReportsPage({
         cashRegisterId: closeId,
         sessionId: selected.session.id,
         confirmed: true,
-        countedUSD: countUSD,
-        countedCDF: countCDF,
+        counts: selected.funds.map((f) => ({
+          currency: f.currency,
+          amount: (counts[f.currency] ?? '').replace(',', '.'),
+        })),
       });
       if (!alive.current || !onlineRef.current) return;
       setConfirmed(false);
-      setCountUSD('');
-      setCountCDF('');
+      setCounts({});
       setCash(null);
       setNotice('Clôture et procès-verbal enregistrés. Aucun solde corrigé automatiquement.');
       await load(query);
@@ -430,7 +440,7 @@ export function ReportsPage({
               <p className="report-caption">
                 Les soldes et courbes couvrent toutes les écritures des caisses choisies. Les
                 filtres utilisateur, catégorie et type s’appliquent au journal et aux mouvements de
-                période. Aucun total ne mélange CDF et USD.
+                période. Aucun total ne mélange des devises différentes.
               </p>
               <div className="report-kpis">
                 {[
@@ -445,8 +455,20 @@ export function ReportsPage({
                   <article className="panel report-kpi" key={card.field}>
                     <card.icon size={22} />
                     <h2>{card.title}</h2>
-                    {data.totals.map((t) => (
-                      <div key={t.currency}>
+                    {money.order(data.totals).map((t) => (
+                      <div
+                        key={t.currency}
+                        className={
+                          t.currency === money.data.preferences.displayCurrency
+                            ? 'preferred-currency'
+                            : undefined
+                        }
+                        title={
+                          t.currency === money.data.preferences.displayCurrency
+                            ? 'Devise d’affichage préférée'
+                            : undefined
+                        }
+                      >
                         <span className="currency-pill">{t.currency}</span>
                         <strong>
                           {formatMoney(
@@ -460,7 +482,7 @@ export function ReportsPage({
                 <article className="panel report-kpi">
                   <Clock3 size={22} />
                   <h2>Demandes en attente</h2>
-                  {data.pending.map((p) => (
+                  {money.order(data.pending).map((p) => (
                     <div key={p.currency}>
                       <span className="currency-pill">{p.currency}</span>
                       <strong>{p.count}</strong>
@@ -481,8 +503,10 @@ export function ReportsPage({
                   jours futurs ne sont pas projetés.
                 </p>
                 <div className="report-charts">
-                  <Curve data={data.daily} currency="CDF" />
-                  <Curve data={data.daily} currency="USD" />
+                  <ValuationPanel snapshot={data} gateway={gateway} online={online} />
+                  {money.order(data.totals).map((t) => (
+                    <Curve key={t.currency} data={data.daily} currency={t.currency} />
+                  ))}
                 </div>
               </section>
               <section className="panel">
@@ -588,9 +612,10 @@ export function ReportsPage({
                         setPage(1);
                       }}
                     >
-                      <option value="ALL">CDF et USD séparés</option>
-                      <option>CDF</option>
-                      <option>USD</option>
+                      <option value="ALL">Devises séparées</option>
+                      {money.order(data.totals).map((t) => (
+                        <option key={t.currency}>{t.currency}</option>
+                      ))}
                     </select>
                   </label>
                   <label>
@@ -810,8 +835,7 @@ export function ReportsPage({
                                 onChange={(e) => {
                                   if (e.target.value === closeId) return;
                                   setCloseId(e.target.value);
-                                  setCountUSD('');
-                                  setCountCDF('');
+                                  setCounts({});
                                   setConfirmed(false);
                                   setNotice(
                                     'Le choix de la caisse exige un nouveau comptage et une nouvelle confirmation.',
@@ -828,26 +852,22 @@ export function ReportsPage({
                                   ))}
                               </select>
                             </label>
-                            <label>
-                              USD comptés
-                              <input
-                                required
-                                pattern="[0-9]+\.[0-9]{2}"
-                                value={countUSD}
-                                onChange={(e) => setCountUSD(e.target.value)}
-                                placeholder="0.00"
-                              />
-                            </label>
-                            <label>
-                              CDF comptés
-                              <input
-                                required
-                                pattern="[0-9]+\.[0-9]{2}"
-                                value={countCDF}
-                                onChange={(e) => setCountCDF(e.target.value)}
-                                placeholder="0.00"
-                              />
-                            </label>
+                            {cash?.data.items
+                              .find((c) => c.id === closeId)
+                              ?.funds.map((f) => (
+                                <label key={f.currency}>
+                                  {f.currency} comptés
+                                  <input
+                                    required
+                                    pattern={money.pattern(f.currency)}
+                                    value={counts[f.currency] ?? ''}
+                                    onChange={(e) =>
+                                      setCounts((v) => ({ ...v, [f.currency]: e.target.value }))
+                                    }
+                                    placeholder={money.placeholder(f.currency)}
+                                  />
+                                </label>
+                              ))}
                             <label>
                               <input
                                 type="checkbox"

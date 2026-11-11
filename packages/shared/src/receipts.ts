@@ -74,7 +74,7 @@ const agencyView = z.object({ id: z.uuid(), code: z.string(), name: z.string() }
 const balanceSchema = z
   .string()
   .max(128)
-  .regex(/^(?:0|[1-9]\d*)\.\d{2}$/);
+  .regex(/^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/);
 export const cashViewSchema = z
   .object({
     id: z.uuid(),

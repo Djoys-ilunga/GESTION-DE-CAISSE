@@ -3,7 +3,7 @@ import { amountSchema, positiveAmountSchema, draftSchema, draftSyncResultSchema 
 describe('Contrats financiers', () => {
   it('exige des chaînes décimales canoniques exactes', () => {
     expect(amountSchema.parse('9007199254740993.01')).toBe('9007199254740993.01');
-    for (const bad of [1.25, '1', '01.00', '1e2', '-1.00', '1.001'])
+    for (const bad of [1.25, '01.00', '1e2', '-1.00', '1.00001'])
       expect(amountSchema.safeParse(bad).success).toBe(false);
     expect(positiveAmountSchema.safeParse('0.00').success).toBe(false);
   });

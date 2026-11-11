@@ -1,3 +1,4 @@
+import { loadCurrencyMetadata } from './money';
 import { Injectable, Inject } from '@nestjs/common';
 import { z } from 'zod';
 import { Prisma } from '../generated/prisma/client';
@@ -25,6 +26,7 @@ export class CentralAccess {
             await tx.$executeRaw`SELECT set_config('caissepro.company_id', ${ctx.companyId}, true), set_config('caissepro.actor_id', ${ctx.userId}, true)`;
             await tx.$executeRaw`SELECT set_config('caissepro.session_id', ${ctx.sessionId ?? ''}, true)`;
             await tx.$executeRaw`SELECT caissepro_assert_session(${ctx.companyId}::uuid,${ctx.userId}::uuid)`;
+            await loadCurrencyMetadata(tx);
             return action(tx);
           },
           { isolationLevel: 'Serializable', maxWait: 10000, timeout: 15000 },

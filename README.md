@@ -1,5 +1,7 @@
 # CaissePro
 
+L’étape 12 ajoute le catalogue de devises extensible, les préférences monétaires individuelles et les rapports par devise. Consulter le [guide multidevise et de migration](docs/etape-12/MULTIDEVISE.md) et les [résultats de validation](docs/etape-12/VALIDATION.md). La branche dédiée est `feat/etape-12-multidevise` ; l’intégration BCC et la qualification des installateurs ne sont pas commencées.
+
 Gestion de caisse d’entreprise : Tauri 2/Rust/React, NestJS, PostgreSQL et Prisma. Étapes 1 à 9 : socle technique, données centrales, authentification, autorisations, caisses, encaissements, dépenses, synchronisation sécurisée, transferts, conversions, tableau de bord, rapports et administration. L’interface française propose des thèmes clair et sombre, une supervision limitée aux caisses autorisées et un journal d’audit exportable. Les encaissements produisent des reçus après confirmation explicite. Les dépenses disposent d’un circuit de soumission, approbation ou rejet motivé, réservation, paiement explicite et bon de sortie.
 
 L’étape 9 et ses limites de qualification sont détaillées dans [Interface et supervision](docs/interface-supervision.md).

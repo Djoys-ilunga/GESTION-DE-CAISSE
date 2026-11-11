@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { currencySchema, amountSchema } from './money.js';
+import { currencySchema, amountSchema, monetaryDecimalSchema } from './money.js';
 const date = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -18,7 +18,7 @@ export const reportQuerySchema = z
   })
   .strict();
 export type ReportQuery = z.input<typeof reportQuerySchema>;
-const decimal = z.string().regex(/^-?(?:0|[1-9]\d*)\.\d{2}$/);
+const decimal = monetaryDecimalSchema;
 const totals = z
   .object({
     currency: currencySchema,
@@ -71,7 +71,8 @@ export const closureViewSchema = z
           })
           .strict(),
       )
-      .length(2),
+      .min(1)
+      .max(300),
   })
   .strict();
 export const reportSnapshotSchema = z
@@ -91,7 +92,7 @@ export const reportSnapshotSchema = z
     from: date,
     to: date,
     query: reportQuerySchema,
-    totals: z.array(totals).length(2),
+    totals: z.array(totals).min(0).max(300),
     cash: z.array(
       z
         .object({
@@ -108,7 +109,7 @@ export const reportSnapshotSchema = z
     ),
     daily: z
       .array(z.object({ date: date, currency: currencySchema, balance: decimal }).strict())
-      .max(732),
+      .max(109800),
     rows: z.array(reportRowSchema).max(10000),
     groups: z.array(
       z
@@ -160,21 +161,27 @@ export const reportSnapshotSchema = z
           })
           .strict(),
       )
-      .length(2),
+      .min(0)
+      .max(300),
     unmeasuredClosures: z.number().int().nonnegative(),
     users: z.array(z.object({ id: z.uuid(), name: z.string() }).strict()),
   })
   .strict();
 export type ReportSnapshot = z.infer<typeof reportSnapshotSchema>;
-export const closeCashSchema = z
-  .object({
-    cashRegisterId: z.uuid(),
-    sessionId: z.uuid(),
-    confirmed: z.literal(true),
-    countedUSD: amountSchema,
-    countedCDF: amountSchema,
-  })
-  .strict();
+const closeIdentity = { cashRegisterId: z.uuid(), sessionId: z.uuid(), confirmed: z.literal(true) };
+export const closeCashSchema = z.union([
+  z
+    .object({
+      ...closeIdentity,
+      counts: z
+        .array(z.object({ currency: currencySchema, amount: amountSchema }).strict())
+        .min(1)
+        .max(300),
+    })
+    .strict()
+    .refine((v) => new Set(v.counts.map((c) => c.currency)).size === v.counts.length),
+  z.object({ ...closeIdentity, countedUSD: amountSchema, countedCDF: amountSchema }).strict(),
+]);
 export type CloseCash = z.infer<typeof closeCashSchema>;
 export const reportFileSchema = z
   .object({
@@ -186,3 +193,39 @@ export const reportFileSchema = z
     dataBase64: z.string().max(1800000),
   })
   .strict();
+
+export const valuationInputSchema = z
+  .object({
+    query: reportQuerySchema,
+    currency: currencySchema,
+    rates: z.array(z.object({ currency: currencySchema, rateId: z.uuid() }).strict()).max(300),
+    confirmed: z.literal(true),
+  })
+  .strict()
+  .refine((v) => new Set(v.rates.map((r) => r.currency)).size === v.rates.length);
+export type ValuationInput = z.infer<typeof valuationInputSchema>;
+export const valuationSchema = z
+  .object({
+    currency: currencySchema,
+    asOf: z.iso.datetime(),
+    accounting: z.literal(false),
+    rounding: z.literal('HALF_UP_BY_CURRENCY'),
+    totalBalance: monetaryDecimalSchema,
+    items: z
+      .array(
+        z
+          .object({
+            currency: currencySchema,
+            originalBalance: monetaryDecimalSchema,
+            equivalent: monetaryDecimalSchema,
+            rateId: z.uuid().nullable(),
+            rate: z.string(),
+            source: z.string(),
+            validFrom: z.iso.datetime().nullable(),
+          })
+          .strict(),
+      )
+      .max(300),
+  })
+  .strict();
+export type Valuation = z.infer<typeof valuationSchema>;

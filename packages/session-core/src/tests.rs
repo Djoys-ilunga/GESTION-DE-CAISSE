@@ -544,3 +544,35 @@ fn validated_save_consumes_its_input_buffer_and_bounds_private_fields() {
     assert!(s.form_buffers.is_empty());
     assert_eq!(s.list_drafts(now).unwrap().len(), 1);
 }
+
+#[test]
+fn multicurrency_offline_drafts_keep_their_exact_original_units_without_posting() {
+    let now = wall_now();
+    let mut s = session(now);
+    s.online = false;
+    s.money_context = Some(
+        json!({"currencies":[{"code":"JPY","precision":0},{"code":"KWD","precision":3},{"code":"CLF","precision":4},{"code":"EUR","precision":2}]}),
+    );
+    for (currency, amount) in [("JPY", "123"), ("KWD", "0.001"), ("CLF", "12.3456")] {
+        let mut input = draft(&s, now);
+        input.draft.currency = currency.into();
+        input.draft.amount = amount.into();
+        let saved = s.save_draft(input, now).unwrap();
+        assert_eq!(saved.draft.currency, currency);
+        assert_eq!(saved.draft.amount, amount);
+        assert!(s.balances.is_none());
+    }
+    for (currency, amount) in [
+        ("jpy", "1"),
+        ("JPY", "1.00"),
+        ("KWD", "1.00"),
+        ("EUR", "1.00001"),
+        ("EUR", "0.0000"),
+        ("EUR", "1e2"),
+    ] {
+        let mut input = draft(&s, now);
+        input.draft.currency = currency.into();
+        input.draft.amount = amount.into();
+        assert!(s.save_draft(input, now).is_err());
+    }
+}

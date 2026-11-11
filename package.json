@@ -16,7 +16,7 @@
     "build:desktop": "pnpm --filter @caissepro/shared build && pnpm --filter @caissepro/desktop tauri build",
     "typecheck": "pnpm --filter @caissepro/shared build && pnpm -r --workspace-concurrency=1 typecheck",
     "lint": "eslint . --max-warnings 0",
-    "test": "pnpm --filter @caissepro/shared build && node --test tests/native/permissions.test.mjs tests/native/demo-macos.test.mjs tests/native/demo-password.test.mjs tests/native/demo-stop.test.mjs && pnpm -r --workspace-concurrency=1 test",
+    "test": "pnpm --filter @caissepro/shared build && node --test tests/native/currency-catalog.test.mjs tests/native/permissions.test.mjs tests/native/demo-macos.test.mjs tests/native/demo-password.test.mjs tests/native/demo-stop.test.mjs && pnpm -r --workspace-concurrency=1 test",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -41,7 +41,10 @@
     "demo:stop": "node scripts/demo-stop.mjs",
     "demo:password": "node scripts/demo-password.mjs",
     "demo:backup:test": "node scripts/demo.mjs backup-test",
-    "demo:native": "bash scripts/demo-native.sh"
+    "demo:native": "bash scripts/demo-native.sh",
+    "test:currency:upgrade": "node scripts/test-currency-upgrade.mjs",
+    "currencies:import": "node scripts/import-currencies.mjs",
+    "demo:backup": "node scripts/demo-database-backup.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

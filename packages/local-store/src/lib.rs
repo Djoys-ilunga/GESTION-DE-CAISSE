@@ -92,16 +92,15 @@ fn system_now() -> i64 {
         .min(i64::MAX as u128) as i64
 }
 fn amount_valid(amount: &str) -> bool {
-    let Some((whole, fraction)) = amount.split_once('.') else {
-        return false;
-    };
+    let (whole, fraction) = amount.split_once('.').unwrap_or((amount, ""));
     !whole.is_empty()
         && whole.len() <= 16
         && whole.bytes().all(|b| b.is_ascii_digit())
         && (whole == "0" || !whole.starts_with('0'))
-        && fraction.len() == 2
+        && fraction.len() <= 4
         && fraction.bytes().all(|b| b.is_ascii_digit())
-        && amount != "0.00"
+        && (!amount.contains('.') || !fraction.is_empty())
+        && amount.bytes().any(|b| (b'1'..=b'9').contains(&b))
 }
 impl EncryptedStore {
     pub fn open(path: &Path, scope: AuthorizedScope, vault: &dyn KeyVault) -> Result<Self> {
@@ -198,8 +197,12 @@ impl EncryptedStore {
                 ],
             )?;
             transaction.pragma_update(None, "user_version", 1)?;
-        } else if version != 1 {
+        } else if version != 1 && version != 2 {
             return Err(StoreError::InvalidData);
+        }
+        if version < 2 {
+            transaction.execute_batch(include_str!("../migrations/002_multicurrency.sql"))?;
+            transaction.pragma_update(None, "user_version", 2)?;
         }
         let scope: (String, String, String) = transaction.query_row(
             "SELECT company_id,user_id,device_id FROM local_scope WHERE singleton=1",
@@ -222,7 +225,8 @@ impl EncryptedStore {
         self.check_access()?;
         let now = self.now();
         if !["receipt", "expense-request"].contains(&draft.kind.as_str())
-            || !["CDF", "USD"].contains(&draft.currency.as_str())
+            || draft.currency.len() != 3
+            || draft.currency.bytes().any(|c| !c.is_ascii_uppercase())
             || !amount_valid(&draft.amount)
             || draft.description.trim().is_empty()
             || draft.description.chars().count() > 500

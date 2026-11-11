@@ -11,7 +11,7 @@ function store() {
 }
 const response = (deploymentId = 'expected') =>
   new Response(
-    JSON.stringify({ service: 'caissepro-api', protocolVersion: 1, deploymentId, status: 'ready' }),
+    JSON.stringify({ service: 'caissepro-api', protocolVersion: 2, deploymentId, status: 'ready' }),
   );
 describe('Disponibilité réelle', () => {
   it('vérifie le contrat et l’identité de déploiement', async () => {

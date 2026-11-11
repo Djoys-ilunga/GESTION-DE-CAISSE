@@ -28,7 +28,7 @@ describe('Disponibilité HTTP avec double de base', () => {
     const r = await request(app.getHttpServer()).get('/api/v1/health/ready').expect(200);
     expect(r.body).toEqual({
       service: 'caissepro-api',
-      protocolVersion: 1,
+      protocolVersion: 2,
       deploymentId: 'test',
       status: 'ready',
     });

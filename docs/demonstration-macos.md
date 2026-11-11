@@ -115,3 +115,19 @@ bash scripts/demo-macos.command --check
 - **Échec de compilation ou d'ouverture** : transmettre le message d'erreur et préciser Apple Silicon ou Intel ainsi que la version de macOS. Ne pas désactiver les protections de macOS.
 
 Les protections financières, les permissions et le verrou de qualification du stockage sensible restent actifs. Cette préparation ne constitue pas une qualification native macOS ; les tests Linux déjà effectués ne la remplacent pas.
+
+## Mise à jour vers l’étape 12
+
+Cette étape est sauvegardée sur la branche `feat/etape-12-multidevise`. Fermer la fenêtre CaissePro et arrêter l’ancien lanceur avant de changer de version. Depuis le dossier du projet :
+
+```bash
+pnpm demo:stop
+git fetch origin
+git switch feat/etape-12-multidevise
+git pull --ff-only
+bash scripts/demo-macos.command
+```
+
+Le serveur et le desktop doivent être actualisés ensemble : le protocole de compatibilité passe à 2. La préparation sauvegarde automatiquement la base locale existante avant toute migration en attente. Elle conserve les montants CDF/USD, les références, le port PostgreSQL et les comptes existants. Un échec de sauvegarde bloque la migration. Le mot de passe personnel déjà choisi reste valable.
+
+Les sauvegardes privées se trouvent dans `../scratch/caissepro-demo/backups/` ; `pnpm demo:backup` permet aussi une sauvegarde explicite. Lire le [guide de migration et de retour arrière](etape-12/MULTIDEVISE.md) avant application à des données utilisées. Aucune réinitialisation, suppression de volume Docker ou création d’installateur n’est nécessaire.

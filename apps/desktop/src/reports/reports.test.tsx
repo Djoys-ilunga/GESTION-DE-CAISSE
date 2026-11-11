@@ -89,7 +89,12 @@ function closureFixture() {
     active: true,
     version: 1,
     session: { id: crypto.randomUUID(), openedAt: new Date().toISOString() },
-    funds: [],
+    funds: ['CDF', 'USD'].map((currency) => ({
+      currency,
+      balance: '0.00',
+      available: '0.00',
+      reserved: '0.00',
+    })),
   }));
   s.p.cashRegisters = items.map((c) => ({
     id: c.id,
@@ -127,7 +132,9 @@ describe('Rapports avec passerelle simulée', () => {
     await userEvent.selectOptions(screen.getByLabelText('Caisse à clôturer'), s.items[1]!.id);
     expect(screen.getByLabelText('USD comptés')).toHaveValue('');
     expect(screen.getByLabelText('CDF comptés')).toHaveValue('');
-    expect(screen.getByRole('checkbox')).not.toBeChecked();
+    expect(
+      screen.getByRole('checkbox', { name: /Je confirme le comptage physique/ }),
+    ).not.toBeChecked();
     expect(screen.getByRole('button', { name: 'Clôturer et établir le PV' })).toBeDisabled();
     expect(s.gateway.closeCash).not.toHaveBeenCalled();
     await fillCounts('12.34', '500.00');
@@ -137,8 +144,10 @@ describe('Rapports avec passerelle simulée', () => {
         cashRegisterId: s.items[1]!.id,
         sessionId: s.items[1]!.session!.id,
         confirmed: true,
-        countedUSD: '12.34',
-        countedCDF: '500.00',
+        counts: [
+          { currency: 'CDF', amount: '500.00' },
+          { currency: 'USD', amount: '12.34' },
+        ],
       }),
     );
     expect(await screen.findByText(/Clôture et procès-verbal enregistrés/)).toBeVisible();
@@ -157,9 +166,11 @@ describe('Rapports avec passerelle simulée', () => {
     );
     await waitFor(() => expect(s.gateway.cashCatalog).toHaveBeenCalledTimes(2));
     expect(await screen.findByLabelText('Caisse à clôturer')).toHaveValue('');
-    expect(screen.getByLabelText('USD comptés')).toHaveValue('');
-    expect(screen.getByLabelText('CDF comptés')).toHaveValue('');
-    expect(screen.getByRole('checkbox')).not.toBeChecked();
+    expect(screen.queryByLabelText('USD comptés')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('CDF comptés')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('checkbox', { name: /Je confirme le comptage physique/ }),
+    ).not.toBeChecked();
     expect(s.gateway.closeCash).not.toHaveBeenCalled();
     ui.rerender(<ReportsPage profile={s.p} gateway={s.gateway} online={false} reports />);
     expect(

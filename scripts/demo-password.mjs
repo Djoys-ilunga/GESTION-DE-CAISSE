@@ -116,7 +116,7 @@ export async function changeDemoPassword({
   if (
     health.service !== 'caissepro-api' ||
     health.deploymentId !== 'caissepro-demo' ||
-    health.protocolVersion !== 1 ||
+    health.protocolVersion !== 2 ||
     health.status !== 'ready'
   )
     throw new Error('Le serveur local ne correspond pas à la démonstration attendue.');

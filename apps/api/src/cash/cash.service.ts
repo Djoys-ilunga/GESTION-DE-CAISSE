@@ -1,3 +1,4 @@
+import { moneyText } from '../data/money';
 import { Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import {
@@ -27,7 +28,7 @@ export function receiptView(row: ReceiptRow): ConfirmedReceipt {
     cashRegisterId: row.cashRegisterId,
     agencyId: row.agencyId,
     currency: row.currency,
-    amount: row.amount.toFixed(2),
+    amount: moneyText(row.amount, row.currency),
     provenance: row.provenance,
     category: row.category,
     description: row.description,
@@ -167,25 +168,29 @@ export class CashService {
       });
       // Les contreparties sont propres à chaque caisse et à chaque devise.
       await tx.treasuryAccount.createMany({
-        data: (['CDF', 'USD'] as const).flatMap((currency) => [
-          {
-            id: randomUUID(),
-            companyId: p.companyId,
-            agencyId: input.agencyId,
-            cashRegisterId: row.id,
-            code: `CAISSE-${row.id}`,
-            currency,
-            kind: 'TREASURY' as const,
-          },
-          {
-            id: randomUUID(),
-            companyId: p.companyId,
-            agencyId: input.agencyId,
-            code: `RECETTES-${row.id}`,
-            currency,
-            kind: 'CLEARING' as const,
-          },
-        ]),
+        data: (
+          await tx.companyCurrency.findMany({ where: { companyId: p.companyId, active: true } })
+        )
+          .map((c) => c.code)
+          .flatMap((currency) => [
+            {
+              id: randomUUID(),
+              companyId: p.companyId,
+              agencyId: input.agencyId,
+              cashRegisterId: row.id,
+              code: `CAISSE-${row.id}`,
+              currency,
+              kind: 'TREASURY' as const,
+            },
+            {
+              id: randomUUID(),
+              companyId: p.companyId,
+              agencyId: input.agencyId,
+              code: `RECETTES-${row.id}`,
+              currency,
+              kind: 'CLEARING' as const,
+            },
+          ]),
       });
       for (const member of members) {
         await tx.agencyGrant.upsert({
@@ -269,7 +274,7 @@ export class CashService {
         ? await tx.$queryRaw<
             {
               cashRegisterId: string;
-              currency: 'CDF' | 'USD';
+              currency: string;
               balance: Prisma.Decimal;
               reserved: Prisma.Decimal;
               available: Prisma.Decimal;
@@ -295,9 +300,9 @@ export class CashService {
                 .filter((f) => f.cashRegisterId === r.id)
                 .map((f) => ({
                   currency: f.currency,
-                  balance: f.balance.toFixed(2),
-                  reserved: f.reserved.toFixed(2),
-                  available: f.available.toFixed(2),
+                  balance: moneyText(f.balance, f.currency),
+                  reserved: moneyText(f.reserved, f.currency),
+                  available: moneyText(f.available, f.currency),
                 })),
             };
           }),
@@ -358,7 +363,7 @@ export class CashService {
           cashRegisterId: r.cashRegisterId!,
           version: r.version,
           currency: r.currency,
-          amount: r.amount.toFixed(2),
+          amount: moneyText(r.amount, r.currency),
           description: r.description,
           provenance: r.receiptProvenance,
           category: r.receiptCategory,
@@ -392,7 +397,7 @@ export class CashService {
         cashRegisterId: r.cashRegisterId,
         version: r.version,
         currency: r.currency,
-        amount: r.amount.toFixed(2),
+        amount: moneyText(r.amount, r.currency),
         description: r.description,
         ...(r.receiptProvenance && r.receiptCategory
           ? {
@@ -480,7 +485,7 @@ export class CashService {
         counterAccountId: counter.id,
         cashSessionId: session.id,
         currency: draft.currency,
-        amount: draft.amount.toFixed(2),
+        amount: moneyText(draft.amount, draft.currency),
       });
       if (posted.replayed) throw new DataError('RECEIPT_INTEGRITY_CONFLICT');
       const operation = await tx.financialOperation.findUniqueOrThrow({

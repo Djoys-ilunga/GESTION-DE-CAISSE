@@ -1,3 +1,4 @@
+import { useMoney, CurrencyOptions } from '../money/MoneyContext';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Building2, RefreshCw, Plus, Settings2 } from 'lucide-react';
 import {
@@ -669,13 +670,17 @@ function Rates({
   gateway: AuthGateway;
   ask: Ask;
 }) {
+  const money = useMoney();
   const [id] = useState<string>(() => crypto.randomUUID()),
-    [from, setFrom] = useState<'CDF' | 'USD'>('USD'),
+    [from, setFrom] = useState<string>(() => money.preferred('USD')),
+    [to, setTo] = useState<string>(
+      () => money.active.find((c) => c !== money.preferred('USD')) ?? '',
+    ),
     [rate, setRate] = useState(''),
     [source, setSource] = useState(''),
     [date, setDate] = useState(new Date().toISOString().slice(0, 16)),
     [error, setError] = useState('');
-  const to = from === 'USD' ? 'CDF' : 'USD';
+
   return (
     <>
       <form
@@ -705,8 +710,8 @@ function Rates({
       >
         <h2>Publier un taux de change</h2>
         <p>
-          Convention : montant de destination = montant d’origine × taux ; arrondi final à deux
-          décimales, au plus proche, demi supérieur.
+          Convention : montant de destination = montant d’origine × taux ; arrondi final à la
+          précision de la devise de destination, au plus proche, demi supérieur.
         </p>
         <div className="form-grid">
           <label>
@@ -718,8 +723,19 @@ function Rates({
                 setRate('');
               }}
             >
-              <option>USD</option>
-              <option>CDF</option>
+              <CurrencyOptions include={from} />
+            </select>
+          </label>
+          <label>
+            Devise de destination
+            <select
+              value={to}
+              onChange={(e) => {
+                setTo(e.target.value);
+                setRate('');
+              }}
+            >
+              <CurrencyOptions include={to} />
             </select>
           </label>
           <label>

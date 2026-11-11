@@ -1,3 +1,4 @@
+import { INITIAL_CURRENCY_CATALOG } from '@caissepro/shared';
 import { vi } from 'vitest';
 import type { NativeSessionView, SessionProfile, FormBufferInput } from '@caissepro/shared';
 import type { AuthGateway } from './gateway';
@@ -39,6 +40,22 @@ export function view(p = profile()): NativeSessionView {
 export function fakeGateway(initial: NativeSessionView = anonymous) {
   let current = structuredClone(initial);
   const gateway: AuthGateway = {
+    reportValuation: vi.fn(),
+    moneyContext: vi.fn(async () => ({
+      currencies: [...INITIAL_CURRENCY_CATALOG],
+      companyCurrencies: ['CDF', 'USD'].map((code) => ({ code, active: true, version: 1 })),
+      preferences: {
+        displayCurrency: null,
+        favoriteCurrency: null,
+        locale: 'fr-FR' as const,
+        version: 0,
+      },
+      reporting: { currency: null, version: 1 },
+      generatedAt: new Date().toISOString(),
+    })),
+    moneyPreferences: vi.fn(),
+    configureCurrency: vi.fn(),
+    configureReporting: vi.fn(),
     saveAudit: vi.fn(),
     settings: vi.fn(),
     referenceData: vi.fn(async () => ({

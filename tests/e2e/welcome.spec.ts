@@ -21,7 +21,7 @@ test('la disponibilité du serveur ne vaut pas ouverture de session', async ({ p
       headers: { 'Access-Control-Allow-Origin': '*' },
       json: {
         service: 'caissepro-api',
-        protocolVersion: 1,
+        protocolVersion: 2,
         deploymentId: 'caissepro-development',
         status: 'ready',
       },

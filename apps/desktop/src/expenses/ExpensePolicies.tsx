@@ -1,3 +1,4 @@
+import { useMoney, CurrencyOptions } from '../money/MoneyContext';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
@@ -20,17 +21,16 @@ const cells = (Object.keys(ROLE_LABELS) as RoleCode[]).flatMap((role) =>
     .map((action) => ({ role, action })),
 );
 export function ExpensePolicies({ gateway, online }: { gateway: AuthGateway; online: boolean }) {
+  const money = useMoney();
   const [policies, setPolicies] = useState<ExpensePolicy[]>([]),
-    [currency, setCurrency] = useState<'CDF' | 'USD'>('USD'),
+    [currency, setCurrency] = useState<string>(() => money.preferred('USD')),
     [limits, setLimits] = useState<Record<string, string>>({}),
     [requireEvidence, setRequireEvidence] = useState(true),
     [busy, setBusy] = useState(false),
     [loaded, setLoaded] = useState(false),
     [error, setError] = useState(''),
     [notice, setNotice] = useState(''),
-    [pending, setPending] = useState<{ currency: 'CDF' | 'USD'; input: ExpensePolicyInput } | null>(
-      null,
-    );
+    [pending, setPending] = useState<{ currency: string; input: ExpensePolicyInput } | null>(null);
   const epoch = useRef(0);
   useEffect(() => {
     let active = true;
@@ -139,8 +139,7 @@ export function ExpensePolicies({ gateway, online }: { gateway: AuthGateway; onl
         <label>
           Devise des plafonds
           <select value={currency} onChange={(e) => setCurrency(e.target.value as typeof currency)}>
-            <option>USD</option>
-            <option>CDF</option>
+            <CurrencyOptions include={currency} />
           </select>
         </label>
         <p>{policy ? `Version ${policy.version}` : 'Configuration nécessaire'}</p>

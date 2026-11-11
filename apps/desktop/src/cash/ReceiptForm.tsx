@@ -1,3 +1,4 @@
+import { useMoney, CurrencyOptions } from '../money/MoneyContext';
 import { useReferences } from '../ui/use-references';
 import { useFormBuffer, bufferedFields } from '../hybrid/use-form-buffer';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
@@ -10,7 +11,6 @@ import {
   type SupportingDocument,
 } from '@caissepro/shared';
 import { createLocalDraft } from '../hybrid/local-store';
-import { formatMoney } from './CashPage';
 import { message, type AuthGateway, type SessionDraft } from '../auth/gateway';
 
 export async function readSupportingDocument(file: File): Promise<SupportingDocument> {
@@ -47,16 +47,16 @@ export function ReceiptForm({
   onSaved(): void;
   onCancel(): void;
 }) {
+  const { format: formatMoney } = useMoney();
+  const money = useMoney();
   const references = useReferences(gateway, online);
   const fields = bufferedFields(buffer);
   const [formId] = useState(editing?.draft.id ?? buffer?.id ?? crypto.randomUUID());
   const [cash, setCash] = useState(
       editing?.cashRegisterId ?? buffer?.cashRegisterId ?? cashes.find((c) => c.active)?.id ?? '',
     ),
-    [currency, setCurrency] = useState<'CDF' | 'USD'>(
-      (fields.currency === 'USD' || fields.currency === 'CDF'
-        ? fields.currency
-        : editing?.draft.currency) ?? 'CDF',
+    [currency, setCurrency] = useState<string>(
+      fields.currency ?? editing?.draft.currency ?? money.preferred('CDF'),
     ),
     [amount, setAmount] = useState(fields.amount ?? editing?.draft.amount ?? ''),
     [provenance, setProvenance] = useState(
@@ -190,8 +190,7 @@ export function ReceiptForm({
         <label>
           Devise
           <select value={currency} onChange={(e) => setCurrency(e.target.value as typeof currency)}>
-            <option>CDF</option>
-            <option>USD</option>
+            <CurrencyOptions include={currency} />
           </select>
         </label>
         <label>
@@ -199,10 +198,10 @@ export function ReceiptForm({
           <input
             required
             inputMode="decimal"
-            placeholder="0,00"
+            placeholder={money.placeholder(currency)}
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            pattern="(?:0|[1-9][0-9]{0,15})[.,][0-9]{2}"
+            pattern={money.pattern(currency)}
           />
         </label>
         <label>

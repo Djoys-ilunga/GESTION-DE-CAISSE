@@ -1,9 +1,10 @@
+import { useMoney } from '../money/MoneyContext';
 import { createPortal } from 'react-dom';
 import { useState } from 'react';
 import { CheckCircle2, Printer, X, Paperclip } from 'lucide-react';
 import type { ConfirmedReceipt, SupportingDocument } from '@caissepro/shared';
 import { message, type AuthGateway } from '../auth/gateway';
-import { formatDate, formatMoney } from './CashPage';
+import { formatDate } from './CashPage';
 export function ReceiptViewer({
   receipt,
   gateway,
@@ -15,6 +16,7 @@ export function ReceiptViewer({
   online: boolean;
   onClose(): void;
 }) {
+  const { format: formatMoney } = useMoney();
   const [evidence, setEvidence] = useState<SupportingDocument | null>(null),
     [error, setError] = useState('');
   return createPortal(

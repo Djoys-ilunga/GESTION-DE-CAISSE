@@ -1,3 +1,5 @@
+import { useMoney } from '../money/MoneyContext';
+import { CurrencyOptions } from '../money/MoneyContext';
 import { useEffect, useState, type FormEvent } from 'react';
 import {
   ArrowDownToLine,
@@ -18,7 +20,7 @@ import type {
   SessionProfile,
 } from '@caissepro/shared';
 import { message, type AuthGateway, type SessionDraft } from '../auth/gateway';
-import { formatDate, formatMoney } from './CashPage';
+import { formatDate } from './CashPage';
 import { ReceiptForm } from './ReceiptForm';
 import { ReceiptViewer } from './ReceiptViewer';
 import './cash.css';
@@ -31,6 +33,7 @@ export function ReceiptsPage({
   profile: SessionProfile;
   online: boolean;
 }) {
+  const { format: formatMoney } = useMoney();
   const canDraft = profile.permissions.includes('draft:read_own'),
     canWrite = profile.permissions.includes('draft:write_own'),
     canPost = profile.permissions.includes('receipt:post');
@@ -193,7 +196,7 @@ export function ReceiptsPage({
     e.preventDefault();
     setQuery({
       ...(filterCash ? { cashRegisterId: filterCash } : {}),
-      ...(filterCurrency ? { currency: filterCurrency as 'CDF' | 'USD' } : {}),
+      ...(filterCurrency ? { currency: filterCurrency as string } : {}),
       ...(filterCategory ? { category: filterCategory } : {}),
       ...(search ? { search } : {}),
       ...(from ? { from } : {}),
@@ -581,9 +584,8 @@ export function ReceiptsPage({
                     value={filterCurrency}
                     onChange={(e) => setFilterCurrency(e.target.value)}
                   >
-                    <option value="">CDF et USD séparés</option>
-                    <option>CDF</option>
-                    <option>USD</option>
+                    <option value="">Devises séparées</option>
+                    <CurrencyOptions include={filterCurrency} />
                   </select>
                 </label>
                 <label>

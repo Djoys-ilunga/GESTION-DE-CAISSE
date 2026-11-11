@@ -184,7 +184,7 @@ impl Session {
             || input.fields.len() > 12
             || input.fields.iter().any(|(key, value)| {
                 let max = match key.as_str() {
-                    "amount" => 19,
+                    "amount" => 21,
                     "currency" | "destinationCurrency" => 3,
                     "destinationCashRegisterId" => 36,
                     "rate" => 25,

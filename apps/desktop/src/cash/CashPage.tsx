@@ -1,12 +1,11 @@
+import { useMoney } from '../money/MoneyContext';
+import { formatMonetary } from '@caissepro/shared';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Building2, Plus, RefreshCw, Wallet, LockKeyhole } from 'lucide-react';
 import type { CashConfiguration, CashSnapshot, SessionProfile } from '@caissepro/shared';
 import { message, type AuthGateway } from '../auth/gateway';
 import './cash.css';
-export const formatMoney = (value: string) => {
-  const [whole, cents] = value.split('.');
-  return `${whole!.replace(/\B(?=(\d{3})+(?!\d))/g, '\u202f')},${cents ?? '00'}`;
-};
+export const formatMoney = formatMonetary;
 export const formatDate = (value: string) =>
   new Date(value).toLocaleString('fr-FR', { timeZone: 'Africa/Kinshasa' });
 export function CashPage({
@@ -18,6 +17,8 @@ export function CashPage({
   profile: SessionProfile;
   online: boolean;
 }) {
+  const money = useMoney();
+  const { format: formatMoney } = money;
   const [snapshot, setSnapshot] = useState<CashSnapshot | null>(null),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
@@ -62,7 +63,7 @@ export function CashPage({
         <div>
           <p className="eyebrow">TRÉSORERIE PAR AGENCE</p>
           <h1>{snapshot?.data.items.length === 1 ? 'Votre caisse' : 'Vos caisses'}</h1>
-          <p>Des fonds distincts en CDF et en USD, issus des seules écritures comptabilisées.</p>
+          <p>Des fonds distincts pour chaque devise, issus des seules écritures comptabilisées.</p>
         </div>
         <Wallet size={28} />
       </div>
@@ -119,10 +120,22 @@ export function CashPage({
                   </span>
                 </div>
                 <div className="currency-funds">
-                  {(['CDF', 'USD'] as const).map((currency) => {
+                  {money.order(cash.funds).map(({ currency }) => {
                     const fund = cash.funds.find((f) => f.currency === currency);
                     return (
-                      <div key={currency}>
+                      <div
+                        key={currency}
+                        className={
+                          currency === money.data.preferences.displayCurrency
+                            ? 'preferred-currency'
+                            : undefined
+                        }
+                        title={
+                          currency === money.data.preferences.displayCurrency
+                            ? 'Devise d’affichage préférée'
+                            : undefined
+                        }
+                      >
                         <span className="currency-pill">{currency}</span>
                         <strong>{fund ? formatMoney(fund.balance) : 'Indisponible'}</strong>
                         {fund && (
@@ -245,7 +258,7 @@ function CashConfigurationPanel({ gateway, online }: { gateway: AuthGateway; onl
         setUsers([]);
         setId(crypto.randomUUID());
         setNotice(
-          'Caisse créée avec des fonds CDF/USD distincts. Les utilisateurs nouvellement affectés doivent se reconnecter.',
+          'Caisse créée avec des fonds distincts par devise autorisée. Les utilisateurs nouvellement affectés doivent se reconnecter.',
         );
       },
     );

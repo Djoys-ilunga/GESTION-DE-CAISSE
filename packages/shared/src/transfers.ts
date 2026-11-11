@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { currencySchema, positiveAmountSchema } from './money.js';
+import {
+  currencySchema,
+  positiveAmountSchema,
+  validCurrencyAmount,
+  currencyPrecision,
+} from './money.js';
 
 // Units of destination currency for exactly one unit of source currency.
 export const transferRateSchema = z
@@ -20,6 +25,12 @@ export const transferDraftSchema = z
   })
   .strict()
   .superRefine((v, ctx) => {
+    try {
+      if (!validCurrencyAmount(v.amount, currencyPrecision(v.sourceCurrency)))
+        ctx.addIssue({ code: 'custom', message: 'Précision du montant source invalide.' });
+    } catch {
+      ctx.addIssue({ code: 'custom', message: 'Métadonnées monétaires requises.' });
+    }
     if (v.sourceCurrency === v.destinationCurrency) {
       if (
         v.sourceCashRegisterId === v.destinationCashRegisterId ||
@@ -61,7 +72,7 @@ export const transferSlipSchema = z
     receivedByName: z.string(),
     handedOverAt: z.iso.datetime(),
     receivedAt: z.iso.datetime(),
-    rounding: z.literal('HALF_UP_2'),
+    rounding: z.enum(['HALF_UP_0', 'HALF_UP_1', 'HALF_UP_2', 'HALF_UP_3', 'HALF_UP_4']),
   })
   .strict();
 export const transferViewSchema = z

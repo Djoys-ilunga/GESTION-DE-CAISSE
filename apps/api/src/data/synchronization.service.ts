@@ -1,3 +1,4 @@
+import { moneyText } from './money';
 import { Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { Draft } from '@caissepro/shared';
@@ -208,7 +209,7 @@ export class SynchronizationService {
       return {
         ...remote(r),
         currency: r.currency,
-        amount: r.amount.toFixed(2),
+        amount: moneyText(r.amount, r.currency),
         description: r.description,
         receiptDetails:
           r.kind === 'RECEIPT' &&

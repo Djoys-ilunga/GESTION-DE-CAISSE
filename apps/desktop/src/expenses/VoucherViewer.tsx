@@ -1,6 +1,7 @@
+import { useMoney } from '../money/MoneyContext';
 import { createPortal } from 'react-dom';
 import type { PaymentVoucher } from '@caissepro/shared';
-import { formatDate, formatMoney } from '../cash/CashPage';
+import { formatDate } from '../cash/CashPage';
 export function VoucherViewer({
   voucher,
   onClose,
@@ -10,6 +11,7 @@ export function VoucherViewer({
   onClose(): void;
   online: boolean;
 }) {
+  const { format: formatMoney } = useMoney();
   return createPortal(
     <div className="receipt-overlay">
       <section

@@ -1,8 +1,9 @@
+import { useMoney } from '../money/MoneyContext';
 import { useEffect, useRef, useState } from 'react';
 import { Bell, Users, Wallet, WifiOff } from 'lucide-react';
 import type { CashSnapshot, SessionProfile, Supervision, SyncStatus } from '@caissepro/shared';
 import { message, type AuthGateway } from '../auth/gateway';
-import { formatDate, formatMoney } from '../cash/CashPage';
+import { formatDate } from '../cash/CashPage';
 export function useSupervision(gateway: AuthGateway, online: boolean, allowed: boolean) {
   const [data, setData] = useState<Supervision | null>(null),
     [error, setError] = useState('');
@@ -292,6 +293,7 @@ export function OfflineOverview({
   profile: SessionProfile;
   onNavigate(page: string): void;
 }) {
+  const { format: formatMoney } = useMoney();
   const [cash, setCash] = useState<CashSnapshot | null>(null),
     [error, setError] = useState('');
   useEffect(() => {

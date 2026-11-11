@@ -70,7 +70,7 @@ test(
       assert.equal(response.headers.get('access-control-allow-origin'), 'http://127.0.0.1:1420');
       assert.deepEqual(await response.json(), {
         service: 'caissepro-api',
-        protocolVersion: 1,
+        protocolVersion: 2,
         deploymentId: 'caissepro-live-smoke',
         status: 'ready',
       });

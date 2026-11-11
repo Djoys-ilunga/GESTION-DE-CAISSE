@@ -1,3 +1,9 @@
+import { valuationSchema, type ValuationInput, type Valuation } from '@caissepro/shared';
+import {
+  moneyContextSchema,
+  type MoneyContext,
+  type MoneyPreferenceInput,
+} from '@caissepro/shared';
 import {
   reportSnapshotSchema,
   managementSettingsSchema,
@@ -99,7 +105,7 @@ export type Balances = {
     balances: {
       accountId: string;
       cashRegisterId: string;
-      currency: 'CDF' | 'USD';
+      currency: string;
       balance: string;
       reserved: string;
       available: string;
@@ -113,6 +119,11 @@ export type AccessCatalog = {
   cashRegisters: { id: string; agencyId: string; name: string; code: string }[];
 };
 export interface AuthGateway {
+  reportValuation(input: ValuationInput): Promise<Valuation>;
+  moneyContext(): Promise<MoneyContext>;
+  moneyPreferences(input: MoneyPreferenceInput): Promise<MoneyContext>;
+  configureCurrency(input: unknown): Promise<unknown>;
+  configureReporting(input: unknown): Promise<unknown>;
   settings(): Promise<ManagementSettings>;
   referenceData(): Promise<ReferenceData>;
   supervision(): Promise<Supervision>;
@@ -151,10 +162,7 @@ export interface AuthGateway {
   ): Promise<SessionDraft>;
   retrySyncDraft(id: string, expectedVersion: number): Promise<SessionDraft>;
   expensePolicies(): Promise<{ items: ExpensePolicy[] }>;
-  configureExpensePolicy(
-    currency: 'CDF' | 'USD',
-    input: ExpensePolicyInput,
-  ): Promise<ExpensePolicy>;
+  configureExpensePolicy(currency: string, input: ExpensePolicyInput): Promise<ExpensePolicy>;
   expenseDrafts(page?: number): Promise<ExpenseDraftList>;
   restoreExpenseDraft(id: string): Promise<SessionDraft>;
   submitExpense(id: string, expectedVersion: number, submitted: true): Promise<ExpenseView>;
@@ -206,6 +214,25 @@ export interface AuthGateway {
   logs(): Promise<AuthLog[]>;
 }
 export class NativeAuthGateway implements AuthGateway {
+  async reportValuation(input: ValuationInput) {
+    return valuationSchema.parse(
+      await this.call('report_action', { action: 'valuation', payload: input }),
+    );
+  }
+  async moneyContext() {
+    return moneyContextSchema.parse(await this.call('admin_request', { action: 'money-context' }));
+  }
+  async moneyPreferences(input: MoneyPreferenceInput) {
+    return moneyContextSchema.parse(
+      await this.call('admin_request', { action: 'money-preferences', payload: input }),
+    );
+  }
+  configureCurrency(input: unknown) {
+    return this.call('admin_request', { action: 'money-currencies', payload: input });
+  }
+  configureReporting(input: unknown) {
+    return this.call('admin_request', { action: 'money-reporting', payload: input });
+  }
   saveAudit(format: 'pdf' | 'xlsx', query: AuditQuery) {
     return this.call<{ saved: boolean }>('report_action', {
       action: 'save-audit-' + format,
@@ -326,7 +353,7 @@ export class NativeAuthGateway implements AuthGateway {
   async expensePolicies() {
     return expensePoliciesSchema.parse(await this.expenseCall('policies'));
   }
-  async configureExpensePolicy(currency: 'CDF' | 'USD', input: ExpensePolicyInput) {
+  async configureExpensePolicy(currency: string, input: ExpensePolicyInput) {
     return expensePolicySchema.parse(
       await this.expenseCall('configure', { currency, data: input }),
     );
@@ -488,6 +515,11 @@ export class NativeAuthGateway implements AuthGateway {
 export function message(error: unknown) {
   const code = error instanceof Error ? error.message : String(error);
   const labels: Record<string, string> = {
+    CURRENCY_INACTIVE:
+      'Cette devise n’est pas autorisée pour l’entreprise. Actualisez le catalogue.',
+    CURRENCY_IN_USE:
+      'Cette devise est utilisée par une réservation, un transfert en attente ou la référence de reporting, ou constitue la dernière devise active.',
+    CURRENCY_PRECISION: 'Le montant ne respecte pas la précision de cette devise.',
     SETTINGS_CONFLICT: 'Les paramètres ont changé. Actualisez les données avant de réessayer.',
     AGENCY_HAS_ACTIVE_CASH:
       'Désactivez les caisses actives de cette agence avant de la désactiver.',

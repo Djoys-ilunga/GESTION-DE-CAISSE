@@ -1,3 +1,5 @@
+import { moneyText } from '../data/money';
+import { currencyPrecision } from '@caissepro/shared';
 import { Injectable, Inject } from '@nestjs/common';
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
@@ -26,8 +28,8 @@ export class TransfersService {
       destinationCashRegisterId: row.destinationCashRegisterId,
       sourceCurrency: row.sourceCurrency,
       destinationCurrency: row.destinationCurrency,
-      amount: row.amount.toFixed(2),
-      targetAmount: row.targetAmount.toFixed(2),
+      amount: moneyText(row.amount, row.sourceCurrency),
+      targetAmount: moneyText(row.targetAmount, row.destinationCurrency),
       rate: row.rate?.toFixed(12) ?? null,
       rateSource: row.rateSource,
       description: row.description,
@@ -72,7 +74,7 @@ export class TransfersService {
           throw new DataError('TRANSFER_CONFLICT');
         return this.view(old);
       }
-      const find = async (cashRegisterId: string, currency: 'USD' | 'CDF') => {
+      const find = async (cashRegisterId: string, currency: string) => {
         const a = await tx.treasuryAccount.findFirst({
           where: {
             companyId: ctx.companyId,
@@ -88,7 +90,10 @@ export class TransfersService {
       const source = await find(input.sourceCashRegisterId, input.sourceCurrency),
         destination = await find(input.destinationCashRegisterId, input.destinationCurrency);
       const targetAmount = input.rate
-        ? new Decimal(input.amount).mul(input.rate).toDecimalPlaces(2).toFixed(2)
+        ? new Decimal(input.amount)
+            .mul(input.rate)
+            .toDecimalPlaces(currencyPrecision(input.destinationCurrency))
+            .toFixed(currencyPrecision(input.destinationCurrency))
         : input.amount;
       positiveAmountSchema.parse(targetAmount);
       const [funds] = await tx.$queryRaw<
@@ -251,7 +256,7 @@ export class TransfersService {
         sourceAccountId: row.sourceAccountId,
         destinationAccountId: row.destinationAccountId,
         ...sessions,
-        amount: row.amount.toFixed(2),
+        amount: moneyText(row.amount, row.sourceCurrency),
       };
       let operationId: string;
       if (row.rate === null)
@@ -271,7 +276,7 @@ export class TransfersService {
             source: row.rateSource,
           },
         });
-        const counter = async (currency: 'USD' | 'CDF') => {
+        const counter = async (currency: string) => {
           const result = await tx.treasuryAccount.findFirst({
             where: {
               companyId: ctx.companyId,

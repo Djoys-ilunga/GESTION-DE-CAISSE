@@ -1,5 +1,9 @@
 # Validation de CaissePro — 9 novembre 2026
 
+## Étape 12 — 11 novembre 2026
+
+La validation actuelle du module multidevise, les tests de migration et de restauration, et leurs limites sont documentés dans [etape-12/VALIDATION.md](etape-12/VALIDATION.md). Les résultats historiques ci-dessous restent conservés avec leur périmètre et leur date.
+
 ## Préparation de la démonstration sur Mac
 
 Ajout d'un guide français et du lanceur `bash scripts/demo-macos.command`, avec contrôle préalable `--check`, refus d'un Docker distant et d'une configuration PostgreSQL différente de la base locale attendue, verrou de lancement et arrêt des seuls processus démarrés. Les mots de passe restent générés localement hors Git. Aucun installateur ni serveur public n'est publié.

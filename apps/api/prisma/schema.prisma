@@ -8,11 +8,6 @@ datasource db {
   provider = "postgresql"
 }
 
-enum Currency {
-  CDF
-  USD
-}
-
 enum AccountKind {
   TREASURY
   CLEARING
@@ -68,28 +63,30 @@ model Installation {
 }
 
 model Company {
-  address         String           @default("") @db.VarChar(300)
-  phone           String           @default("") @db.VarChar(60)
-  email           String           @default("") @db.VarChar(254)
-  taxId           String           @default("") @db.VarChar(100)
-  settingsVersion Int              @default(1)
-  sessionMinutes  Int              @default(480)
-  idleMinutes     Int              @default(15)
-  offlineMinutes  Int              @default(15)
-  syncEvents      SyncEvent[]
-  code            String           @unique @default(dbgenerated("('CP-'::text || upper(substr((gen_random_uuid())::text, 1, 12)))")) @db.VarChar(32)
-  id              String           @id @default(uuid()) @db.Uuid
-  name            String           @db.VarChar(160)
-  active          Boolean          @default(true)
-  createdAt       DateTime         @default(now()) @db.Timestamptz(3)
-  agencies        Agency[]
-  members         CompanyMember[]
-  roles           Role[]
-  rates           ExchangeRate[]
-  audits          AuditEvent[]
-  receiptCounters ReceiptCounter[]
-  expensePolicies ExpensePolicy[]
-  voucherCounters VoucherCounter[]
+  address          String                   @default("") @db.VarChar(300)
+  phone            String                   @default("") @db.VarChar(60)
+  email            String                   @default("") @db.VarChar(254)
+  taxId            String                   @default("") @db.VarChar(100)
+  settingsVersion  Int                      @default(1)
+  sessionMinutes   Int                      @default(480)
+  idleMinutes      Int                      @default(15)
+  offlineMinutes   Int                      @default(15)
+  syncEvents       SyncEvent[]
+  code             String                   @unique @default(dbgenerated("('CP-'::text || upper(substr((gen_random_uuid())::text, 1, 12)))")) @db.VarChar(32)
+  id               String                   @id @default(uuid()) @db.Uuid
+  name             String                   @db.VarChar(160)
+  active           Boolean                  @default(true)
+  createdAt        DateTime                 @default(now()) @db.Timestamptz(3)
+  agencies         Agency[]
+  members          CompanyMember[]
+  roles            Role[]
+  rates            ExchangeRate[]
+  audits           AuditEvent[]
+  receiptCounters  ReceiptCounter[]
+  expensePolicies  ExpensePolicy[]
+  voucherCounters  VoucherCounter[]
+  currencies       CompanyCurrency[]
+  monetarySettings CompanyMonetarySettings?
 }
 
 model Agency {
@@ -135,17 +132,18 @@ model User {
 }
 
 model CompanyMember {
-  authorizationVersion Int                 @default(1)
+  authorizationVersion Int                  @default(1)
   cashGrants           CashRegisterGrant[]
   authSessions         AuthSession[]
-  id                   String              @id @default(uuid()) @db.Uuid
-  companyId            String              @db.Uuid
-  userId               String              @db.Uuid
-  active               Boolean             @default(true)
-  company              Company             @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  user                 User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  id                   String               @id @default(uuid()) @db.Uuid
+  companyId            String               @db.Uuid
+  userId               String               @db.Uuid
+  active               Boolean              @default(true)
+  company              Company              @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  user                 User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
   roles                MemberRole[]
   agencies             AgencyGrant[]
+  moneyPreferences     UserMoneyPreference?
 
   @@unique([companyId, id])
   @@unique([companyId, userId])
@@ -221,21 +219,22 @@ model CashRegister {
 }
 
 model TreasuryAccount {
-  id             String            @id @default(uuid()) @db.Uuid
-  companyId      String            @db.Uuid
-  agencyId       String            @db.Uuid
-  cashRegisterId String?           @db.Uuid
-  code           String            @db.VarChar(60)
-  currency       Currency
-  kind           AccountKind
-  active         Boolean           @default(true)
-  agency         Agency            @relation(fields: [companyId, agencyId], references: [companyId, id], onDelete: Restrict)
-  register       CashRegister?     @relation(fields: [companyId, cashRegisterId, agencyId], references: [companyId, id, agencyId], onDelete: Restrict)
-  entries        LedgerEntry[]
-  expenses       ExpenseRequest[]
-  reservations   FundReservation[]
-  outgoing       Transfer[]        @relation("TransferSource")
-  incoming       Transfer[]        @relation("TransferDestination")
+  id                 String             @id @default(uuid()) @db.Uuid
+  companyId          String             @db.Uuid
+  agencyId           String             @db.Uuid
+  cashRegisterId     String?            @db.Uuid
+  code               String             @db.VarChar(60)
+  currency           String
+  kind               AccountKind
+  active             Boolean            @default(true)
+  agency             Agency             @relation(fields: [companyId, agencyId], references: [companyId, id], onDelete: Restrict)
+  register           CashRegister?      @relation(fields: [companyId, cashRegisterId, agencyId], references: [companyId, id, agencyId], onDelete: Restrict)
+  entries            LedgerEntry[]
+  expenses           ExpenseRequest[]
+  reservations       FundReservation[]
+  outgoing           Transfer[]         @relation("TransferSource")
+  incoming           Transfer[]         @relation("TransferDestination")
+  currencyDefinition CurrencyDefinition @relation("TreasuryAccount_currency_catalog", fields: [currency], references: [code], onDelete: NoAction, onUpdate: NoAction, map: "TreasuryAccount_currency_catalog_fk")
 
   @@unique([companyId, id, currency])
   @@unique([companyId, id, currency, agencyId])
@@ -262,33 +261,34 @@ model CashSession {
 }
 
 model FinancialOperation {
-  id               String              @id @default(uuid()) @db.Uuid
-  companyId        String              @db.Uuid
-  agencyId         String              @db.Uuid
-  createdById      String              @db.Uuid
-  kind             OperationKind
-  currency         Currency?
-  idempotencyKey   String              @db.Uuid
-  requestHash      String              @db.Char(64)
-  postedAt         DateTime            @default(now()) @db.Timestamptz(3)
-  transactionId    BigInt              @default(dbgenerated("txid_current()"))
-  expenseRequestId String?             @db.Uuid
-  reversalOfId     String?             @db.Uuid
-  reasonCode       String?             @db.VarChar(80)
-  exchangeRateId   String?             @db.Uuid
-  sourceAmount     Decimal?            @db.Decimal(18, 2)
-  targetAmount     Decimal?            @db.Decimal(18, 2)
-  agency           Agency              @relation(fields: [companyId, agencyId], references: [companyId, id], onDelete: Restrict)
-  creator          User                @relation(fields: [createdById], references: [id], onDelete: Restrict)
-  expense          ExpenseRequest?     @relation(fields: [companyId, expenseRequestId], references: [companyId, id], onDelete: Restrict)
-  original         FinancialOperation? @relation("OperationReversal", fields: [companyId, reversalOfId], references: [companyId, id], onDelete: Restrict, onUpdate: Restrict)
-  reversal         FinancialOperation? @relation("OperationReversal")
-  rate             ExchangeRate?       @relation(fields: [companyId, exchangeRateId], references: [companyId, id], onDelete: Restrict)
-  entries          LedgerEntry[]
-  transfer         Transfer?
-  attachments      Attachment[]
-  cashReceipt      CashReceipt?
-  paymentVoucher   PaymentVoucher?
+  id                 String              @id @default(uuid()) @db.Uuid
+  companyId          String              @db.Uuid
+  agencyId           String              @db.Uuid
+  createdById        String              @db.Uuid
+  kind               OperationKind
+  currency           String?
+  idempotencyKey     String              @db.Uuid
+  requestHash        String              @db.Char(64)
+  postedAt           DateTime            @default(now()) @db.Timestamptz(3)
+  transactionId      BigInt              @default(dbgenerated("txid_current()"))
+  expenseRequestId   String?             @db.Uuid
+  reversalOfId       String?             @db.Uuid
+  reasonCode         String?             @db.VarChar(80)
+  exchangeRateId     String?             @db.Uuid
+  sourceAmount       Decimal?            @db.Decimal(24, 8)
+  targetAmount       Decimal?            @db.Decimal(24, 8)
+  agency             Agency              @relation(fields: [companyId, agencyId], references: [companyId, id], onDelete: Restrict)
+  creator            User                @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  expense            ExpenseRequest?     @relation(fields: [companyId, expenseRequestId], references: [companyId, id], onDelete: Restrict)
+  original           FinancialOperation? @relation("OperationReversal", fields: [companyId, reversalOfId], references: [companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  reversal           FinancialOperation? @relation("OperationReversal")
+  rate               ExchangeRate?       @relation(fields: [companyId, exchangeRateId], references: [companyId, id], onDelete: Restrict)
+  entries            LedgerEntry[]
+  transfer           Transfer?
+  attachments        Attachment[]
+  cashReceipt        CashReceipt?
+  paymentVoucher     PaymentVoucher?
+  currencyDefinition CurrencyDefinition? @relation("FinancialOperation_currency_catalog", fields: [currency], references: [code], onDelete: NoAction, onUpdate: NoAction, map: "FinancialOperation_currency_catalog_fk")
 
   @@unique([companyId, id])
   @@unique([companyId, idempotencyKey])
@@ -298,18 +298,19 @@ model FinancialOperation {
 }
 
 model LedgerEntry {
-  id            String             @id @default(uuid()) @db.Uuid
-  companyId     String             @db.Uuid
-  operationId   String             @db.Uuid
-  accountId     String             @db.Uuid
-  cashSessionId String?            @db.Uuid
-  lineNo        Int
-  currency      Currency
-  side          EntrySide
-  amount        Decimal            @db.Decimal(18, 2)
-  operation     FinancialOperation @relation(fields: [companyId, operationId], references: [companyId, id], onDelete: Restrict)
-  account       TreasuryAccount    @relation(fields: [companyId, accountId, currency], references: [companyId, id, currency], onDelete: Restrict)
-  session       CashSession?       @relation(fields: [companyId, cashSessionId], references: [companyId, id], onDelete: Restrict)
+  id                 String             @id @default(uuid()) @db.Uuid
+  companyId          String             @db.Uuid
+  operationId        String             @db.Uuid
+  accountId          String             @db.Uuid
+  cashSessionId      String?            @db.Uuid
+  lineNo             Int
+  currency           String
+  side               EntrySide
+  amount             Decimal            @db.Decimal(24, 8)
+  operation          FinancialOperation @relation(fields: [companyId, operationId], references: [companyId, id], onDelete: Restrict)
+  account            TreasuryAccount    @relation(fields: [companyId, accountId, currency], references: [companyId, id, currency], onDelete: Restrict)
+  session            CashSession?       @relation(fields: [companyId, cashSessionId], references: [companyId, id], onDelete: Restrict)
+  currencyDefinition CurrencyDefinition @relation("LedgerEntry_currency_catalog", fields: [currency], references: [code], onDelete: NoAction, onUpdate: NoAction, map: "LedgerEntry_currency_catalog_fk")
 
   @@unique([companyId, operationId, lineNo])
   @@index([companyId, accountId])
@@ -330,8 +331,8 @@ model ExpenseRequest {
   agencyId            String               @db.Uuid
   accountId           String               @db.Uuid
   requestedById       String               @db.Uuid
-  currency            Currency
-  amount              Decimal              @db.Decimal(18, 2)
+  currency            String
+  amount              Decimal              @db.Decimal(24, 8)
   description         String               @db.VarChar(500)
   state               ExpenseState         @default(PENDING)
   version             Int                  @default(1)
@@ -342,6 +343,7 @@ model ExpenseRequest {
   reservation         FundReservation?
   operations          FinancialOperation[]
   attachments         Attachment[]
+  currencyDefinition  CurrencyDefinition   @relation("ExpenseRequest_currency_catalog", fields: [currency], references: [code], onDelete: NoAction, onUpdate: NoAction, map: "ExpenseRequest_currency_catalog_fk")
 
   @@unique([companyId, id])
   @@unique([companyId, sourceDraftId])
@@ -349,32 +351,34 @@ model ExpenseRequest {
 }
 
 model ExpenseApproval {
-  id               String           @id @default(uuid()) @db.Uuid
-  companyId        String           @db.Uuid
-  expenseRequestId String           @db.Uuid
-  approverId       String           @db.Uuid
-  reason           String?          @db.VarChar(500)
-  decision         ApprovalDecision
-  currency         Currency
-  amount           Decimal          @db.Decimal(18, 2)
-  createdAt        DateTime         @default(now()) @db.Timestamptz(3)
-  expense          ExpenseRequest   @relation(fields: [companyId, expenseRequestId], references: [companyId, id], onDelete: Restrict)
-  approver         User             @relation(fields: [approverId], references: [id], onDelete: Restrict)
+  id                 String             @id @default(uuid()) @db.Uuid
+  companyId          String             @db.Uuid
+  expenseRequestId   String             @db.Uuid
+  approverId         String             @db.Uuid
+  reason             String?            @db.VarChar(500)
+  decision           ApprovalDecision
+  currency           String
+  amount             Decimal            @db.Decimal(24, 8)
+  createdAt          DateTime           @default(now()) @db.Timestamptz(3)
+  expense            ExpenseRequest     @relation(fields: [companyId, expenseRequestId], references: [companyId, id], onDelete: Restrict)
+  approver           User               @relation(fields: [approverId], references: [id], onDelete: Restrict)
+  currencyDefinition CurrencyDefinition @relation("ExpenseApproval_currency_catalog", fields: [currency], references: [code], onDelete: NoAction, onUpdate: NoAction, map: "ExpenseApproval_currency_catalog_fk")
 
   @@unique([companyId, expenseRequestId])
 }
 
 model FundReservation {
-  id               String           @id @default(uuid()) @db.Uuid
-  companyId        String           @db.Uuid
-  expenseRequestId String           @db.Uuid
-  accountId        String           @db.Uuid
-  currency         Currency
-  amount           Decimal          @db.Decimal(18, 2)
-  state            ReservationState @default(ACTIVE)
-  createdAt        DateTime         @default(now()) @db.Timestamptz(3)
-  expense          ExpenseRequest   @relation(fields: [companyId, expenseRequestId], references: [companyId, id], onDelete: Restrict)
-  account          TreasuryAccount  @relation(fields: [companyId, accountId, currency], references: [companyId, id, currency], onDelete: Restrict)
+  id                 String             @id @default(uuid()) @db.Uuid
+  companyId          String             @db.Uuid
+  expenseRequestId   String             @db.Uuid
+  accountId          String             @db.Uuid
+  currency           String
+  amount             Decimal            @db.Decimal(24, 8)
+  state              ReservationState   @default(ACTIVE)
+  createdAt          DateTime           @default(now()) @db.Timestamptz(3)
+  expense            ExpenseRequest     @relation(fields: [companyId, expenseRequestId], references: [companyId, id], onDelete: Restrict)
+  account            TreasuryAccount    @relation(fields: [companyId, accountId, currency], references: [companyId, id, currency], onDelete: Restrict)
+  currencyDefinition CurrencyDefinition @relation("FundReservation_currency_catalog", fields: [currency], references: [code], onDelete: NoAction, onUpdate: NoAction, map: "FundReservation_currency_catalog_fk")
 
   @@unique([companyId, expenseRequestId])
   @@index([companyId, accountId, state])
@@ -386,25 +390,28 @@ model Transfer {
   operationId          String             @db.Uuid
   sourceAccountId      String             @db.Uuid
   destinationAccountId String             @db.Uuid
-  currency             Currency
-  amount               Decimal            @db.Decimal(18, 2)
+  currency             String
+  amount               Decimal            @db.Decimal(24, 8)
   operation            FinancialOperation @relation(fields: [companyId, operationId], references: [companyId, id], onDelete: Restrict)
   source               TreasuryAccount    @relation("TransferSource", fields: [companyId, sourceAccountId, currency], references: [companyId, id, currency], onDelete: Restrict)
   destination          TreasuryAccount    @relation("TransferDestination", fields: [companyId, destinationAccountId, currency], references: [companyId, id, currency], onDelete: Restrict)
+  currencyDefinition   CurrencyDefinition @relation("Transfer_currency_catalog", fields: [currency], references: [code], onDelete: NoAction, onUpdate: NoAction, map: "Transfer_currency_catalog_fk")
 
   @@unique([companyId, operationId])
 }
 
 model ExchangeRate {
-  id           String               @id @default(uuid()) @db.Uuid
-  companyId    String               @db.Uuid
-  fromCurrency Currency
-  toCurrency   Currency
-  rate         Decimal              @db.Decimal(24, 12)
-  effectiveAt  DateTime             @db.Timestamptz(3)
-  source       String               @db.VarChar(100)
-  company      Company              @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  operations   FinancialOperation[]
+  id                     String               @id @default(uuid()) @db.Uuid
+  companyId              String               @db.Uuid
+  fromCurrency           String
+  toCurrency             String
+  rate                   Decimal              @db.Decimal(24, 12)
+  effectiveAt            DateTime             @db.Timestamptz(3)
+  source                 String               @db.VarChar(100)
+  company                Company              @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  operations             FinancialOperation[]
+  fromCurrencyDefinition CurrencyDefinition   @relation("ExchangeRate_fromCurrency_catalog", fields: [fromCurrency], references: [code], onDelete: NoAction, onUpdate: NoAction, map: "ExchangeRate_fromCurrency_catalog_fk")
+  toCurrencyDefinition   CurrencyDefinition   @relation("ExchangeRate_toCurrency_catalog", fields: [toCurrency], references: [code], onDelete: NoAction, onUpdate: NoAction, map: "ExchangeRate_toCurrency_catalog_fk")
 
   @@unique([companyId, id])
   @@index([companyId, fromCurrency, toCurrency, effectiveAt])
@@ -441,34 +448,35 @@ model AuditEvent {
 }
 
 model ImportedDraft {
-  syncEvents        SyncEvent[]
-  clientCreatedAt   DateTime?       @db.Timestamptz(3)
-  clientUpdatedAt   DateTime?       @db.Timestamptz(3)
-  expenseDetails    Json?
-  expense           ExpenseRequest?
-  receiptProvenance String?         @db.VarChar(160)
-  receiptCategory   String?         @db.VarChar(80)
-  receiptReference  String?         @db.VarChar(160)
-  evidenceName      String?         @db.VarChar(160)
-  evidenceMime      String?         @db.VarChar(100)
-  evidenceSha       String?         @db.Char(64)
-  evidenceBytes     Bytes?
-  receipt           CashReceipt?
-  cashRegisterId    String?         @db.Uuid
-  id                String          @id @default(uuid()) @db.Uuid
-  companyId         String          @db.Uuid
-  agencyId          String          @db.Uuid
-  authorId          String          @db.Uuid
-  clientDraftId     String          @db.Uuid
-  kind              DraftKind
-  currency          Currency
-  amount            Decimal         @db.Decimal(18, 2)
-  description       String          @db.VarChar(500)
-  version           Int
-  payloadHash       String          @db.Char(64)
-  receivedAt        DateTime        @default(now()) @db.Timestamptz(3)
-  agency            Agency          @relation(fields: [companyId, agencyId], references: [companyId, id], onDelete: Restrict)
-  author            User            @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  syncEvents         SyncEvent[]
+  clientCreatedAt    DateTime?          @db.Timestamptz(3)
+  clientUpdatedAt    DateTime?          @db.Timestamptz(3)
+  expenseDetails     Json?
+  expense            ExpenseRequest?
+  receiptProvenance  String?            @db.VarChar(160)
+  receiptCategory    String?            @db.VarChar(80)
+  receiptReference   String?            @db.VarChar(160)
+  evidenceName       String?            @db.VarChar(160)
+  evidenceMime       String?            @db.VarChar(100)
+  evidenceSha        String?            @db.Char(64)
+  evidenceBytes      Bytes?
+  receipt            CashReceipt?
+  cashRegisterId     String?            @db.Uuid
+  id                 String             @id @default(uuid()) @db.Uuid
+  companyId          String             @db.Uuid
+  agencyId           String             @db.Uuid
+  authorId           String             @db.Uuid
+  clientDraftId      String             @db.Uuid
+  kind               DraftKind
+  currency           String
+  amount             Decimal            @db.Decimal(24, 8)
+  description        String             @db.VarChar(500)
+  version            Int
+  payloadHash        String             @db.Char(64)
+  receivedAt         DateTime           @default(now()) @db.Timestamptz(3)
+  agency             Agency             @relation(fields: [companyId, agencyId], references: [companyId, id], onDelete: Restrict)
+  author             User               @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  currencyDefinition CurrencyDefinition @relation("ImportedDraft_currency_catalog", fields: [currency], references: [code], onDelete: NoAction, onUpdate: NoAction, map: "ImportedDraft_currency_catalog_fk")
 
   @@unique([companyId, authorId, clientDraftId])
   @@unique([companyId, id])
@@ -494,8 +502,8 @@ model CashReceipt {
   clientDraftId      String             @db.Uuid
   operationId        String             @db.Uuid
   createdById        String             @db.Uuid
-  currency           Currency
-  amount             Decimal            @db.Decimal(18, 2)
+  currency           String
+  amount             Decimal            @db.Decimal(24, 8)
   provenance         String             @db.VarChar(160)
   category           String             @db.VarChar(80)
   description        String             @db.VarChar(500)
@@ -519,6 +527,7 @@ model CashReceipt {
   operation          FinancialOperation @relation(fields: [companyId, operationId], references: [companyId, id], onDelete: Restrict)
   source             ImportedDraft      @relation(fields: [companyId, sourceDraftId], references: [companyId, id], onDelete: Restrict)
   creator            User               @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  currencyDefinition CurrencyDefinition @relation("CashReceipt_currency_catalog", fields: [currency], references: [code], onDelete: NoAction, onUpdate: NoAction, map: "CashReceipt_currency_catalog_fk")
 
   @@unique([companyId, id])
   @@unique([companyId, sourceDraftId])
@@ -588,15 +597,16 @@ model AuthEvent {
 }
 
 model ExpensePolicy {
-  companyId       String   @db.Uuid
-  currency        Currency
-  version         Int
-  requireEvidence Boolean
-  limits          Json
-  payloadHash     String   @db.Char(64)
-  configuredById  String   @db.Uuid
-  configuredAt    DateTime @db.Timestamptz(3)
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  companyId          String             @db.Uuid
+  currency           String
+  version            Int
+  requireEvidence    Boolean
+  limits             Json
+  payloadHash        String             @db.Char(64)
+  configuredById     String             @db.Uuid
+  configuredAt       DateTime           @db.Timestamptz(3)
+  company            Company            @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  currencyDefinition CurrencyDefinition @relation("ExpensePolicy_currency_catalog", fields: [currency], references: [code], onDelete: NoAction, onUpdate: NoAction, map: "ExpensePolicy_currency_catalog_fk")
 
   @@id([companyId, currency])
 }
@@ -626,31 +636,32 @@ model VoucherCounter {
 }
 
 model PaymentVoucher {
-  id               String             @id @default(uuid()) @db.Uuid
-  companyId        String             @db.Uuid
-  expenseRequestId String             @db.Uuid
-  operationId      String             @db.Uuid
-  createdById      String             @db.Uuid
-  currency         Currency
-  amount           Decimal            @db.Decimal(18, 2)
-  beneficiary      String             @db.VarChar(160)
-  description      String             @db.VarChar(500)
-  reference        String             @db.VarChar(160)
-  companyName      String             @db.VarChar(160)
-  companyCode      String             @db.VarChar(32)
-  agencyName       String             @db.VarChar(160)
-  cashName         String             @db.VarChar(160)
-  requesterName    String             @db.VarChar(160)
-  approverName     String             @db.VarChar(160)
-  cashierName      String             @db.VarChar(160)
-  approvedAt       DateTime           @db.Timestamptz(3)
-  postedAt         DateTime           @db.Timestamptz(3)
-  year             Int
-  sequence         BigInt
-  number           String             @db.VarChar(160)
-  expense          ExpenseRequest     @relation(fields: [companyId, expenseRequestId], references: [companyId, id], onDelete: Restrict)
-  operation        FinancialOperation @relation(fields: [companyId, operationId], references: [companyId, id], onDelete: Restrict)
-  creator          User               @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  id                 String             @id @default(uuid()) @db.Uuid
+  companyId          String             @db.Uuid
+  expenseRequestId   String             @db.Uuid
+  operationId        String             @db.Uuid
+  createdById        String             @db.Uuid
+  currency           String
+  amount             Decimal            @db.Decimal(24, 8)
+  beneficiary        String             @db.VarChar(160)
+  description        String             @db.VarChar(500)
+  reference          String             @db.VarChar(160)
+  companyName        String             @db.VarChar(160)
+  companyCode        String             @db.VarChar(32)
+  agencyName         String             @db.VarChar(160)
+  cashName           String             @db.VarChar(160)
+  requesterName      String             @db.VarChar(160)
+  approverName       String             @db.VarChar(160)
+  cashierName        String             @db.VarChar(160)
+  approvedAt         DateTime           @db.Timestamptz(3)
+  postedAt           DateTime           @db.Timestamptz(3)
+  year               Int
+  sequence           BigInt
+  number             String             @db.VarChar(160)
+  expense            ExpenseRequest     @relation(fields: [companyId, expenseRequestId], references: [companyId, id], onDelete: Restrict)
+  operation          FinancialOperation @relation(fields: [companyId, operationId], references: [companyId, id], onDelete: Restrict)
+  creator            User               @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  currencyDefinition CurrencyDefinition @relation("PaymentVoucher_currency_catalog", fields: [currency], references: [code], onDelete: NoAction, onUpdate: NoAction, map: "PaymentVoucher_currency_catalog_fk")
 
   @@unique([companyId, id])
   @@unique([companyId, expenseRequestId])
@@ -679,30 +690,32 @@ model SyncEvent {
 }
 
 model TransferOrder {
-  id                        String    @id @db.Uuid
-  companyId                 String    @db.Uuid
-  authorId                  String    @db.Uuid
-  sourceCashRegisterId      String    @db.Uuid
-  destinationCashRegisterId String    @db.Uuid
-  sourceAccountId           String    @db.Uuid
-  destinationAccountId      String    @db.Uuid
-  sourceCurrency            Currency
-  destinationCurrency       Currency
-  amount                    Decimal   @db.Decimal(18, 2)
-  targetAmount              Decimal   @db.Decimal(18, 2)
-  rate                      Decimal?  @db.Decimal(24, 12)
-  rateSource                String    @db.VarChar(100)
-  description               String    @db.VarChar(500)
-  payloadHash               String    @db.Char(64)
-  state                     String    @default("DRAFT") @db.VarChar(20)
-  version                   Int       @default(1)
-  createdAt                 DateTime  @default(now()) @db.Timestamptz(3)
-  handedOverAt              DateTime? @db.Timestamptz(3)
-  receivedAt                DateTime? @db.Timestamptz(3)
-  handedOverById            String?   @db.Uuid
-  receivedById              String?   @db.Uuid
-  operationId               String?   @unique @db.Uuid
-  slip                      Json?
+  id                            String             @id @db.Uuid
+  companyId                     String             @db.Uuid
+  authorId                      String             @db.Uuid
+  sourceCashRegisterId          String             @db.Uuid
+  destinationCashRegisterId     String             @db.Uuid
+  sourceAccountId               String             @db.Uuid
+  destinationAccountId          String             @db.Uuid
+  sourceCurrency                String
+  destinationCurrency           String
+  amount                        Decimal            @db.Decimal(24, 8)
+  targetAmount                  Decimal            @db.Decimal(24, 8)
+  rate                          Decimal?           @db.Decimal(24, 12)
+  rateSource                    String             @db.VarChar(100)
+  description                   String             @db.VarChar(500)
+  payloadHash                   String             @db.Char(64)
+  state                         String             @default("DRAFT") @db.VarChar(20)
+  version                       Int                @default(1)
+  createdAt                     DateTime           @default(now()) @db.Timestamptz(3)
+  handedOverAt                  DateTime?          @db.Timestamptz(3)
+  receivedAt                    DateTime?          @db.Timestamptz(3)
+  handedOverById                String?            @db.Uuid
+  receivedById                  String?            @db.Uuid
+  operationId                   String?            @unique @db.Uuid
+  slip                          Json?
+  sourceCurrencyDefinition      CurrencyDefinition @relation("TransferOrder_sourceCurrency_catalog", fields: [sourceCurrency], references: [code], onDelete: NoAction, onUpdate: NoAction, map: "TransferOrder_sourceCurrency_catalog_fk")
+  destinationCurrencyDefinition CurrencyDefinition @relation("TransferOrder_destinationCurrency_catalog", fields: [destinationCurrency], references: [code], onDelete: NoAction, onUpdate: NoAction, map: "TransferOrder_destinationCurrency_catalog_fk")
 
   @@unique([companyId, id])
   @@index([companyId, createdAt, id])
@@ -733,15 +746,82 @@ model FinancialCategory {
 }
 
 model ReferenceExchangeRate {
-  id            String   @id @db.Uuid
-  companyId     String   @db.Uuid
-  fromCurrency  Currency
-  toCurrency    Currency
-  rate          Decimal  @db.Decimal(24, 12)
-  source        String   @db.VarChar(100)
-  validFrom     DateTime @db.Timestamptz(3)
-  publishedAt   DateTime @default(now()) @db.Timestamptz(3)
-  publishedById String   @db.Uuid
+  id                     String             @id @db.Uuid
+  companyId              String             @db.Uuid
+  fromCurrency           String
+  toCurrency             String
+  rate                   Decimal            @db.Decimal(24, 12)
+  source                 String             @db.VarChar(100)
+  validFrom              DateTime           @db.Timestamptz(3)
+  publishedAt            DateTime           @default(now()) @db.Timestamptz(3)
+  publishedById          String             @db.Uuid
+  fromCurrencyDefinition CurrencyDefinition @relation("ReferenceExchangeRate_fromCurrency_catalog", fields: [fromCurrency], references: [code], onDelete: NoAction, onUpdate: NoAction, map: "ReferenceExchangeRate_fromCurrency_catalog_fk")
+  toCurrencyDefinition   CurrencyDefinition @relation("ReferenceExchangeRate_toCurrency_catalog", fields: [toCurrency], references: [code], onDelete: NoAction, onUpdate: NoAction, map: "ReferenceExchangeRate_toCurrency_catalog_fk")
 
   @@index([companyId, validFrom])
+}
+
+model CurrencyDefinition {
+  code                               String                  @id
+  numericCode                        String                  @db.VarChar(3)
+  name                               String                  @db.VarChar(160)
+  symbol                             String                  @db.VarChar(20)
+  precision                          Int
+  active                             Boolean                 @default(true)
+  bccRateStatus                      String                  @default("UNVERIFIED") @db.VarChar(16)
+  sourceDate                         String                  @db.VarChar(10)
+  referenceExchangeRate_fromCurrency ReferenceExchangeRate[] @relation("ReferenceExchangeRate_fromCurrency_catalog")
+  referenceExchangeRate_toCurrency   ReferenceExchangeRate[] @relation("ReferenceExchangeRate_toCurrency_catalog")
+  transferOrder_sourceCurrency       TransferOrder[]         @relation("TransferOrder_sourceCurrency_catalog")
+  transferOrder_destinationCurrency  TransferOrder[]         @relation("TransferOrder_destinationCurrency_catalog")
+  paymentVoucher_currency            PaymentVoucher[]        @relation("PaymentVoucher_currency_catalog")
+  expensePolicy_currency             ExpensePolicy[]         @relation("ExpensePolicy_currency_catalog")
+  cashReceipt_currency               CashReceipt[]           @relation("CashReceipt_currency_catalog")
+  importedDraft_currency             ImportedDraft[]         @relation("ImportedDraft_currency_catalog")
+  exchangeRate_fromCurrency          ExchangeRate[]          @relation("ExchangeRate_fromCurrency_catalog")
+  exchangeRate_toCurrency            ExchangeRate[]          @relation("ExchangeRate_toCurrency_catalog")
+  transfer_currency                  Transfer[]              @relation("Transfer_currency_catalog")
+  fundReservation_currency           FundReservation[]       @relation("FundReservation_currency_catalog")
+  expenseApproval_currency           ExpenseApproval[]       @relation("ExpenseApproval_currency_catalog")
+  expenseRequest_currency            ExpenseRequest[]        @relation("ExpenseRequest_currency_catalog")
+  ledgerEntry_currency               LedgerEntry[]           @relation("LedgerEntry_currency_catalog")
+  financialOperation_currency        FinancialOperation[]    @relation("FinancialOperation_currency_catalog")
+  treasuryAccount_currency           TreasuryAccount[]       @relation("TreasuryAccount_currency_catalog")
+  companies                          CompanyCurrency[]
+}
+
+model CompanyCurrency {
+  companyId           String                    @db.Uuid
+  code                String
+  active              Boolean                   @default(true)
+  version             Int                       @default(1)
+  company             Company                   @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  definition          CurrencyDefinition        @relation(fields: [code], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  reportingSettings   CompanyMonetarySettings[] @relation("CompanyReportingCurrency")
+  displayPreferences  UserMoneyPreference[]     @relation("UserDisplayCurrency")
+  favoritePreferences UserMoneyPreference[]     @relation("UserFavoriteCurrency")
+
+  @@id([companyId, code])
+}
+
+model CompanyMonetarySettings {
+  companyId         String           @id @db.Uuid
+  reportingCurrency String?
+  version           Int              @default(1)
+  company           Company          @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reporting         CompanyCurrency? @relation("CompanyReportingCurrency", fields: [companyId, reportingCurrency], references: [companyId, code], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model UserMoneyPreference {
+  companyId        String           @db.Uuid
+  userId           String           @db.Uuid
+  displayCurrency  String?
+  favoriteCurrency String?
+  locale           String           @default("fr-FR") @db.VarChar(10)
+  version          Int              @default(1)
+  member           CompanyMember    @relation(fields: [companyId, userId], references: [companyId, userId], onDelete: NoAction, onUpdate: NoAction)
+  display          CompanyCurrency? @relation("UserDisplayCurrency", fields: [companyId, displayCurrency], references: [companyId, code], onDelete: NoAction, onUpdate: NoAction)
+  favorite         CompanyCurrency? @relation("UserFavoriteCurrency", fields: [companyId, favoriteCurrency], references: [companyId, code], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([companyId, userId])
 }

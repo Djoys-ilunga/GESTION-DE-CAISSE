@@ -269,3 +269,72 @@ fn native_key_vault_roundtrip() {
     vault.delete(&account).unwrap();
     assert!(vault.load(&account).unwrap().is_none());
 }
+
+#[test]
+fn legacy_encrypted_drafts_and_acknowledgements_survive_currency_schema_upgrade() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("upgrade.db");
+    let encryption_key = key();
+    let authorized = scope();
+    let d = draft();
+    {
+        let conn = Connection::open(&path).unwrap();
+        let hex_key = Zeroizing::new(hex::encode(encryption_key.as_slice()));
+        conn.execute_batch(&format!(
+            "PRAGMA key=\"x'{}'\";PRAGMA foreign_keys=ON;",
+            hex_key.as_str()
+        ))
+        .unwrap();
+        conn.execute_batch(include_str!("../migrations/001_local.sql"))
+            .unwrap();
+        conn.execute(
+            "INSERT INTO local_scope VALUES(1,?1,?2,?3)",
+            params![
+                authorized.company_id.to_string(),
+                authorized.user_id.to_string(),
+                authorized.device_id.to_string()
+            ],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO drafts VALUES(?1,'receipt','USD',?2,?3,3,'synced',?4,?5,?4)",
+            params![
+                d.id.to_string(),
+                d.amount,
+                d.description,
+                d.created_at,
+                d.expires_at
+            ],
+        )
+        .unwrap();
+        conn.execute("INSERT INTO sync_metadata(draft_id,idempotency_key,server_version,result_code) VALUES(?1,?1,7,'draft-received')",params![d.id.to_string()]).unwrap();
+        conn.pragma_update(None, "user_version", 1).unwrap();
+    }
+    let mut store = EncryptedStore::open_encrypted(&path, authorized, &encryption_key).unwrap();
+    let saved: (String,i64,i64)=store.connection.query_row("SELECT d.amount,d.version,s.server_version FROM drafts d JOIN sync_metadata s ON s.draft_id=d.id WHERE d.id=?1",params![d.id.to_string()],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).unwrap();
+    assert_eq!(saved, (d.amount.clone(), 3, 7));
+    assert_eq!(
+        store
+            .connection
+            .query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))
+            .unwrap(),
+        2
+    );
+    let mut japanese = d.clone();
+    japanese.id = Uuid::new_v4();
+    japanese.currency = "JPY".into();
+    japanese.amount = "123".into();
+    store.save_draft(&japanese, None).unwrap();
+    assert_eq!(
+        store
+            .connection
+            .query_row(
+                "SELECT amount FROM drafts WHERE id=?1",
+                params![japanese.id.to_string()],
+                |r| r.get::<_, String>(0)
+            )
+            .unwrap(),
+        "123"
+    );
+    store.migrate().unwrap();
+}

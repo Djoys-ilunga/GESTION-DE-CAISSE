@@ -1,7 +1,7 @@
 // Synthetic demo only. No reset, production connection or default password.
 import { createRequire } from 'node:module';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { spawnSync, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
@@ -56,6 +56,22 @@ if (action === 'prepare') {
       true,
       'Une préparation interrompue existe : diagnostiquer sans supprimer les données.',
     );
+    const schemaCheck = new Client({ connectionString: s.url });
+    let pending;
+    try {
+      await schemaCheck.connect();
+      const applied = (
+        await schemaCheck.query(
+          'SELECT migration_name FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL',
+        )
+      ).rows.map((r) => r.migration_name);
+      pending = readdirSync(join(root, 'apps/api/prisma/migrations')).filter(
+        (n) => /^\d/.test(n) && !applied.includes(n),
+      );
+    } finally {
+      await schemaCheck.end();
+    }
+    if (pending.length) run(process.execPath, ['scripts/demo-database-backup.mjs']);
     run('pnpm', ['--filter', '@caissepro/api', 'db:deploy'], {
       env: { ...process.env, DATABASE_URL: s.url },
     });

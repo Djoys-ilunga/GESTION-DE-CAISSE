@@ -1,3 +1,5 @@
+import { useMoney, CurrencyOptions } from '../money/MoneyContext';
+import { currencyPrecision } from '@caissepro/shared';
 import { useReferences } from '../ui/use-references';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
@@ -9,7 +11,7 @@ import {
   type TransferView,
 } from '@caissepro/shared';
 import { message, type AuthGateway } from '../auth/gateway';
-import { formatDate, formatMoney } from '../cash/CashPage';
+import { formatDate } from '../cash/CashPage';
 import '../cash/cash.css';
 import './transfers.css';
 const stateLabel = {
@@ -26,6 +28,8 @@ export function TransfersPage({
   gateway: AuthGateway;
   online: boolean;
 }) {
+  const { format: formatMoney } = useMoney();
+  const money = useMoney();
   const references = useReferences(gateway, online);
   const [catalog, setCatalog] = useState<CashSnapshot | null>(null),
     [buffers, setBuffers] = useState<FormBuffer[]>([]),
@@ -38,8 +42,8 @@ export function TransfersPage({
   const [id, setId] = useState(() => crypto.randomUUID()),
     [source, setSource] = useState(''),
     [destination, setDestination] = useState('');
-  const [currency, setCurrency] = useState<'CDF' | 'USD'>('USD'),
-    [targetCurrency, setTargetCurrency] = useState<'CDF' | 'USD'>('USD');
+  const [currency, setCurrency] = useState<string>(() => money.preferred('USD')),
+    [targetCurrency, setTargetCurrency] = useState<string>(() => money.preferred('USD'));
   const [amount, setAmount] = useState(''),
     [rate, setRate] = useState(''),
     [rateSource, setRateSource] = useState(''),
@@ -126,7 +130,7 @@ export function TransfersPage({
     });
     if (!parsed.success) {
       setError(
-        'Vérifiez les caisses, les montants (ex. 25.00) et le taux explicite de conversion.',
+        'Vérifiez les caisses, les montants et leur précision et le taux explicite de conversion.',
       );
       return;
     }
@@ -240,22 +244,17 @@ export function TransfersPage({
             </label>
             <label>
               Devise source
-              <select
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value as 'CDF' | 'USD')}
-              >
-                <option>USD</option>
-                <option>CDF</option>
+              <select value={currency} onChange={(e) => setCurrency(e.target.value as string)}>
+                <CurrencyOptions include={currency} />
               </select>
             </label>
             <label>
               Devise destination
               <select
                 value={targetCurrency}
-                onChange={(e) => setTargetCurrency(e.target.value as 'CDF' | 'USD')}
+                onChange={(e) => setTargetCurrency(e.target.value as string)}
               >
-                <option>USD</option>
-                <option>CDF</option>
+                <CurrencyOptions include={targetCurrency} />
               </select>
             </label>
             <label>
@@ -263,7 +262,8 @@ export function TransfersPage({
               <input
                 required
                 inputMode="decimal"
-                placeholder="25.00"
+                pattern={money.pattern(currency)}
+                placeholder={money.placeholder(currency)}
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
               />
@@ -427,7 +427,7 @@ export function TransfersPage({
           </p>
           <p>
             {selected.rate
-              ? `Taux : ${selected.rate} ${selected.destinationCurrency} pour 1 ${selected.sourceCurrency} · ${selected.rateSource} · HALF_UP à 2 décimales`
+              ? `Taux : ${selected.rate} ${selected.destinationCurrency} pour 1 ${selected.sourceCurrency} · ${selected.rateSource} · HALF_UP à ${money.precision(selected.destinationCurrency)} décimales`
               : 'Même devise, sans conversion.'}
           </p>
           <p>
@@ -499,6 +499,7 @@ export function TransfersPage({
   );
 }
 function TransferSlip({ row, onClose }: { row: TransferView; onClose(): void }) {
+  const { format: formatMoney } = useMoney();
   const slip = row.slip!;
   return createPortal(
     <div className="receipt-overlay">
@@ -526,7 +527,10 @@ function TransferSlip({ row, onClose }: { row: TransferView; onClose(): void }) 
               ['Montant remis', `${formatMoney(row.amount)} ${row.sourceCurrency}`],
               ['Montant reçu', `${formatMoney(row.targetAmount)} ${row.destinationCurrency}`],
               ['Taux', row.rate ? `${row.rate} · ${row.rateSource}` : 'Sans conversion'],
-              ['Arrondi', 'HALF_UP final à 2 décimales'],
+              [
+                'Arrondi',
+                `HALF_UP final à ${currencyPrecision(row.destinationCurrency)} décimales`,
+              ],
               ['Motif', row.description],
               ['Remis par', `${slip.handedOverByName} · ${formatDate(slip.handedOverAt)}`],
               ['Reçu par', `${slip.receivedByName} · ${formatDate(slip.receivedAt)}`],

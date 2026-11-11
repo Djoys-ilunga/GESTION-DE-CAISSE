@@ -1,3 +1,4 @@
+import { useMoney, CurrencyOptions } from '../money/MoneyContext';
 import { useReferences } from '../ui/use-references';
 import { useFormBuffer, bufferedFields } from '../hybrid/use-form-buffer';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
@@ -33,6 +34,7 @@ export function ExpenseForm({
   onSaved(): void;
   onCancel(): void;
 }) {
+  const money = useMoney();
   const editing = copy ? null : source;
   const references = useReferences(gateway, online);
   const fields = bufferedFields(buffer);
@@ -41,10 +43,8 @@ export function ExpenseForm({
       source?.agencyId ?? buffer?.agencyId ?? profile.agencies[0]?.id ?? '',
     ),
     [cash, setCash] = useState(source?.cashRegisterId ?? buffer?.cashRegisterId ?? ''),
-    [currency, setCurrency] = useState<'USD' | 'CDF'>(
-      (fields.currency === 'USD' || fields.currency === 'CDF'
-        ? fields.currency
-        : source?.draft.currency) ?? 'USD',
+    [currency, setCurrency] = useState<string>(
+      fields.currency ?? source?.draft.currency ?? money.preferred('USD'),
     ),
     [amount, setAmount] = useState(fields.amount ?? source?.draft.amount ?? ''),
     [description, setDescription] = useState(fields.description ?? source?.draft.description ?? ''),
@@ -191,19 +191,19 @@ export function ExpenseForm({
               value={currency}
               onChange={(e) => setCurrency(e.target.value as typeof currency)}
             >
-              <option>USD</option>
-              <option>CDF</option>
+              <CurrencyOptions include={currency} />
             </select>
           </label>
           <label>
             Montant exact
             <input
               inputMode="decimal"
+              pattern={money.pattern(currency)}
               required
               value={amount}
-              maxLength={19}
+              maxLength={21}
               onChange={(e) => setAmount(e.target.value)}
-              placeholder="0.00"
+              placeholder={money.placeholder(currency)}
             />
           </label>
           <label>

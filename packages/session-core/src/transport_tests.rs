@@ -132,7 +132,11 @@ impl Api {
             }
             "/api/v1/health/ready" => (
                 200,
-                json!({"service":"caissepro-api","status":"ready","protocolVersion":1,"deploymentId":deployment.lock().unwrap().as_str()}),
+                json!({"service":"caissepro-api","status":"ready","protocolVersion":2,"deploymentId":deployment.lock().unwrap().as_str()}),
+            ),
+            "/api/v1/money/context" => (
+                200,
+                json!({"companyCurrencies":[{"code":"JPY","active":true,"version":1}],"preferences":{"favoriteCurrency":"JPY","displayCurrency":null,"locale":"fr-FR","version":1}}),
             ),
             "/api/v1/auth/login" => {
                 logins.fetch_add(1, Ordering::SeqCst);
@@ -988,4 +992,78 @@ async fn transfer_confirmations_require_explicit_consent_and_revalidated_permiss
         .retain(|p| p != "transfer:post");
     assert!(broker.transfer_action("handover",Some(json!({"id":Uuid::new_v4(),"expectedVersion":1,"handedOver":true,"rateValidated":true})),Some(view.generation)).await.is_err());
     assert_eq!(api.writes.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn currency_context_is_memory_only_guarded_offline_and_cannot_change_preferences_offline() {
+    let api = Api::new();
+    {
+        let mut p = api.profile.lock().unwrap();
+        p.permissions.push("offline:access".into());
+        p.offline_until = Some(iso(wall_now() + 120000));
+    }
+    let broker = api.broker();
+    let session = broker
+        .login(
+            "TEST".into(),
+            "alice@example.test".into(),
+            Zeroizing::new("local-password-test".into()),
+        )
+        .await
+        .unwrap();
+    let context = broker
+        .admin("money-context", None, Some(session.generation))
+        .await
+        .unwrap();
+    assert_eq!(context["companyCurrencies"][0]["code"], "JPY");
+    api.offline.store(true, Ordering::SeqCst);
+    let _ = broker.revalidate(Some(session.generation)).await;
+    let session = broker
+        .unlock(
+            Zeroizing::new("local-password-test".into()),
+            Some(session.generation),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        broker
+            .admin("money-context", None, Some(session.generation))
+            .await
+            .unwrap(),
+        context
+    );
+    assert!(matches!(
+        broker
+            .admin(
+                "money-preferences",
+                Some(json!({})),
+                Some(session.generation)
+            )
+            .await,
+        Err(Error::OnlineRequired)
+    ));
+    assert!(matches!(
+        broker
+            .admin(
+                "money-currencies",
+                Some(json!({"confirmed":true})),
+                Some(session.generation)
+            )
+            .await,
+        Err(Error::OnlineRequired)
+    ));
+    assert!(matches!(
+        broker
+            .transfer_action("handover", Some(json!({})), Some(session.generation))
+            .await,
+        Err(Error::OnlineRequired)
+    ));
+    assert_eq!(api.sync.financial.load(Ordering::SeqCst), 0);
+    broker.lock(Some(session.generation)).await.unwrap();
+    assert!(matches!(
+        broker
+            .admin("money-context", None, Some(session.generation))
+            .await,
+        Err(Error::Locked)
+    ));
 }

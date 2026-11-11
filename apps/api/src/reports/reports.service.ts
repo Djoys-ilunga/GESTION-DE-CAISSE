@@ -1,3 +1,6 @@
+import { valuationInputSchema, valuationSchema, type ValuationInput } from '@caissepro/shared';
+import { currencyPrecision } from '@caissepro/shared';
+import { moneyText } from '../data/money';
 import { Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import {
@@ -143,9 +146,9 @@ export class ReportsService {
           agencyId: a.agencyId,
           agencyName: a.agency.name,
           currency: a.currency,
-          balance: funds!.balance.toFixed(2),
-          reserved: funds!.reserved.toFixed(2),
-          available: funds!.available.toFixed(2),
+          balance: moneyText(funds!.balance, a.currency),
+          reserved: moneyText(funds!.reserved, a.currency),
+          available: moneyText(funds!.available, a.currency),
         });
       }
       const accountMap = new Map(accounts.map((a) => [a.id, a]));
@@ -166,7 +169,7 @@ export class ReportsService {
             userName: o.creator.displayName,
             currency: e.currency,
             side: e.side,
-            amount: e.amount.toFixed(2),
+            amount: moneyText(e.amount, e.currency),
             category:
               o.cashReceipt?.category ??
               (o.kind === 'DISBURSEMENT'
@@ -191,9 +194,10 @@ export class ReportsService {
           const k = e.operation.kind === 'REVERSAL' ? e.operation.original?.kind : e.operation.kind;
           return k === kind ? sum.plus(signed(e).mul(kind === 'RECEIPT' ? 1 : -1)) : sum;
         }, new D(0));
+      const currencies = [...new Set(accounts.map((a) => a.currency))].sort();
       const daily = [];
       const totals = [];
-      for (const currency of ['CDF', 'USD'] as const) {
+      for (const currency of currencies) {
         const ids = new Set(accounts.filter((a) => a.currency === currency).map((a) => a.id));
         const first = opening
           .filter((o) => ids.has(o.accountId))
@@ -209,29 +213,29 @@ export class ReportsService {
               .filter((e) => e.currency === currency && day(e.operation.postedAt) === date)
               .reduce((s, e) => s.plus(signed(e)), new D(0)),
           );
-          daily.push({ date, currency, balance: balance.toFixed(2) });
+          daily.push({ date, currency, balance: balance.toFixed(currencyPrecision(currency)) });
         }
         const current = cash.filter((c) => c.currency === currency);
         const sum = (field: 'balance' | 'reserved' | 'available') =>
-          current.reduce((s, c) => s.plus(c[field]), new D(0)).toFixed(2);
+          current.reduce((s, c) => s.plus(c[field]), new D(0)).toFixed(currencyPrecision(currency));
         const period = entries.filter((e) => e.currency === currency && selected.has(e.id));
         totals.push({
           currency,
           balance: sum('balance'),
           reserved: sum('reserved'),
           available: sum('available'),
-          opening: first.toFixed(2),
-          closing: balance.toFixed(2),
-          receipts: flow(period, 'RECEIPT').toFixed(2),
-          disbursements: flow(period, 'DISBURSEMENT').toFixed(2),
+          opening: first.toFixed(currencyPrecision(currency)),
+          closing: balance.toFixed(currencyPrecision(currency)),
+          receipts: flow(period, 'RECEIPT').toFixed(currencyPrecision(currency)),
+          disbursements: flow(period, 'DISBURSEMENT').toFixed(currencyPrecision(currency)),
           todayReceipts: flow(
             todayEntries.filter((e) => e.currency === currency),
             'RECEIPT',
-          ).toFixed(2),
+          ).toFixed(currencyPrecision(currency)),
           todayDisbursements: flow(
             todayEntries.filter((e) => e.currency === currency),
             'DISBURSEMENT',
-          ).toFixed(2),
+          ).toFixed(currencyPrecision(currency)),
         });
       }
       const groups = new Map<
@@ -239,7 +243,7 @@ export class ReportsService {
         {
           dimension: 'category' | 'agency' | 'user';
           name: string;
-          currency: 'USD' | 'CDF';
+          currency: string;
           incoming: Prisma.Decimal;
           outgoing: Prisma.Decimal;
         }
@@ -324,12 +328,16 @@ export class ReportsService {
         rows,
         groups: [...groups.values()].map((g) => ({
           ...g,
-          incoming: g.incoming.toFixed(2),
-          outgoing: g.outgoing.toFixed(2),
+          incoming: moneyText(g.incoming, g.currency),
+          outgoing: moneyText(g.outgoing, g.currency),
         })),
-        pending: ['CDF', 'USD'].map((currency) => {
+        pending: currencies.map((currency) => {
           const p = pendingRaw.find((p) => p.currency === currency);
-          return { currency, count: p?._count ?? 0, amount: p?._sum.amount?.toFixed(2) ?? '0.00' };
+          return {
+            currency,
+            count: p?._count ?? 0,
+            amount: moneyText(p?._sum.amount ?? new D(0), currency),
+          };
         }),
         decisions: decisions.map((d) => ({
           id: d.id,
@@ -337,23 +345,27 @@ export class ReportsService {
           requestState: d.state,
           reason: d.approval?.reason ?? null,
           currency: d.currency,
-          amount: d.amount.toFixed(2),
+          amount: moneyText(d.amount, d.currency),
           description: d.description,
           requester: d.requester.displayName,
           approver: d.approval?.approver.displayName ?? null,
           decidedAt: d.approval?.createdAt.toISOString() ?? null,
         })),
         closures: closures.map((c) => closureViewSchema.parse(c.snapshot)),
-        discrepancies: (['CDF', 'USD'] as const).map((currency) => {
-          const values = closures.map(
-            (c) => closureViewSchema.parse(c.snapshot).counts.find((v) => v.currency === currency)!,
-          );
+        discrepancies: currencies.map((currency) => {
+          const values = closures
+            .map((c) =>
+              closureViewSchema.parse(c.snapshot).counts.find((v) => v.currency === currency),
+            )
+            .filter((v): v is NonNullable<typeof v> => v !== undefined);
           return {
             currency,
             measured: values.length,
             count: values.filter((v) => !new D(v.difference).isZero()).length,
             net: values.length
-              ? values.reduce((s, v) => s.plus(v.difference), new D(0)).toFixed(2)
+              ? values
+                  .reduce((s, v) => s.plus(v.difference), new D(0))
+                  .toFixed(currencyPrecision(currency))
               : null,
           };
         }),
@@ -365,8 +377,68 @@ export class ReportsService {
       return result;
     });
   }
+  async valuation(ctx: DataContext, raw: unknown) {
+    const input: ValuationInput = valuationInputSchema.parse(raw);
+    const snapshot = await this.snapshot(ctx, input.query);
+    return this.access.run(ctx, async (tx) => {
+      const allowed = await this.scope(tx, ctx);
+      if (snapshot.cash.some((c) => !allowed.includes(c.id))) throw new DataError('ACCESS_DENIED');
+      await tx.$executeRaw`SELECT caissepro_currency_active(${ctx.companyId}::uuid,${input.currency})`;
+      const needed = snapshot.totals
+        .filter((t) => t.currency !== input.currency)
+        .map((t) => t.currency);
+      if (
+        input.rates.length !== needed.length ||
+        input.rates.some((r) => !needed.includes(r.currency))
+      )
+        throw new DataError('VALUATION_RATE_REQUIRED');
+      const now = new Date(),
+        items = [];
+      for (const t of snapshot.totals) {
+        const chosen = input.rates.find((r) => r.currency === t.currency);
+        const rate =
+          t.currency === input.currency
+            ? null
+            : await tx.referenceExchangeRate.findFirst({
+                where: {
+                  id: chosen?.rateId ?? '',
+                  companyId: ctx.companyId,
+                  fromCurrency: t.currency,
+                  toCurrency: input.currency,
+                  validFrom: { lte: now },
+                },
+              });
+        if (t.currency !== input.currency && !rate) throw new DataError('VALUATION_RATE_REQUIRED');
+        const multiplier = rate?.rate ?? new D(1);
+        items.push({
+          currency: t.currency,
+          originalBalance: t.balance,
+          equivalent: moneyText(new D(t.balance).mul(multiplier), input.currency),
+          rateId: rate?.id ?? null,
+          rate: multiplier.toFixed(12),
+          source: rate?.source ?? 'Même devise — aucun change',
+          validFrom: rate?.validFrom.toISOString() ?? null,
+        });
+      }
+      return valuationSchema.parse({
+        currency: input.currency,
+        asOf: now.toISOString(),
+        accounting: false,
+        rounding: 'HALF_UP_BY_CURRENCY',
+        totalBalance: moneyText(
+          items.reduce((s, i) => s.plus(i.equivalent), new D(0)),
+          input.currency,
+        ),
+        items,
+      });
+    });
+  }
   async close(ctx: DataContext, raw: unknown) {
     const input = closeCashSchema.parse(raw);
+    const counts =
+      'counts' in input
+        ? Object.fromEntries(input.counts.map((c) => [c.currency, c.amount]))
+        : { USD: input.countedUSD, CDF: input.countedCDF };
     return this.access.run(ctx, async (tx) => {
       await this.access.requireCash(tx, ctx, input.cashRegisterId, 'session:manage');
       const accounts = await tx.treasuryAccount.findMany({
@@ -386,12 +458,17 @@ export class ReportsService {
         if (
           prior.closedById !== ctx.userId ||
           view.cashRegisterId !== input.cashRegisterId ||
-          view.counts.find((c) => c.currency === 'USD')!.counted !== input.countedUSD ||
-          view.counts.find((c) => c.currency === 'CDF')!.counted !== input.countedCDF
+          view.counts.length !== Object.keys(counts).length ||
+          view.counts.some((c) => counts[c.currency] !== c.counted)
         )
           throw new DataError('CLOSURE_CONFLICT');
         return view;
       }
+      if (
+        accounts.length !== Object.keys(counts).length ||
+        accounts.some((a) => counts[a.currency] === undefined)
+      )
+        throw new DataError('CLOSURE_COUNTS_REQUIRED');
       const session = await tx.cashSession.findFirst({
         where: {
           companyId: ctx.companyId,
@@ -414,7 +491,7 @@ export class ReportsService {
           sessionId: session.id,
           closedById: ctx.userId,
           closedAt,
-          snapshot: { USD: input.countedUSD, CDF: input.countedCDF },
+          snapshot: counts,
         },
       });
       await tx.auditEvent.create({

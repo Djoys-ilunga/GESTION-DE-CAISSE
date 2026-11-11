@@ -1,0 +1,1662 @@
+[
+  {
+    "code": "AED",
+    "name": "dirham des Émirats arabes unis",
+    "numericCode": "784",
+    "precision": 2,
+    "symbol": "AED",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "AFN",
+    "name": "afghani afghan",
+    "numericCode": "971",
+    "precision": 2,
+    "symbol": "؋",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "ALL",
+    "name": "lek albanais",
+    "numericCode": "008",
+    "precision": 2,
+    "symbol": "ALL",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "AMD",
+    "name": "dram arménien",
+    "numericCode": "051",
+    "precision": 2,
+    "symbol": "֏",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "ANG",
+    "name": "florin antillais",
+    "numericCode": "532",
+    "precision": 2,
+    "symbol": "ANG",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "AOA",
+    "name": "kwanza angolais",
+    "numericCode": "973",
+    "precision": 2,
+    "symbol": "Kz",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "ARS",
+    "name": "peso argentin",
+    "numericCode": "032",
+    "precision": 2,
+    "symbol": "$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "AUD",
+    "name": "dollar australien",
+    "numericCode": "036",
+    "precision": 2,
+    "symbol": "$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "AWG",
+    "name": "florin arubais",
+    "numericCode": "533",
+    "precision": 2,
+    "symbol": "AWG",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "AZN",
+    "name": "manat azéri",
+    "numericCode": "944",
+    "precision": 2,
+    "symbol": "₼",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "BAM",
+    "name": "mark convertible bosniaque",
+    "numericCode": "977",
+    "precision": 2,
+    "symbol": "KM",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "BBD",
+    "name": "dollar barbadien",
+    "numericCode": "052",
+    "precision": 2,
+    "symbol": "$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "BDT",
+    "name": "taka bangladeshi",
+    "numericCode": "050",
+    "precision": 2,
+    "symbol": "৳",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "BGN",
+    "name": "lev bulgare",
+    "numericCode": "975",
+    "precision": 2,
+    "symbol": "BGN",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "BHD",
+    "name": "dinar bahreïni",
+    "numericCode": "048",
+    "precision": 3,
+    "symbol": "BHD",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "BIF",
+    "name": "franc burundais",
+    "numericCode": "108",
+    "precision": 0,
+    "symbol": "BIF",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "BMD",
+    "name": "dollar bermudien",
+    "numericCode": "060",
+    "precision": 2,
+    "symbol": "$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "BND",
+    "name": "dollar brunéien",
+    "numericCode": "096",
+    "precision": 2,
+    "symbol": "$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "BOB",
+    "name": "boliviano bolivien",
+    "numericCode": "068",
+    "precision": 2,
+    "symbol": "Bs",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "BOV",
+    "name": "mvdol bolivien",
+    "numericCode": "984",
+    "precision": 2,
+    "symbol": "BOV",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "BRL",
+    "name": "réal brésilien",
+    "numericCode": "986",
+    "precision": 2,
+    "symbol": "R$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "BSD",
+    "name": "dollar bahaméen",
+    "numericCode": "044",
+    "precision": 2,
+    "symbol": "$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "BTN",
+    "name": "ngultrum bouthanais",
+    "numericCode": "064",
+    "precision": 2,
+    "symbol": "BTN",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "BWP",
+    "name": "pula botswanais",
+    "numericCode": "072",
+    "precision": 2,
+    "symbol": "P",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "BYN",
+    "name": "rouble biélorusse",
+    "numericCode": "933",
+    "precision": 2,
+    "symbol": "р.",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "BZD",
+    "name": "dollar bélizéen",
+    "numericCode": "084",
+    "precision": 2,
+    "symbol": "$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "CAD",
+    "name": "dollar canadien",
+    "numericCode": "124",
+    "precision": 2,
+    "symbol": "$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "CDF",
+    "name": "franc congolais",
+    "numericCode": "976",
+    "precision": 2,
+    "symbol": "CDF",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "CHE",
+    "name": "euro WIR",
+    "numericCode": "947",
+    "precision": 2,
+    "symbol": "CHE",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "CHF",
+    "name": "franc suisse",
+    "numericCode": "756",
+    "precision": 2,
+    "symbol": "CHF",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "CHW",
+    "name": "franc WIR",
+    "numericCode": "948",
+    "precision": 2,
+    "symbol": "CHW",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "CLF",
+    "name": "unité d’investissement chilienne",
+    "numericCode": "990",
+    "precision": 4,
+    "symbol": "CLF",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "CLP",
+    "name": "peso chilien",
+    "numericCode": "152",
+    "precision": 0,
+    "symbol": "$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "CNY",
+    "name": "yuan renminbi chinois",
+    "numericCode": "156",
+    "precision": 2,
+    "symbol": "¥",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "COP",
+    "name": "peso colombien",
+    "numericCode": "170",
+    "precision": 2,
+    "symbol": "$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "COU",
+    "name": "unité de valeur réelle colombienne",
+    "numericCode": "970",
+    "precision": 2,
+    "symbol": "COU",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "CRC",
+    "name": "colón costaricain",
+    "numericCode": "188",
+    "precision": 2,
+    "symbol": "₡",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "CUC",
+    "name": "peso cubain convertible",
+    "numericCode": "931",
+    "precision": 2,
+    "symbol": "$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "CUP",
+    "name": "peso cubain",
+    "numericCode": "192",
+    "precision": 2,
+    "symbol": "$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "CVE",
+    "name": "escudo capverdien",
+    "numericCode": "132",
+    "precision": 2,
+    "symbol": "CVE",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "CZK",
+    "name": "couronne tchèque",
+    "numericCode": "203",
+    "precision": 2,
+    "symbol": "Kč",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "DJF",
+    "name": "franc djiboutien",
+    "numericCode": "262",
+    "precision": 0,
+    "symbol": "DJF",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "DKK",
+    "name": "couronne danoise",
+    "numericCode": "208",
+    "precision": 2,
+    "symbol": "kr",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "DOP",
+    "name": "peso dominicain",
+    "numericCode": "214",
+    "precision": 2,
+    "symbol": "$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "DZD",
+    "name": "dinar algérien",
+    "numericCode": "012",
+    "precision": 2,
+    "symbol": "DZD",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "EGP",
+    "name": "livre égyptienne",
+    "numericCode": "818",
+    "precision": 2,
+    "symbol": "£E",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "ERN",
+    "name": "nafka érythréen",
+    "numericCode": "232",
+    "precision": 2,
+    "symbol": "ERN",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "ETB",
+    "name": "birr éthiopien",
+    "numericCode": "230",
+    "precision": 2,
+    "symbol": "ETB",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "EUR",
+    "name": "euro",
+    "numericCode": "978",
+    "precision": 2,
+    "symbol": "€",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "FJD",
+    "name": "dollar fidjien",
+    "numericCode": "242",
+    "precision": 2,
+    "symbol": "$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "FKP",
+    "name": "livre des îles Malouines",
+    "numericCode": "238",
+    "precision": 2,
+    "symbol": "£",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "GBP",
+    "name": "livre sterling",
+    "numericCode": "826",
+    "precision": 2,
+    "symbol": "£",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "GEL",
+    "name": "lari géorgien",
+    "numericCode": "981",
+    "precision": 2,
+    "symbol": "₾",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "GHS",
+    "name": "cédi ghanéen",
+    "numericCode": "936",
+    "precision": 2,
+    "symbol": "GH₵",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "GIP",
+    "name": "livre de Gibraltar",
+    "numericCode": "292",
+    "precision": 2,
+    "symbol": "£",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "GMD",
+    "name": "dalasi gambien",
+    "numericCode": "270",
+    "precision": 2,
+    "symbol": "GMD",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "GNF",
+    "name": "franc guinéen",
+    "numericCode": "324",
+    "precision": 0,
+    "symbol": "FG",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "GTQ",
+    "name": "quetzal guatémaltèque",
+    "numericCode": "320",
+    "precision": 2,
+    "symbol": "Q",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "GYD",
+    "name": "dollar du Guyana",
+    "numericCode": "328",
+    "precision": 2,
+    "symbol": "$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "HKD",
+    "name": "dollar de Hong Kong",
+    "numericCode": "344",
+    "precision": 2,
+    "symbol": "$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "HNL",
+    "name": "lempira hondurien",
+    "numericCode": "340",
+    "precision": 2,
+    "symbol": "L",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "HTG",
+    "name": "gourde haïtienne",
+    "numericCode": "332",
+    "precision": 2,
+    "symbol": "HTG",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "HUF",
+    "name": "forint hongrois",
+    "numericCode": "348",
+    "precision": 2,
+    "symbol": "Ft",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "IDR",
+    "name": "roupie indonésienne",
+    "numericCode": "360",
+    "precision": 2,
+    "symbol": "Rp",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "ILS",
+    "name": "nouveau shekel israélien",
+    "numericCode": "376",
+    "precision": 2,
+    "symbol": "₪",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "INR",
+    "name": "roupie indienne",
+    "numericCode": "356",
+    "precision": 2,
+    "symbol": "₹",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "IQD",
+    "name": "dinar irakien",
+    "numericCode": "368",
+    "precision": 3,
+    "symbol": "IQD",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "IRR",
+    "name": "riyal iranien",
+    "numericCode": "364",
+    "precision": 2,
+    "symbol": "IRR",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "ISK",
+    "name": "couronne islandaise",
+    "numericCode": "352",
+    "precision": 0,
+    "symbol": "kr",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "JMD",
+    "name": "dollar jamaïcain",
+    "numericCode": "388",
+    "precision": 2,
+    "symbol": "$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "JOD",
+    "name": "dinar jordanien",
+    "numericCode": "400",
+    "precision": 3,
+    "symbol": "JOD",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "JPY",
+    "name": "yen japonais",
+    "numericCode": "392",
+    "precision": 0,
+    "symbol": "¥",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "KES",
+    "name": "shilling kényan",
+    "numericCode": "404",
+    "precision": 2,
+    "symbol": "KES",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "KGS",
+    "name": "som kirghize",
+    "numericCode": "417",
+    "precision": 2,
+    "symbol": "⃀",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "KHR",
+    "name": "riel cambodgien",
+    "numericCode": "116",
+    "precision": 2,
+    "symbol": "៛",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "KMF",
+    "name": "franc comorien",
+    "numericCode": "174",
+    "precision": 0,
+    "symbol": "FC",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "KPW",
+    "name": "won nord-coréen",
+    "numericCode": "408",
+    "precision": 2,
+    "symbol": "₩",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "KRW",
+    "name": "won sud-coréen",
+    "numericCode": "410",
+    "precision": 0,
+    "symbol": "₩",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "KWD",
+    "name": "dinar koweïtien",
+    "numericCode": "414",
+    "precision": 3,
+    "symbol": "KWD",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "KYD",
+    "name": "dollar des îles Caïmans",
+    "numericCode": "136",
+    "precision": 2,
+    "symbol": "$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "KZT",
+    "name": "tenge kazakh",
+    "numericCode": "398",
+    "precision": 2,
+    "symbol": "₸",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "LAK",
+    "name": "kip laotien",
+    "numericCode": "418",
+    "precision": 2,
+    "symbol": "₭",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "LBP",
+    "name": "livre libanaise",
+    "numericCode": "422",
+    "precision": 2,
+    "symbol": "£L",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "LKR",
+    "name": "roupie srilankaise",
+    "numericCode": "144",
+    "precision": 2,
+    "symbol": "Rs",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "LRD",
+    "name": "dollar libérien",
+    "numericCode": "430",
+    "precision": 2,
+    "symbol": "$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "LSL",
+    "name": "loti lesothan",
+    "numericCode": "426",
+    "precision": 2,
+    "symbol": "LSL",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "LYD",
+    "name": "dinar libyen",
+    "numericCode": "434",
+    "precision": 3,
+    "symbol": "LYD",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "MAD",
+    "name": "dirham marocain",
+    "numericCode": "504",
+    "precision": 2,
+    "symbol": "MAD",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "MDL",
+    "name": "leu moldave",
+    "numericCode": "498",
+    "precision": 2,
+    "symbol": "MDL",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "MGA",
+    "name": "ariary malgache",
+    "numericCode": "969",
+    "precision": 2,
+    "symbol": "Ar",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "MKD",
+    "name": "denar macédonien",
+    "numericCode": "807",
+    "precision": 2,
+    "symbol": "MKD",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "MMK",
+    "name": "kyat myanmarais",
+    "numericCode": "104",
+    "precision": 2,
+    "symbol": "K",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "MNT",
+    "name": "tugrik mongol",
+    "numericCode": "496",
+    "precision": 2,
+    "symbol": "₮",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "MOP",
+    "name": "pataca macanaise",
+    "numericCode": "446",
+    "precision": 2,
+    "symbol": "MOP",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "MRU",
+    "name": "ouguiya mauritanien",
+    "numericCode": "929",
+    "precision": 2,
+    "symbol": "MRU",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "MUR",
+    "name": "roupie mauricienne",
+    "numericCode": "480",
+    "precision": 2,
+    "symbol": "Rs",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "MVR",
+    "name": "rufiyaa maldivienne",
+    "numericCode": "462",
+    "precision": 2,
+    "symbol": "MVR",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "MWK",
+    "name": "kwacha malawite",
+    "numericCode": "454",
+    "precision": 2,
+    "symbol": "MWK",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "MXN",
+    "name": "peso mexicain",
+    "numericCode": "484",
+    "precision": 2,
+    "symbol": "$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "MXV",
+    "name": "unité de conversion mexicaine (UDI)",
+    "numericCode": "979",
+    "precision": 2,
+    "symbol": "MXV",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "MYR",
+    "name": "ringgit malais",
+    "numericCode": "458",
+    "precision": 2,
+    "symbol": "RM",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "MZN",
+    "name": "metical mozambicain",
+    "numericCode": "943",
+    "precision": 2,
+    "symbol": "MZN",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "NAD",
+    "name": "dollar namibien",
+    "numericCode": "516",
+    "precision": 2,
+    "symbol": "$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "NGN",
+    "name": "naira nigérian",
+    "numericCode": "566",
+    "precision": 2,
+    "symbol": "₦",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "NIO",
+    "name": "córdoba oro nicaraguayen",
+    "numericCode": "558",
+    "precision": 2,
+    "symbol": "$C",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "NOK",
+    "name": "couronne norvégienne",
+    "numericCode": "578",
+    "precision": 2,
+    "symbol": "kr",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "NPR",
+    "name": "roupie népalaise",
+    "numericCode": "524",
+    "precision": 2,
+    "symbol": "Rs",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "NZD",
+    "name": "dollar néo-zélandais",
+    "numericCode": "554",
+    "precision": 2,
+    "symbol": "$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "OMR",
+    "name": "riyal omanais",
+    "numericCode": "512",
+    "precision": 3,
+    "symbol": "OMR",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "PAB",
+    "name": "balboa panaméen",
+    "numericCode": "590",
+    "precision": 2,
+    "symbol": "PAB",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "PEN",
+    "name": "sol péruvien",
+    "numericCode": "604",
+    "precision": 2,
+    "symbol": "PEN",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "PGK",
+    "name": "kina papouan-néo-guinéen",
+    "numericCode": "598",
+    "precision": 2,
+    "symbol": "PGK",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "PHP",
+    "name": "peso philippin",
+    "numericCode": "608",
+    "precision": 2,
+    "symbol": "₱",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "PKR",
+    "name": "roupie pakistanaise",
+    "numericCode": "586",
+    "precision": 2,
+    "symbol": "Rs",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "PLN",
+    "name": "zloty polonais",
+    "numericCode": "985",
+    "precision": 2,
+    "symbol": "zł",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "PYG",
+    "name": "guaraní paraguayen",
+    "numericCode": "600",
+    "precision": 0,
+    "symbol": "₲",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "QAR",
+    "name": "riyal qatari",
+    "numericCode": "634",
+    "precision": 2,
+    "symbol": "QAR",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "RON",
+    "name": "leu roumain",
+    "numericCode": "946",
+    "precision": 2,
+    "symbol": "L",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "RSD",
+    "name": "dinar serbe",
+    "numericCode": "941",
+    "precision": 2,
+    "symbol": "RSD",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "RUB",
+    "name": "rouble russe",
+    "numericCode": "643",
+    "precision": 2,
+    "symbol": "₽",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "RWF",
+    "name": "franc rwandais",
+    "numericCode": "646",
+    "precision": 0,
+    "symbol": "FR",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "SAR",
+    "name": "riyal saoudien",
+    "numericCode": "682",
+    "precision": 2,
+    "symbol": "SAR",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "SBD",
+    "name": "dollar des îles Salomon",
+    "numericCode": "090",
+    "precision": 2,
+    "symbol": "$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "SCR",
+    "name": "roupie des Seychelles",
+    "numericCode": "690",
+    "precision": 2,
+    "symbol": "SCR",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "SDG",
+    "name": "livre soudanaise",
+    "numericCode": "938",
+    "precision": 2,
+    "symbol": "SDG",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "SEK",
+    "name": "couronne suédoise",
+    "numericCode": "752",
+    "precision": 2,
+    "symbol": "kr",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "SGD",
+    "name": "dollar de Singapour",
+    "numericCode": "702",
+    "precision": 2,
+    "symbol": "$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "SHP",
+    "name": "livre de Sainte-Hélène",
+    "numericCode": "654",
+    "precision": 2,
+    "symbol": "£",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "SLE",
+    "name": "leone sierra-léonais",
+    "numericCode": "925",
+    "precision": 2,
+    "symbol": "SLE",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "SOS",
+    "name": "shilling somalien",
+    "numericCode": "706",
+    "precision": 2,
+    "symbol": "SOS",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "SRD",
+    "name": "dollar surinamais",
+    "numericCode": "968",
+    "precision": 2,
+    "symbol": "$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "SSP",
+    "name": "livre sud-soudanaise",
+    "numericCode": "728",
+    "precision": 2,
+    "symbol": "£",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "STN",
+    "name": "dobra santoméen",
+    "numericCode": "930",
+    "precision": 2,
+    "symbol": "Db",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "SVC",
+    "name": "colón salvadorien",
+    "numericCode": "222",
+    "precision": 2,
+    "symbol": "SVC",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "SYP",
+    "name": "livre syrienne",
+    "numericCode": "760",
+    "precision": 2,
+    "symbol": "£",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "SZL",
+    "name": "lilangeni swazi",
+    "numericCode": "748",
+    "precision": 2,
+    "symbol": "SZL",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "THB",
+    "name": "baht thaïlandais",
+    "numericCode": "764",
+    "precision": 2,
+    "symbol": "฿",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "TJS",
+    "name": "somoni tadjik",
+    "numericCode": "972",
+    "precision": 2,
+    "symbol": "TJS",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "TMT",
+    "name": "nouveau manat turkmène",
+    "numericCode": "934",
+    "precision": 2,
+    "symbol": "TMT",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "TND",
+    "name": "dinar tunisien",
+    "numericCode": "788",
+    "precision": 3,
+    "symbol": "TND",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "TOP",
+    "name": "pa’anga tongan",
+    "numericCode": "776",
+    "precision": 2,
+    "symbol": "$T",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "TRY",
+    "name": "livre turque",
+    "numericCode": "949",
+    "precision": 2,
+    "symbol": "₺",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "TTD",
+    "name": "dollar de Trinité-et-Tobago",
+    "numericCode": "780",
+    "precision": 2,
+    "symbol": "$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "TWD",
+    "name": "nouveau dollar taïwanais",
+    "numericCode": "901",
+    "precision": 2,
+    "symbol": "NT$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "TZS",
+    "name": "shilling tanzanien",
+    "numericCode": "834",
+    "precision": 2,
+    "symbol": "TZS",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "UAH",
+    "name": "hryvnia ukrainienne",
+    "numericCode": "980",
+    "precision": 2,
+    "symbol": "₴",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "UGX",
+    "name": "shilling ougandais",
+    "numericCode": "800",
+    "precision": 0,
+    "symbol": "UGX",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "USD",
+    "name": "dollar des États-Unis",
+    "numericCode": "840",
+    "precision": 2,
+    "symbol": "$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "USN",
+    "name": "dollar des Etats-Unis (jour suivant)",
+    "numericCode": "997",
+    "precision": 2,
+    "symbol": "USN",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "UYI",
+    "name": "peso uruguayen (unités indexées)",
+    "numericCode": "940",
+    "precision": 0,
+    "symbol": "UYI",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "UYU",
+    "name": "peso uruguayen",
+    "numericCode": "858",
+    "precision": 2,
+    "symbol": "$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "UYW",
+    "name": "UYW",
+    "numericCode": "927",
+    "precision": 4,
+    "symbol": "UYW",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "UZS",
+    "name": "sum ouzbek",
+    "numericCode": "860",
+    "precision": 2,
+    "symbol": "UZS",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "VED",
+    "name": "VED",
+    "numericCode": "926",
+    "precision": 2,
+    "symbol": "VED",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "VES",
+    "name": "bolivar vénézuélien",
+    "numericCode": "928",
+    "precision": 2,
+    "symbol": "VES",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "VND",
+    "name": "dông vietnamien",
+    "numericCode": "704",
+    "precision": 0,
+    "symbol": "₫",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "VUV",
+    "name": "vatu vanuatuan",
+    "numericCode": "548",
+    "precision": 0,
+    "symbol": "VUV",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "WST",
+    "name": "tala samoan",
+    "numericCode": "882",
+    "precision": 2,
+    "symbol": "$WS",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "XAF",
+    "name": "franc CFA (BEAC)",
+    "numericCode": "950",
+    "precision": 0,
+    "symbol": "FCFA",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "XCD",
+    "name": "dollar des Caraïbes orientales",
+    "numericCode": "951",
+    "precision": 2,
+    "symbol": "$",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "XOF",
+    "name": "franc CFA (BCEAO)",
+    "numericCode": "952",
+    "precision": 0,
+    "symbol": "F CFA",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "XPF",
+    "name": "franc CFP",
+    "numericCode": "953",
+    "precision": 0,
+    "symbol": "FCFP",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "YER",
+    "name": "riyal yéménite",
+    "numericCode": "886",
+    "precision": 2,
+    "symbol": "YER",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "ZAR",
+    "name": "rand sud-africain",
+    "numericCode": "710",
+    "precision": 2,
+    "symbol": "R",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "ZMW",
+    "name": "kwacha zambien",
+    "numericCode": "967",
+    "precision": 2,
+    "symbol": "Kw",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  },
+  {
+    "code": "ZWG",
+    "name": "or du Zimbabwe",
+    "numericCode": "924",
+    "precision": 2,
+    "symbol": "ZWG",
+    "active": true,
+    "bccRateStatus": "UNVERIFIED",
+    "sourceDate": "2024-06-25"
+  }
+]

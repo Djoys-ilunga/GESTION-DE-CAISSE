@@ -88,6 +88,28 @@ async function installDouble(page: Page, offline = false) {
       host.transferDouble = { financial: () => financial, buffers: () => buffers.length };
       host.__TAURI_INTERNALS__ = {
         invoke: async (command, args) => {
+          if (command === 'admin_request' && args.action === 'money-context')
+            return {
+              currencies: ['CDF', 'USD'].map((code) => ({
+                code,
+                numericCode: code === 'CDF' ? '976' : '840',
+                name: code,
+                symbol: code,
+                precision: 2,
+                active: true,
+                bccRateStatus: 'UNVERIFIED',
+                sourceDate: '2024-06-25',
+              })),
+              companyCurrencies: ['CDF', 'USD'].map((code) => ({ code, active: true, version: 1 })),
+              preferences: {
+                displayCurrency: null,
+                favoriteCurrency: null,
+                locale: 'fr-FR',
+                version: 0,
+              },
+              reporting: { currency: null, version: 1 },
+              generatedAt: new Date().toISOString(),
+            };
           if (command === 'auth_health') {
             if (offline) throw new Error('SERVER_UNAVAILABLE');
             return { status: 'ready' };

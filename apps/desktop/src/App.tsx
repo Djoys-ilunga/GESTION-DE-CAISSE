@@ -1,3 +1,5 @@
+import { MoneyProvider } from './money/MoneyContext';
+import { MoneyPage } from './money/MoneyPage';
 import { Appearance } from './ui/Appearance';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { SettingsPage } from './management/SettingsPage';
@@ -195,13 +197,20 @@ function SessionApp({
     view.profile.cashRegisters.map((r) => r.id).join(','),
   ].join(':');
   return (
-    <Workspace
+    <MoneyProvider
       key={scopeKey}
-      view={view as NativeSessionView & { profile: SessionProfile }}
       gateway={gateway}
-      onLock={() => controller.action(() => gateway.lock())}
+      online={view.state === 'online'}
       onLogout={logout}
-    />
+    >
+      <Workspace
+        key={scopeKey}
+        view={view as NativeSessionView & { profile: SessionProfile }}
+        gateway={gateway}
+        onLock={() => controller.action(() => gateway.lock())}
+        onLogout={logout}
+      />
+    </MoneyProvider>
   );
 }
 export function App(props: { connection?: ConnectionService; gateway?: AuthGateway }) {
@@ -296,8 +305,7 @@ function Login({
               <ShieldCheck size={56} />
             </div>
             <div>
-              <span>CDF</span>
-              <span>USD</span>
+              <span>Multidevise</span>
             </div>
           </div>
           <ul>
@@ -627,6 +635,7 @@ function Workspace({
     { id: 'users', label: 'Utilisateurs', icon: Users, permission: 'users:manage' },
     { id: 'logs', label: 'Journal des connexions', icon: ScrollText, permission: 'auth:logs:read' },
     { id: 'sync', label: 'Synchronisation', icon: RefreshCw, permission: 'draft:read_own' },
+    { id: 'money', label: 'Devises et préférences', icon: Wallet },
     { id: 'security', label: 'Sécurité', icon: ShieldCheck },
   ].filter((item) => !item.permission || permission(item.permission));
   return (
@@ -752,6 +761,8 @@ function Workspace({
             <TransfersPage profile={profile} gateway={gateway} online={online} />
           ) : page === 'sync' ? (
             <SyncCenter profile={profile} gateway={gateway} online={online} />
+          ) : page === 'money' ? (
+            <MoneyPage gateway={gateway} profile={profile} online={online} />
           ) : page === 'settings' ? (
             <SettingsPage profile={profile} gateway={gateway} online={online} />
           ) : page === 'roles' ? (

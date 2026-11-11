@@ -46,7 +46,7 @@ impl Broker {
             .as_ref()
             .ok_or(Error::AuthRequired)?
             .permission(permission)?;
-        if !["snapshot", "pdf", "xlsx", "close"].contains(&action) {
+        if !["snapshot", "pdf", "xlsx", "valuation", "close"].contains(&action) {
             return Err(Error::Forbidden);
         }
         self.revalidate(Some(generation)).await?;
@@ -56,7 +56,12 @@ impl Broker {
             .ok_or(Error::AuthRequired)?
             .permission(permission)?;
         let payload = payload.unwrap_or_else(|| json!({}));
-        let (method, path, body) = if action == "close" {
+        let (method, path, body) = if action == "valuation" {
+            if payload.get("confirmed") != Some(&Value::Bool(true)) {
+                return Err(Error::InvalidInput);
+            }
+            (Method::POST, "reports/valuation".into(), Some(payload))
+        } else if action == "close" {
             if payload.get("confirmed") != Some(&Value::Bool(true)) {
                 return Err(Error::InvalidInput);
             }
@@ -266,7 +271,7 @@ impl Broker {
                 let currency = payload
                     .get("currency")
                     .and_then(Value::as_str)
-                    .filter(|s| ["CDF", "USD"].contains(s))
+                    .filter(|s| s.len() == 3 && s.bytes().all(|c| c.is_ascii_uppercase()))
                     .ok_or(Error::InvalidInput)?;
                 (
                     Method::PUT,
@@ -836,7 +841,9 @@ impl Broker {
                 _ => Error::ClosureConflict,
             });
         }
-        if path.starts_with("management") && response.status().as_u16() == 409 {
+        if (path.starts_with("management") || path.starts_with("money"))
+            && response.status().as_u16() == 409
+        {
             let mut bytes = Vec::new();
             while let Some(chunk) = response.chunk().await.map_err(|_| Error::Unavailable)? {
                 if bytes.len() + chunk.len() > 4096 {
@@ -848,6 +855,9 @@ impl Broker {
             return Err(match body.get("code").and_then(Value::as_str) {
                 Some("REPORT_TOO_LARGE") => Error::ReportTooLarge,
                 Some("AGENCY_HAS_ACTIVE_CASH") => Error::AgencyHasActiveCash,
+                Some("CURRENCY_INACTIVE") | Some("CURRENCY_UNKNOWN") => Error::CurrencyInactive,
+                Some("CURRENCY_IN_USE") => Error::CurrencyInUse,
+                Some("CURRENCY_PRECISION") => Error::CurrencyPrecision,
                 _ => Error::SettingsConflict,
             });
         }
@@ -919,7 +929,7 @@ impl Broker {
         let health = self.raw(Method::GET, "health/ready", None, None).await?;
         if health.get("service").and_then(Value::as_str) != Some("caissepro-api")
             || health.get("status").and_then(Value::as_str) != Some("ready")
-            || health.get("protocolVersion").and_then(Value::as_u64) != Some(1)
+            || health.get("protocolVersion").and_then(Value::as_u64) != Some(2)
             || health.get("deploymentId").and_then(Value::as_str) != Some(&self.deployment)
         {
             return Err(Error::Identity);
@@ -929,7 +939,7 @@ impl Broker {
     pub async fn check_health(&self) -> Result<Value> {
         self.health().await?;
         Ok(
-            json!({"service":"caissepro-api","protocolVersion":1,"deploymentId":self.deployment,"status":"ready"}),
+            json!({"service":"caissepro-api","protocolVersion":2,"deploymentId":self.deployment,"status":"ready"}),
         )
     }
     pub async fn tick(&self) -> Result<SessionView> {
@@ -1140,6 +1150,7 @@ impl Broker {
                 if scope_changed {
                     session.balances = None;
                     session.cash_catalog = None;
+                    session.money_context = None;
                     session.drafts.clear();
                     session.pending_sync.clear();
                     session.form_buffers.clear();
@@ -1227,6 +1238,7 @@ impl Broker {
                         if !response.profile.same_scope(&s.profile) {
                             s.balances = None;
                             s.cash_catalog = None;
+                            s.money_context = None;
                             s.drafts.clear();
                             s.pending_sync.clear();
                             s.form_buffers.clear();
@@ -1385,9 +1397,51 @@ impl Broker {
         payload: Option<Value>,
         expected: Option<u64>,
     ) -> Result<Value> {
+        if ["money-context", "money-preferences"].contains(&action) {
+            let (generation, _) = self.snapshot(true, false, expected)?;
+            {
+                let state = self.state()?;
+                let session = state.session.as_ref().ok_or(Error::AuthRequired)?;
+                if !session.online {
+                    session.permission("offline:access")?;
+                    if action != "money-context" {
+                        return Err(Error::OnlineRequired);
+                    }
+                    return session.money_context.clone().ok_or(Error::OnlineRequired);
+                }
+            }
+            self.revalidate(Some(generation)).await?;
+            let value = self
+                .protected(
+                    if action == "money-context" {
+                        Method::GET
+                    } else {
+                        Method::PUT
+                    },
+                    if action == "money-context" {
+                        "money/context"
+                    } else {
+                        "money/preferences"
+                    },
+                    if action == "money-context" {
+                        None
+                    } else {
+                        payload
+                    },
+                    Some(generation),
+                )
+                .await?;
+            let mut state = self.state()?;
+            Self::generation(&state, Some(generation))?;
+            let session = state.session.as_mut().ok_or(Error::AuthRequired)?;
+            session.guard(self.clock.now())?;
+            session.money_context = Some(value.clone());
+            return Ok(value);
+        }
         let (generation, _) = self.snapshot(true, true, expected)?;
         let permission = match action {
-            "settings" | "company" | "agency" | "category" | "rate" => "cash:configure",
+            "money-currencies" | "money-reporting" | "settings" | "company" | "agency"
+            | "category" | "rate" => "cash:configure",
             "references" => "directory:read",
             "supervision" => "ledger:read",
             "audit" | "audit-pdf" | "audit-xlsx" | "logs" => "auth:logs:read",
@@ -1400,7 +1454,16 @@ impl Broker {
             .as_ref()
             .ok_or(Error::AuthRequired)?
             .permission(permission)?;
-        if ["company", "agency", "category", "rate"].contains(&action) {
+        if [
+            "money-currencies",
+            "money-reporting",
+            "company",
+            "agency",
+            "category",
+            "rate",
+        ]
+        .contains(&action)
+        {
             if payload.as_ref().and_then(|v| v.get("confirmed")) != Some(&Value::Bool(true)) {
                 return Err(Error::InvalidInput);
             }
@@ -1412,6 +1475,8 @@ impl Broker {
                 .permission(permission)?;
         }
         let (method, path, body) = match action {
+            "money-currencies" => (Method::PUT, "money/currencies".into(), payload),
+            "money-reporting" => (Method::PUT, "money/reporting".into(), payload),
             "settings" => (Method::GET, "management/settings".into(), None),
             "references" => (Method::GET, "management/references".into(), None),
             "supervision" => (Method::GET, "management/supervision".into(), None),

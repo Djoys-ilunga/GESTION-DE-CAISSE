@@ -19,6 +19,12 @@ export class ReportsController {
   @Get('xlsx') @Permission('ledger:read') async xlsx(@Req() r: AuthRequest, @Query() q: unknown) {
     return exportReport(await this.reports.snapshot(context(r), q), 'xlsx');
   }
+  @Post('valuation') @Permission('ledger:read') valuation(
+    @Req() r: AuthRequest,
+    @Body() b: unknown,
+  ) {
+    return this.reports.valuation(context(r), b);
+  }
   @Post('close') @Permission('session:manage') close(@Req() r: AuthRequest, @Body() b: unknown) {
     return this.reports.close(context(r), b);
   }

@@ -7,6 +7,12 @@ pub use model::*;
 type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("CURRENCY_INACTIVE")]
+    CurrencyInactive,
+    #[error("CURRENCY_IN_USE")]
+    CurrencyInUse,
+    #[error("CURRENCY_PRECISION")]
+    CurrencyPrecision,
     #[error("SETTINGS_CONFLICT")]
     SettingsConflict,
     #[error("AGENCY_HAS_ACTIVE_CASH")]

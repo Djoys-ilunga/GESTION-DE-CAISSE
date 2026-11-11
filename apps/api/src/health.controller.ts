@@ -1,5 +1,5 @@
 import { Controller, Get, Header, Inject, ServiceUnavailableException } from '@nestjs/common';
-import type { ApiHealth } from '@caissepro/shared';
+import { API_PROTOCOL_VERSION, type ApiHealth } from '@caissepro/shared';
 import { Public } from './auth/auth.guard';
 import { READINESS_DATABASE, type ReadinessDatabase } from './database.port';
 @Controller('health')
@@ -16,7 +16,7 @@ export class HealthController {
     }
     return {
       service: 'caissepro-api',
-      protocolVersion: 1,
+      protocolVersion: API_PROTOCOL_VERSION,
       deploymentId: process.env.API_DEPLOYMENT_ID!,
       status: 'ready',
     };

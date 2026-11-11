@@ -1,5 +1,6 @@
 import { Injectable, type OnModuleInit, type OnModuleDestroy } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { registerCurrencyDefinitions } from '@caissepro/shared';
 import { PrismaClient } from './generated/prisma/client';
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
@@ -23,6 +24,15 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   async ready() {
     return this.$transaction(async (tx) => {
       await tx.$executeRawUnsafe('SET LOCAL ROLE caissepro_runtime');
+      const catalog = await tx.currencyDefinition.findMany({
+        select: { code: true, precision: true },
+      });
+      if (
+        !catalog.some((c) => c.code === 'CDF' && c.precision === 2) ||
+        !catalog.some((c) => c.code === 'USD' && c.precision === 2)
+      )
+        throw new Error('CURRENCY_SCHEMA_NOT_READY');
+      registerCurrencyDefinitions(catalog);
       return tx.installation.count();
     });
   }

@@ -26,7 +26,7 @@ function fixture() {
   writeFileSync(join(directory, 'acces-prives.txt'), text);
   const health = {
     service: 'caissepro-api',
-    protocolVersion: 1,
+    protocolVersion: 2,
     deploymentId: 'caissepro-demo',
     status: 'ready',
   };

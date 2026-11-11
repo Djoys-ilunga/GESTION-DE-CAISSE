@@ -89,6 +89,7 @@ pub struct Session {
     pub drafts: HashMap<uuid::Uuid, DraftRecord>,
     pub balances: Option<serde_json::Value>,
     pub cash_catalog: Option<serde_json::Value>,
+    pub money_context: Option<serde_json::Value>,
     pub revalidating: bool,
     pub form_buffers: HashMap<uuid::Uuid, FormBuffer>,
     pub pending_sync: HashMap<uuid::Uuid, PendingSync>,
@@ -151,6 +152,7 @@ impl Session {
             drafts: HashMap::new(),
             balances: None,
             cash_catalog: None,
+            money_context: None,
             revalidating: false,
             pending_sync: HashMap::new(),
             form_buffers: HashMap::new(),
@@ -243,17 +245,40 @@ impl Session {
 
         let created = millis(&draft.created_at)?;
         let expires = millis(&draft.expires_at)?;
-        let valid_amount = draft.amount.split_once('.').is_some_and(|(a, b)| {
-            !a.is_empty()
-                && a.len() <= 16
-                && a.bytes().all(|c| c.is_ascii_digit())
-                && (a == "0" || !a.starts_with('0'))
-                && b.len() == 2
-                && b.bytes().all(|c| c.is_ascii_digit())
-                && draft.amount != "0.00"
-        });
+        let (a, b) = draft.amount.split_once('.').unwrap_or((&draft.amount, ""));
+        let valid_amount = !a.is_empty()
+            && a.len() <= 16
+            && a.bytes().all(|c| c.is_ascii_digit())
+            && (a == "0" || !a.starts_with('0'))
+            && b.len() <= 4
+            && b.bytes().all(|c| c.is_ascii_digit())
+            && (!draft.amount.contains('.') || !b.is_empty())
+            && draft.amount.bytes().any(|c| (b'1'..=b'9').contains(&c));
+        // The cached server catalog is authoritative when available. Drafts retain
+        // their real currency; an inactive historical code remains editable.
+        if let Some(context) = &self.money_context {
+            let precision = context
+                .get("currencies")
+                .and_then(|v| v.as_array())
+                .and_then(|list| {
+                    list.iter().find(|c| {
+                        c.get("code").and_then(|v| v.as_str()) == Some(draft.currency.as_str())
+                    })
+                })
+                .and_then(|c| c.get("precision"))
+                .and_then(|p| p.as_u64())
+                .ok_or(Error::InvalidInput)?;
+            if precision > 4
+                || b.len() != precision as usize
+                || (precision == 0 && draft.amount.contains('.'))
+                || (precision > 0 && !draft.amount.contains('.'))
+            {
+                return Err(Error::InvalidInput);
+            }
+        }
         if !valid_amount
-            || !["CDF", "USD"].contains(&draft.currency.as_str())
+            || draft.currency.len() != 3
+            || draft.currency.bytes().any(|c| !c.is_ascii_uppercase())
             || !["receipt", "expense-request"].contains(&draft.kind.as_str())
             || draft.description.trim().is_empty()
             || draft.description.chars().count() > 500

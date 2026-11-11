@@ -1,3 +1,5 @@
+import { useMoney } from '../money/MoneyContext';
+import { CurrencyOptions } from '../money/MoneyContext';
 import { useEffect, useRef, useState } from 'react';
 import { ClipboardCheck, Plus, RefreshCw } from 'lucide-react';
 import {
@@ -11,7 +13,7 @@ import {
   type SupportingDocument,
 } from '@caissepro/shared';
 import { message, type AuthGateway, type SessionDraft } from '../auth/gateway';
-import { formatDate, formatMoney } from '../cash/CashPage';
+import { formatDate } from '../cash/CashPage';
 import { ExpenseForm } from './ExpenseForm';
 import { ExpensePolicies } from './ExpensePolicies';
 import { VoucherViewer } from './VoucherViewer';
@@ -34,6 +36,7 @@ export function ExpensesPage({
   gateway: AuthGateway;
   online: boolean;
 }) {
+  const { format: formatMoney } = useMoney();
   const can = (permission: string) => profile.permissions.includes(permission);
   const [tab, setTab] = useState<'drafts' | 'requests' | 'policies'>(
       can('draft:read_own') ? 'drafts' : 'requests',
@@ -68,7 +71,7 @@ export function ExpensesPage({
         ? gateway.expenseList({
             page,
             ...(state ? { state: state as ExpenseView['state'] } : {}),
-            ...(currency ? { currency: currency as 'CDF' | 'USD' } : {}),
+            ...(currency ? { currency: currency as string } : {}),
           })
         : Promise.resolve(null),
     ]);
@@ -103,7 +106,7 @@ export function ExpensesPage({
             .expenseList({
               page,
               ...(state ? { state: state as ExpenseView['state'] } : {}),
-              ...(currency ? { currency: currency as 'CDF' | 'USD' } : {}),
+              ...(currency ? { currency: currency as string } : {}),
             })
             .catch((e) => {
               if (active) setError(message(e));
@@ -465,9 +468,8 @@ export function ExpensesPage({
                     setPage(1);
                   }}
                 >
-                  <option value="">CDF et USD séparés</option>
-                  <option>CDF</option>
-                  <option>USD</option>
+                  <option value="">Devises séparées</option>
+                  <CurrencyOptions include={currency} />
                 </select>
               </label>
             </div>
@@ -598,6 +600,7 @@ function ExpenseDetail({
   onPay(): void;
   onVoucher(id: string): void;
 }) {
+  const { format: formatMoney } = useMoney();
   const [reason, setReason] = useState(''),
     [attested, setAttested] = useState(false),
     [evidence, setEvidence] = useState<SupportingDocument | null>(null),

@@ -107,7 +107,7 @@ export const formBufferInputSchema = z
         destinationCurrency: z.string().max(3).optional(),
         rate: z.string().max(25).optional(),
         rateSource: z.string().max(100).optional(),
-        amount: z.string().max(19).optional(),
+        amount: z.string().max(21).optional(),
         currency: z.string().max(3).optional(),
         description: z.string().max(500).optional(),
         provenance: z.string().max(160).optional(),

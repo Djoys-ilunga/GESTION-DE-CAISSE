@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { currencySchema, positiveAmountSchema } from './money.js';
+import {
+  currencySchema,
+  positiveAmountSchema,
+  validCurrencyAmount,
+  currencyPrecision,
+} from './money.js';
 import { receiptDetailsSchema } from './receipts.js';
 import { expenseDetailsSchema } from './expenses.js';
 export * from './auth.js';
@@ -7,7 +12,7 @@ export * from './money.js';
 export * from './receipts.js';
 export * from './expenses.js';
 export * from './synchronization.js';
-export const API_PROTOCOL_VERSION = 1 as const;
+export const API_PROTOCOL_VERSION = 2 as const;
 export const apiHealthSchema = z
   .object({
     service: z.literal('caissepro-api'),
@@ -30,6 +35,13 @@ export const draftSchema = z
     expenseDetails: expenseDetailsSchema.optional(),
   })
   .strict()
+  .refine((d) => {
+    try {
+      return validCurrencyAmount(d.amount, currencyPrecision(d.currency));
+    } catch {
+      return false;
+    }
+  }, 'Précision monétaire invalide.')
   .refine((d) => Date.parse(d.expiresAt) > Date.parse(d.createdAt), 'Expiration invalide.')
   .refine(
     (d) =>

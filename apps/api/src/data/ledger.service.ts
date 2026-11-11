@@ -1,8 +1,11 @@
+import { moneyText } from './money';
+import { currencyPrecision } from '@caissepro/shared';
+import type { Currency } from '@caissepro/shared';
 import { Injectable, Inject } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { currencySchema, positiveAmountSchema } from '@caissepro/shared';
-import { Prisma, type OperationKind, type Currency } from '../generated/prisma/client';
+import { Prisma, type OperationKind } from '../generated/prisma/client';
 import { CentralAccess, DataError, type DataContext, type Tx } from './central-access';
 // 18 chiffres de montant × 24 chiffres de taux : aucun arrondi intermédiaire.
 const ExactDecimal = Prisma.Decimal.clone({
@@ -202,9 +205,9 @@ export class LedgerService {
       if (!row) throw new DataError('ACCOUNT_NOT_FOUND');
       return {
         currency: row.currency,
-        balance: row.balance.toFixed(2),
-        reserved: row.reserved.toFixed(2),
-        available: row.available.toFixed(2),
+        balance: moneyText(row.balance, row.currency),
+        reserved: moneyText(row.reserved, row.currency),
+        available: moneyText(row.available, row.currency),
       };
     });
   }
@@ -386,14 +389,14 @@ export class LedgerService {
             accountId: ex.accountId,
             cashSessionId: input.cashSessionId,
             currency: ex.currency,
-            amount: ex.amount.toFixed(2),
+            amount: moneyText(ex.amount, ex.currency),
             side: 'CREDIT',
           },
           {
             accountId: input.counterAccountId,
             cashSessionId: null,
             currency: ex.currency,
-            amount: ex.amount.toFixed(2),
+            amount: moneyText(ex.amount, ex.currency),
             side: 'DEBIT',
           },
         ],
@@ -419,8 +422,8 @@ export class LedgerService {
       ]);
       const target = new ExactDecimal(input.amount)
         .mul(rate.rate.toString())
-        .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
-        .toFixed(2);
+        .toDecimalPlaces(currencyPrecision(rate.toCurrency), Prisma.Decimal.ROUND_HALF_UP)
+        .toFixed(currencyPrecision(rate.toCurrency));
       positiveAmountSchema.parse(target);
       return {
         currency: null,
@@ -484,7 +487,7 @@ export class LedgerService {
             accountId: e.accountId,
             cashSessionId: e.account.cashRegisterId ? (input.sessions[e.accountId] ?? null) : null,
             currency: e.currency,
-            amount: e.amount.toFixed(2),
+            amount: moneyText(e.amount, e.currency),
             side: e.side === 'DEBIT' ? 'CREDIT' : 'DEBIT',
           })),
         };

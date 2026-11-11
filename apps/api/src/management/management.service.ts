@@ -1,3 +1,4 @@
+import { moneyText } from '../data/money';
 import { Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import {
@@ -284,7 +285,7 @@ export class ManagementService {
         ...expenses.map((e) => ({
           id: 'expense-' + e.id,
           title: 'Dépense en attente',
-          message: `${e.amount.toFixed(2)} ${e.currency} — consulter la demande.`,
+          message: `${moneyText(e.amount, e.currency)} ${e.currency} — consulter la demande.`,
           severity: 'info' as const,
           target: 'expenses' as const,
           createdAt: e.createdAt.toISOString(),
