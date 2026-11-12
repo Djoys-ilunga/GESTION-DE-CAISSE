@@ -12,12 +12,15 @@ function fixture() {
   mkdirSync(desktop, { recursive: true });
   mkdirSync(join(root, 'node_modules/vite/bin'), { recursive: true });
   writeFileSync(vite, '// Fixture only.');
+  // This tests the macOS process classifier with synthetic ps/lsof records,
+  // independently of the host Node binary's name (node.exe on Windows).
+  const nodeExecutable = join(root, 'node');
   const records = [
     {
       pid: 12345,
       port: 3001,
-      executable: process.execPath,
-      command: process.execPath + ' apps/api/dist/main.js',
+      executable: nodeExecutable,
+      command: nodeExecutable + ' apps/api/dist/main.js',
       cwd: root,
       started: 'Tue Nov 10 10:00:00 2026',
       alive: true,
@@ -25,8 +28,8 @@ function fixture() {
     {
       pid: 12346,
       port: 1420,
-      executable: process.execPath,
-      command: process.execPath + ' ' + vite + ' --host 127.0.0.1 --port 1420 --strictPort',
+      executable: nodeExecutable,
+      command: nodeExecutable + ' ' + vite + ' --host 127.0.0.1 --port 1420 --strictPort',
       cwd: desktop,
       started: 'Tue Nov 10 10:00:01 2026',
       alive: true,
@@ -101,7 +104,7 @@ test('refuses unrelated Node commands even when their working directory is this 
     const record = f.records[0];
     assert.equal(
       demoProcessRole(
-        { ...record, command: process.execPath + ' scripts/another-project.mjs' },
+        { ...record, command: record.executable + ' scripts/another-project.mjs' },
         f.root,
       ),
       null,
