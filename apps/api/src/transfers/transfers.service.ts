@@ -42,6 +42,9 @@ export class TransfersService {
       receivedById: row.receivedById,
       operationId: row.operationId,
       slip: row.slip,
+      rateQuoteId: row.rateQuoteId,
+      rateOrigin: row.rate ? (row.rateOrigin ?? 'MANUAL') : null,
+      rateEvidence: row.rateEvidence,
     });
   }
   private async endpoints(
@@ -273,6 +276,7 @@ export class TransfersService {
             toCurrency: row.destinationCurrency,
             rate: row.rate,
             effectiveAt: row.handedOverAt!,
+            transferOrderId: row.id,
             source: row.rateSource,
           },
         });

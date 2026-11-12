@@ -21,6 +21,7 @@ export const transferDraftSchema = z
     amount: positiveAmountSchema,
     rate: transferRateSchema.nullable(),
     rateSource: z.string().trim().max(100),
+    rateQuoteId: z.uuid().nullable().optional(),
     description: z.string().trim().min(1).max(500),
   })
   .strict()
@@ -97,6 +98,9 @@ export const transferViewSchema = z
     receivedById: z.uuid().nullable(),
     operationId: z.uuid().nullable(),
     slip: transferSlipSchema.nullable(),
+    rateQuoteId: z.uuid().nullable().optional(),
+    rateOrigin: z.enum(['BCC', 'MANUAL']).nullable().optional(),
+    rateEvidence: z.record(z.string(), z.unknown()).nullable().optional(),
   })
   .strict();
 export type TransferView = z.infer<typeof transferViewSchema>;

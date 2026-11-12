@@ -63,6 +63,8 @@ model Installation {
 }
 
 model Company {
+  exchangeRatePolicy ExchangeRatePolicy?
+
   address          String                   @default("") @db.VarChar(300)
   phone            String                   @default("") @db.VarChar(60)
   email            String                   @default("") @db.VarChar(254)
@@ -401,6 +403,9 @@ model Transfer {
 }
 
 model ExchangeRate {
+  transferOrderId        String?              @db.Uuid
+  rateEvidence           Json?
+  transferOrder          TransferOrder?       @relation(fields: [companyId, transferOrderId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
   id                     String               @id @default(uuid()) @db.Uuid
   companyId              String               @db.Uuid
   fromCurrency           String
@@ -413,6 +418,7 @@ model ExchangeRate {
   fromCurrencyDefinition CurrencyDefinition   @relation("ExchangeRate_fromCurrency_catalog", fields: [fromCurrency], references: [code], onDelete: NoAction, onUpdate: NoAction, map: "ExchangeRate_fromCurrency_catalog_fk")
   toCurrencyDefinition   CurrencyDefinition   @relation("ExchangeRate_toCurrency_catalog", fields: [toCurrency], references: [code], onDelete: NoAction, onUpdate: NoAction, map: "ExchangeRate_toCurrency_catalog_fk")
 
+  @@unique([companyId, transferOrderId])
   @@unique([companyId, id])
   @@index([companyId, fromCurrency, toCurrency, effectiveAt])
 }
@@ -690,6 +696,11 @@ model SyncEvent {
 }
 
 model TransferOrder {
+  rateQuoteId                   String?            @db.Uuid
+  rateOrigin                    String?            @db.VarChar(10)
+  rateEvidence                  Json?
+  rateQuote                     RateQuote?         @relation(fields: [companyId, rateQuoteId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+  appliedRates                  ExchangeRate[]
   id                            String             @id @db.Uuid
   companyId                     String             @db.Uuid
   authorId                      String             @db.Uuid
@@ -762,6 +773,9 @@ model ReferenceExchangeRate {
 }
 
 model CurrencyDefinition {
+  bccQuotations                      BccQuotation[]
+  rateQuotesFrom                     RateQuote[]             @relation("RateQuoteFrom")
+  rateQuotesTo                       RateQuote[]             @relation("RateQuoteTo")
   code                               String                  @id
   numericCode                        String                  @db.VarChar(3)
   name                               String                  @db.VarChar(160)
@@ -824,4 +838,117 @@ model UserMoneyPreference {
   favorite         CompanyCurrency? @relation("UserFavoriteCurrency", fields: [companyId, favoriteCurrency], references: [companyId, code], onDelete: NoAction, onUpdate: NoAction)
 
   @@id([companyId, userId])
+}
+
+model BccSourceApproval {
+  id              String           @id @db.VarChar(20)
+  sourceUrl       String           @db.VarChar(300)
+  contractVersion String?          @db.VarChar(100)
+  approved        Boolean          @default(false)
+  approvedAt      DateTime?        @db.Timestamptz(3)
+  evidence        String?          @db.VarChar(1000)
+  publications    BccPublication[]
+}
+
+model BccRefreshState {
+  id            String    @id @db.VarChar(20)
+  state         String    @default("UNVERIFIED") @db.VarChar(20)
+  code          String    @default("SOURCE_CONTRACT_UNVERIFIED") @db.VarChar(80)
+  checkedAt     DateTime? @db.Timestamptz(3)
+  lastSuccessAt DateTime? @db.Timestamptz(3)
+  nextAllowedAt DateTime? @db.Timestamptz(3)
+  leaseToken    String?   @db.Uuid
+  leaseUntil    DateTime? @db.Timestamptz(3)
+  failures      Int       @default(0)
+}
+
+model BccPublication {
+  ingestionTxId BigInt @default(dbgenerated("txid_current()"))
+
+  id               String            @id @db.Uuid
+  sourceId         String            @default("bcc") @db.VarChar(20)
+  sourceUrl        String            @db.VarChar(300)
+  sourceReference  String            @db.VarChar(160)
+  publicationDate  String            @db.VarChar(10)
+  publishedAt      DateTime?         @db.Timestamptz(3)
+  retrievedAt      DateTime          @db.Timestamptz(3)
+  contentSha256    String            @db.Char(64)
+  connectorVersion String            @db.VarChar(100)
+  source           BccSourceApproval @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  quotes           BccQuotation[]
+  rateQuotes       RateQuote[]
+  events           BccRefreshEvent[]
+
+  @@unique([sourceId, contentSha256,connectorVersion])
+  @@index([publicationDate, retrievedAt])
+}
+
+model BccQuotation {
+  publicationId String             @db.Uuid
+  currency      String             @db.VarChar(3)
+  unit          String             @db.VarChar(3)
+  unitEvidence  String             @db.VarChar(160)
+  rawBuy        Decimal?           @db.Decimal(30, 12)
+  rawMean       Decimal?           @db.Decimal(30, 12)
+  rawSell       Decimal?           @db.Decimal(30, 12)
+  buy           Decimal?           @db.Decimal(38, 18)
+  mean          Decimal?           @db.Decimal(38, 18)
+  sell          Decimal?           @db.Decimal(38, 18)
+  publication   BccPublication     @relation(fields: [publicationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  definition    CurrencyDefinition @relation(fields: [currency], references: [code], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([publicationId, currency])
+}
+
+model BccRefreshEvent {
+  id            String          @id @db.Uuid
+  state         String          @db.VarChar(20)
+  code          String          @db.VarChar(80)
+  checkedAt     DateTime        @db.Timestamptz(3)
+  retrievedAt   DateTime?       @db.Timestamptz(3)
+  publicationId String?         @db.Uuid
+  publication   BccPublication? @relation(fields: [publicationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([checkedAt])
+}
+
+model ExchangeRatePolicy {
+  companyId       String   @id @db.Uuid
+  allowManual     Boolean  @default(true)
+  quoteKind       String   @default("MEAN") @db.VarChar(5)
+  maxAgeHours     Int      @default(96)
+  quoteTtlMinutes Int      @default(15)
+  version         Int      @default(1)
+  updatedAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedById     String?  @db.Uuid
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model RateQuote {
+  id             String             @id @db.Uuid
+  companyId      String             @db.Uuid
+  createdById    String             @db.Uuid
+  fromCurrency   String             @db.VarChar(3)
+  toCurrency     String             @db.VarChar(3)
+  amount         Decimal            @db.Decimal(24, 8)
+  targetAmount   Decimal            @db.Decimal(24, 8)
+  mode           String             @db.VarChar(6)
+  quoteKind      String             @db.VarChar(5)
+  referenceRate  Decimal?           @db.Decimal(24, 12)
+  appliedRate    Decimal            @db.Decimal(24, 12)
+  source         String             @db.VarChar(100)
+  justification  String?            @db.VarChar(500)
+  effectiveAt    DateTime           @db.Timestamptz(3)
+  createdAt      DateTime           @db.Timestamptz(3)
+  expiresAt      DateTime           @db.Timestamptz(3)
+  publicationId  String?            @db.Uuid
+  policyVersion  Int
+  snapshot       Json
+  publication    BccPublication?    @relation(fields: [publicationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  fromDefinition CurrencyDefinition @relation("RateQuoteFrom", fields: [fromCurrency], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  toDefinition   CurrencyDefinition @relation("RateQuoteTo", fields: [toCurrency], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  orders         TransferOrder[]
+
+  @@unique([companyId, id])
+  @@index([companyId, createdAt])
 }

@@ -44,7 +44,8 @@
     "demo:native": "bash scripts/demo-native.sh",
     "test:currency:upgrade": "node scripts/test-currency-upgrade.mjs",
     "currencies:import": "node scripts/import-currencies.mjs",
-    "demo:backup": "node scripts/demo-database-backup.mjs"
+    "demo:backup": "node scripts/demo-database-backup.mjs",
+    "test:bcc:upgrade": "node scripts/test-currency-upgrade.mjs --bcc"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

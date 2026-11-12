@@ -1,0 +1,34 @@
+.exchange-page {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+.exchange-page .panel {
+  min-width: 0;
+}
+.exchange-page th,
+.exchange-page td {
+  padding: 0.7rem;
+  text-align: left;
+  vertical-align: top;
+}
+.exchange-page details {
+  margin: 1rem 0;
+}
+.exchange-page summary {
+  cursor: pointer;
+}
+.exchange-hash {
+  overflow-wrap: anywhere;
+}
+.exchange-page .form-grid {
+  align-items: end;
+}
+.exchange-page .form-grid label {
+  display: grid;
+  gap: 0.35rem;
+}
+.exchange-page input,
+.exchange-page select {
+  max-width: 100%;
+}

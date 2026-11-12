@@ -92,7 +92,12 @@ describe('Synchronisation v2 avec API et PostgreSQL réels', () => {
     const s = await setup(),
       value = body(s),
       responses = await Promise.all(Array.from({ length: 6 }, () => send(s, value)));
-    expect(responses.map((r) => r.status)).toEqual(Array(6).fill(201));
+    expect(
+      responses.map((r) => r.status),
+      JSON.stringify(
+        responses.filter((r) => r.status !== 201).map((r) => ({ status: r.status, error: r.body })),
+      ),
+    ).toEqual(Array(6).fill(201));
     const a = draftSyncResultSchema.parse(responses[0]!.body);
     expect(a.outcome).toBe('accepted-as-draft');
     if (a.outcome !== 'accepted-as-draft') throw new Error('Accusé requis');

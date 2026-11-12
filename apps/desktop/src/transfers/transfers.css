@@ -59,3 +59,15 @@
     flex-wrap: wrap;
   }
 }
+
+.rate-evidence {
+  display: grid;
+  gap: 0.6rem;
+  overflow-wrap: anywhere;
+}
+.rate-evidence dt {
+  font-weight: 600;
+}
+.rate-evidence dd {
+  margin: 0.2rem 0 0;
+}

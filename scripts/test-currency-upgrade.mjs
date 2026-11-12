@@ -11,6 +11,10 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { localDockerEndpoint } from './demo-macos.mjs';
 import assert from 'node:assert/strict';
+const bccUpgrade = process.argv.includes('--bcc');
+const targetMigration = bccUpgrade
+  ? '20261111000200_bcc_exchange'
+  : '20261111000100_extensible_currencies';
 const require = createRequire(new URL('../apps/api/package.json', import.meta.url));
 require('dotenv').config({ path: new URL('../.env', import.meta.url), quiet: true });
 const { Client } = require('pg');
@@ -32,8 +36,9 @@ try {
   db = new Client({ connectionString: base.toString() });
   await db.connect();
   const directory = new URL('../apps/api/prisma/migrations/', import.meta.url),
-    names = (await readdir(directory)).filter((n) => /^\d/.test(n)).sort(),
+    names = (await readdir(directory)).filter((n) => /^\d/.test(n) && n <= targetMigration).sort(),
     latest = names.at(-1);
+  assert.equal(latest, targetMigration);
   for (const n of names.slice(0, -1))
     await db.query(await readFile(new URL(n + '/migration.sql', directory), 'utf8'));
   const c = randomUUID(),
@@ -138,6 +143,22 @@ try {
     [randomUUID(), c, cash, session, u, { CDF: '9007199254740993.01', USD: '123456.78' }],
   );
   await db.query('COMMIT');
+  if (bccUpgrade) {
+    await db.query(
+      'INSERT INTO "ExchangeRate"(id,"companyId","fromCurrency","toCurrency",rate,source,"effectiveAt")VALUES($1,$2,\'USD\',\'CDF\',2500,\'Taux historique conservé\',clock_timestamp())',
+      [randomUUID(), c],
+    );
+    await db.query('BEGIN');
+    await db.query(
+      "SELECT set_config('caissepro.company_id',$1,true),set_config('caissepro.actor_id',$2,true)",
+      [c, u],
+    );
+    await db.query(
+      'INSERT INTO "TransferOrder"(id,"companyId","authorId","sourceCashRegisterId","destinationCashRegisterId","sourceAccountId","destinationAccountId","sourceCurrency","destinationCurrency",amount,"targetAmount",rate,"rateSource",description,"payloadHash")VALUES($1,$2,$3,$4,$4,$5,$6,\'USD\',\'CDF\',1,2500,2500,\'Manuel historique\',\'Brouillon historique\',$7)',
+      [randomUUID(), c, u, cash, treasury.USD, treasury.CDF, 'c'.repeat(64)],
+    );
+    await db.query('COMMIT');
+  }
   await db.query(
     "CREATE TEMP TABLE cp_before_rows AS SELECT ''::text relation,'{}'::jsonb value WITH NO DATA",
   );
@@ -166,15 +187,33 @@ try {
   await db.query('ROLLBACK');
   assert.equal(
     (await db.query("SELECT typtype FROM pg_type WHERE typname='Currency'")).rows[0].typtype,
-    'e',
+    bccUpgrade ? 'd' : 'e',
   );
+  if (bccUpgrade)
+    assert.equal((await db.query('SELECT to_regclass(\'public."RateQuote"\') r')).rows[0].r, null);
   await db.query(migration);
   for (const t of tables) {
+    const extra = bccUpgrade
+      ? t === 'TransferOrder'
+        ? ['rateQuoteId', 'rateOrigin', 'rateEvidence']
+        : t === 'ExchangeRate'
+          ? ['transferOrderId', 'rateEvidence']
+          : []
+      : [];
+    const projection = extra.length
+      ? `to_jsonb(t)-ARRAY[${extra.map((k) => "'" + k + "'").join(',')}]`
+      : 'to_jsonb(t)';
+    const filter =
+      bccUpgrade && t === 'Permission'
+        ? "WHERE code<>'fx:manual'"
+        : bccUpgrade && t === 'RolePermission'
+          ? `WHERE "permissionCode"<>'fx:manual'`
+          : '';
     const r = await db.query(
-      `SELECT count(*)::integer n FROM ((SELECT value FROM cp_before_rows WHERE relation=$1 EXCEPT ALL SELECT to_jsonb(t) FROM "${t}" t) UNION ALL (SELECT to_jsonb(t) FROM "${t}" t EXCEPT ALL SELECT value FROM cp_before_rows WHERE relation=$1)) mismatch`,
+      `SELECT count(*)::integer n FROM ((SELECT value FROM cp_before_rows WHERE relation=$1 EXCEPT ALL SELECT ${projection} FROM "${t}" t) UNION ALL (SELECT ${projection} FROM "${t}" t ${filter} EXCEPT ALL SELECT value FROM cp_before_rows WHERE relation=$1)) mismatch`,
       [t],
     );
-    assert.equal(r.rows[0].n, 0, 'Lignes historiques modifiées : ' + t);
+    assert.equal(r.rows[0].n, 0, 'Valeurs historiques modifiées : ' + t);
   }
   const after = (
     await db.query(
@@ -272,7 +311,7 @@ try {
     `Sauvegarde/restauration réelle vérifiée : ${allTables.length} tables identiques dans une deuxième base jetable.`,
   );
   console.log(
-    `Migration vérifiée : ${tables.length} tables historiques identiques (valeurs numériques exactes, identifiants, JSON et dates), RLS conservée, rollback DDL validé.`,
+    `Migration ${targetMigration} vérifiée : ${tables.length} tables historiques préservées${bccUpgrade ? ', hors colonnes additives et nouveau droit FX manuel' : ''} (valeurs numériques exactes, identifiants, JSON et dates), RLS conservée, rollback DDL validé.`,
   );
 } finally {
   await restored?.end();

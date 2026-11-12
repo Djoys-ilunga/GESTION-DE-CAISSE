@@ -1,0 +1,9 @@
+HTTP/1.1 200 OK
+date: Thu, 12 Nov 2026 09:03:22 GMT
+server: envoy
+HTTP/2 200 
+date: Thu, 12 Nov 2026 09:03:25 GMT
+content-type: text/html; charset=utf-8
+cache-control: no-store, must-revalidate
+strict-transport-security: max-age=63072000; includeSubDomains; preload
+server: envoy

@@ -167,7 +167,8 @@ export function MoneyPage({
           </p>
           <small>
             Source ISO de {code} datée du {data.currencies.find((c) => c.code === code)?.sourceDate}
-            . Disponibilité des cours BCC non vérifiée ; aucune connexion BCC à cette étape.
+            . Le catalogue ne garantit pas la fraîcheur des cours. Consultez « Taux de change »
+            avant une conversion.
           </small>
         </section>
       )}

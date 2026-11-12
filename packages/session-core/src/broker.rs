@@ -164,10 +164,14 @@ impl Broker {
                 } else {
                     json!(fields.get("rate").ok_or(Error::InvalidInput)?)
                 };
-                let body = json!({"id":buffer.id,"sourceCashRegisterId":buffer.cash_register_id,
+                let mut body = json!({"id":buffer.id,"sourceCashRegisterId":buffer.cash_register_id,
                     "destinationCashRegisterId":fields.get("destinationCashRegisterId"),"sourceCurrency":currency,
                     "destinationCurrency":destination_currency,"amount":fields.get("amount"),"rate":rate,
                     "rateSource":fields.get("rateSource").map(String::as_str).unwrap_or(""),"description":fields.get("description")});
+                if let Some(quote) = fields.get("rateQuoteId").filter(|v| !v.is_empty()) {
+                    body["rateQuoteId"] =
+                        json!(Uuid::parse_str(quote).map_err(|_| Error::InvalidInput)?);
+                }
                 sent_buffer = Some(buffer);
                 (Method::POST, "transfers/drafts".into(), Some(body))
             }
@@ -806,6 +810,26 @@ impl Broker {
             request = request.json(&body)
         }
         let mut response = request.send().await.map_err(|_| Error::Unavailable)?;
+        if path.starts_with("exchange-rates") && response.status().as_u16() == 409 {
+            let mut bytes = Vec::new();
+            while let Some(chunk) = response.chunk().await.map_err(|_| Error::Unavailable)? {
+                if bytes.len() + chunk.len() > 4096 {
+                    return Err(Error::InvalidResponse);
+                }
+                bytes.extend_from_slice(&chunk);
+            }
+            let body: Value = serde_json::from_slice(&bytes).map_err(|_| Error::InvalidResponse)?;
+            return Err(match body.get("code").and_then(Value::as_str) {
+                Some("BCC_AUTHORIZATION_REQUIRED") => Error::BccAuthorizationRequired,
+                Some("BCC_SOURCE_UNVERIFIED") => Error::BccUnverified,
+                Some("BCC_RATE_UNAVAILABLE") => Error::BccUnavailable,
+                Some("RATE_QUOTE_STALE" | "RATE_POLICY_CHANGED" | "RATE_QUOTE_INVALID") => {
+                    Error::RateStale
+                }
+                Some("MANUAL_RATE_FORBIDDEN") => Error::ManualRateForbidden,
+                _ => Error::SettingsConflict,
+            });
+        }
         if path.starts_with("expenses/") && [403, 409].contains(&response.status().as_u16()) {
             let forbidden = response.status().as_u16() == 403;
             let mut bytes = Vec::new();
@@ -873,6 +897,10 @@ impl Broker {
             return Err(match body.get("code").and_then(Value::as_str) {
                 Some("INSUFFICIENT_FUNDS") => Error::InsufficientFunds,
                 Some("TRANSFER_DISTINCT_RECEIVER_REQUIRED") => Error::TransferReceiver,
+                Some("RATE_QUOTE_STALE" | "RATE_POLICY_CHANGED" | "RATE_QUOTE_INVALID") => {
+                    Error::RateStale
+                }
+                Some("MANUAL_RATE_FORBIDDEN") => Error::ManualRateForbidden,
                 _ => Error::TransferConflict,
             });
         }
@@ -1443,7 +1471,10 @@ impl Broker {
             "money-currencies" | "money-reporting" | "settings" | "company" | "agency"
             | "category" | "rate" => "cash:configure",
             "references" => "directory:read",
-            "supervision" => "ledger:read",
+            "supervision" | "exchange-rates" | "exchange-history" | "exchange-quote" => {
+                "ledger:read"
+            }
+            "exchange-refresh" | "exchange-policy" => "cash:configure",
             "audit" | "audit-pdf" | "audit-xlsx" | "logs" => "auth:logs:read",
             "access" => "roles:assign",
             "users" | "catalog" | "create" => "users:manage",
@@ -1455,6 +1486,8 @@ impl Broker {
             .ok_or(Error::AuthRequired)?
             .permission(permission)?;
         if [
+            "exchange-refresh",
+            "exchange-policy",
             "money-currencies",
             "money-reporting",
             "company",
@@ -1475,6 +1508,19 @@ impl Broker {
                 .permission(permission)?;
         }
         let (method, path, body) = match action {
+            "exchange-rates" => (Method::GET, "exchange-rates".into(), None),
+            "exchange-history" => (
+                Method::GET,
+                Self::query_path(
+                    "exchange-rates/history",
+                    &payload.unwrap_or_else(|| json!({})),
+                    &["page"],
+                )?,
+                None,
+            ),
+            "exchange-refresh" => (Method::POST, "exchange-rates/refresh".into(), payload),
+            "exchange-policy" => (Method::PUT, "exchange-rates/policy".into(), payload),
+            "exchange-quote" => (Method::POST, "exchange-rates/quote".into(), payload),
             "money-currencies" => (Method::PUT, "money/currencies".into(), payload),
             "money-reporting" => (Method::PUT, "money/reporting".into(), payload),
             "settings" => (Method::GET, "management/settings".into(), None),

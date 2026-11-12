@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import { loadCurrencyMetadata } from './money';
 import { Injectable, Inject } from '@nestjs/common';
 import { z } from 'zod';
@@ -35,12 +36,30 @@ export class CentralAccess {
         if (error instanceof DataError) throw error;
         const message = error instanceof Error ? error.message : '';
         const code = (error as { code?: string })?.code;
+        const cause = (
+          error as {
+            meta?: {
+              driverAdapterError?: {
+                cause?: { originalMessage?: unknown; originalCode?: unknown };
+              };
+            };
+          }
+        )?.meta?.driverAdapterError?.cause;
+        const sqlState = typeof cause?.originalCode === 'string' ? cause.originalCode : '';
+        // Prefer the server's SQLSTATE/message over Prisma's source-code excerpt.
+        // A snippet mentioning Serializable must not replay a business refusal.
+        const retryMessage =
+          typeof cause?.originalMessage === 'string' ? cause.originalMessage : message;
         if (
-          attempt < 5 &&
+          attempt < 8 &&
           (['P2034', 'P2002'].includes(code ?? '') ||
-            /40001|40P01|serialization|deadlock/i.test(message))
+            ['40001', '40P01'].includes(sqlState) ||
+            (!sqlState && /40001|40P01|serializ|deadlock|write conflict/i.test(retryMessage)))
         ) {
-          await new Promise((resolve) => setTimeout(resolve, 10 * (attempt + 1)));
+          // Six simultaneous syncs each commit STARTED/draft/SUCCESS transactions.
+          // A bounded exponential delay with jitter avoids retrying them in lockstep.
+          const delay = Math.min(25 * 2 ** attempt, 250) + randomInt(0, 26);
+          await new Promise((resolve) => setTimeout(resolve, delay));
           continue;
         }
         // Prisma peut inclure des extraits de code avant le message PostgreSQL.

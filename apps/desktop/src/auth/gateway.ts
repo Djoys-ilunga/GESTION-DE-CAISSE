@@ -1,3 +1,13 @@
+import {
+  bccRatesSchema,
+  bccHistorySchema,
+  exchangeQuoteSchema,
+  type BccRates,
+  type BccHistory,
+  type ExchangeQuote,
+  type ExchangeQuoteInput,
+  type ExchangePolicy,
+} from '@caissepro/shared';
 import { valuationSchema, type ValuationInput, type Valuation } from '@caissepro/shared';
 import {
   moneyContextSchema,
@@ -119,6 +129,13 @@ export type AccessCatalog = {
   cashRegisters: { id: string; agencyId: string; name: string; code: string }[];
 };
 export interface AuthGateway {
+  exchangeRates(): Promise<BccRates>;
+  exchangeHistory(page?: number): Promise<BccHistory>;
+  refreshExchange(): Promise<unknown>;
+  exchangeQuote(input: ExchangeQuoteInput): Promise<ExchangeQuote>;
+  exchangePolicy(
+    input: Omit<ExchangePolicy, 'version'> & { expectedVersion: number; confirmed: true },
+  ): Promise<unknown>;
   reportValuation(input: ValuationInput): Promise<Valuation>;
   moneyContext(): Promise<MoneyContext>;
   moneyPreferences(input: MoneyPreferenceInput): Promise<MoneyContext>;
@@ -285,6 +302,27 @@ export class NativeAuthGateway implements AuthGateway {
     );
   }
 
+  async exchangeRates() {
+    return bccRatesSchema.parse(await this.call('admin_request', { action: 'exchange-rates' }));
+  }
+  async exchangeHistory(page = 1) {
+    return bccHistorySchema.parse(
+      await this.call('admin_request', { action: 'exchange-history', payload: { page } }),
+    );
+  }
+  refreshExchange() {
+    return this.call('admin_request', { action: 'exchange-refresh', payload: { confirmed: true } });
+  }
+  async exchangeQuote(input: ExchangeQuoteInput) {
+    return exchangeQuoteSchema.parse(
+      await this.call('admin_request', { action: 'exchange-quote', payload: input }),
+    );
+  }
+  exchangePolicy(
+    input: Omit<ExchangePolicy, 'version'> & { expectedVersion: number; confirmed: true },
+  ) {
+    return this.call('admin_request', { action: 'exchange-policy', payload: input });
+  }
   private transferCall(action: string, payload?: unknown) {
     return this.call('transfer_action', { action, payload });
   }
@@ -515,6 +553,14 @@ export class NativeAuthGateway implements AuthGateway {
 export function message(error: unknown) {
   const code = error instanceof Error ? error.message : String(error);
   const labels: Record<string, string> = {
+    BCC_AUTHORIZATION_REQUIRED:
+      'La collecte automatique BCC nécessite une autorisation. Utilisez uniquement un taux manuel autorisé et justifié ou un fournisseur habilité.',
+    BCC_SOURCE_UNVERIFIED:
+      'La source BCC n’est pas encore vérifiée. Aucun taux officiel n’est utilisable.',
+    BCC_RATE_UNAVAILABLE: 'Taux BCC indisponible pour ces devises et ce type de cours.',
+    RATE_QUOTE_STALE:
+      'Le taux a expiré, la publication ou la politique a changé. Vérifiez un nouveau taux avant transmission ou recréez le brouillon transmis.',
+    MANUAL_RATE_FORBIDDEN: 'La politique ou vos autorisations interdisent ce taux manuel.',
     CURRENCY_INACTIVE:
       'Cette devise n’est pas autorisée pour l’entreprise. Actualisez le catalogue.',
     CURRENCY_IN_USE:

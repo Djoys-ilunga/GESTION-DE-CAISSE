@@ -181,7 +181,7 @@ impl Session {
         self.form_buffers
             .retain(|_, b| millis(&b.expires_at).is_ok_and(|end| end > now));
         if !["receipt", "expense-request", "transfer"].contains(&input.kind.as_str())
-            || input.fields.len() > 12
+            || input.fields.len() > 14
             || input.fields.iter().any(|(key, value)| {
                 let max = match key.as_str() {
                     "amount" => 21,
@@ -189,6 +189,10 @@ impl Session {
                     "destinationCashRegisterId" => 36,
                     "rate" => 25,
                     "rateSource" => 100,
+                    "rateQuoteId" => 36,
+                    "rateMode" => 6,
+                    "rateJustification" => 500,
+                    "rateEffectiveAt" => 35,
                     "description" => 500,
                     "provenance" | "category" | "reference" | "beneficiary" => 160,
                     _ => 0,

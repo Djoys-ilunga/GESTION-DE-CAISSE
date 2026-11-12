@@ -134,6 +134,10 @@ impl Api {
                 200,
                 json!({"service":"caissepro-api","status":"ready","protocolVersion":2,"deploymentId":deployment.lock().unwrap().as_str()}),
             ),
+            "/api/v1/exchange-rates/quote" => (
+                409,
+                json!({"code":"BCC_AUTHORIZATION_REQUIRED","message":"Source non autorisée"}),
+            ),
             "/api/v1/money/context" => (
                 200,
                 json!({"companyCurrencies":[{"code":"JPY","active":true,"version":1}],"preferences":{"favoriteCurrency":"JPY","displayCurrency":null,"locale":"fr-FR","version":1}}),
@@ -907,8 +911,9 @@ async fn transfer_transmission_keeps_uuid_after_lost_ack_and_never_executes_a_fi
         .await
         .unwrap();
     let id = Uuid::new_v4();
+    let quote_id = Uuid::new_v4();
     let input = json!({"id":id,"kind":"transfer","agencyId":agency,"cashRegisterId":source,"expectedLocalVersion":null,
-        "fields":{"amount":"12.34","currency":"USD","destinationCurrency":"CDF","destinationCashRegisterId":destination.to_string(),"rate":"2800","rateSource":"Guichet","description":"Transfert local"}});
+        "fields":{"amount":"12.34","currency":"USD","destinationCurrency":"CDF","destinationCashRegisterId":destination.to_string(),"rate":"2800","rateSource":"Guichet","rateQuoteId":quote_id.to_string(),"description":"Transfert local"}});
     broker
         .synchronization_action("buffer-save", Some(input), Some(view.generation))
         .await
@@ -946,6 +951,7 @@ async fn transfer_transmission_keeps_uuid_after_lost_ack_and_never_executes_a_fi
         let requests = api.sync.requests.lock().unwrap();
         assert_eq!(requests.len(), 2);
         assert_eq!(requests[0], requests[1]);
+        assert_eq!(requests[0]["rateQuoteId"], quote_id.to_string());
     }
     assert_eq!(api.sync.financial.load(Ordering::SeqCst), 0);
     assert_eq!(api.writes.load(Ordering::SeqCst), 0);
@@ -1066,4 +1072,66 @@ async fn currency_context_is_memory_only_guarded_offline_and_cannot_change_prefe
             .await,
         Err(Error::Locked)
     ));
+}
+
+#[tokio::test]
+async fn exchange_access_is_online_permission_guarded_and_rejects_unconfirmed_refresh() {
+    let api = Api::new();
+    let broker = api.broker();
+    let generation = login_for_sync(&broker).await;
+    assert!(matches!(
+        broker.admin("exchange-rates", None, Some(generation)).await,
+        Err(Error::Forbidden)
+    ));
+    {
+        let mut p = api.profile.lock().unwrap();
+        p.permissions.push("cash:configure".into());
+        p.permissions.push("ledger:read".into());
+    }
+    let generation = broker
+        .revalidate(Some(generation))
+        .await
+        .unwrap()
+        .generation;
+    assert!(matches!(
+        broker
+            .admin(
+                "exchange-refresh",
+                Some(json!({"confirmed":false})),
+                Some(generation)
+            )
+            .await,
+        Err(Error::InvalidInput)
+    ));
+    broker.lock(Some(generation)).await.unwrap();
+    assert!(matches!(
+        broker
+            .admin("exchange-quote", Some(json!({})), Some(generation))
+            .await,
+        Err(Error::Locked)
+    ));
+    assert_eq!(api.sync.financial.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn exchange_authorization_error_is_preserved_without_financial_action() {
+    let api = Api::new();
+    api.profile
+        .lock()
+        .unwrap()
+        .permissions
+        .push("ledger:read".into());
+    let broker = api.broker();
+    let generation = login_for_sync(&broker).await;
+    assert!(matches!(
+        broker
+            .admin(
+                "exchange-quote",
+                Some(json!({"mode":"BCC"})),
+                Some(generation)
+            )
+            .await,
+        Err(Error::BccAuthorizationRequired)
+    ));
+    assert_eq!(api.sync.financial.load(Ordering::SeqCst), 0);
 }

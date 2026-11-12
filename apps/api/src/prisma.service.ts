@@ -33,6 +33,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       )
         throw new Error('CURRENCY_SCHEMA_NOT_READY');
       registerCurrencyDefinitions(catalog);
+      await tx.bccSourceApproval.count();
       return tx.installation.count();
     });
   }

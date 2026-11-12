@@ -83,6 +83,35 @@ async function installNativeDouble(page: Page) {
     };
     host.__TAURI_INTERNALS__ = {
       invoke: async (command, args) => {
+        if (command === 'admin_request' && args.action === 'exchange-rates')
+          return {
+            generatedAt: new Date().toISOString(),
+            source: {
+              state: 'UNVERIFIED',
+              code: 'BCC_AUTHORIZATION_REQUIRED',
+              approved: false,
+              checkedAt: null,
+              lastSuccessAt: null,
+              nextAllowedAt: null,
+              sourceUrl: 'https://www.bcc.cd/marche-des-changes/cours-de-change',
+            },
+            policy: {
+              allowManual: true,
+              quoteKind: 'MEAN',
+              maxAgeHours: 96,
+              quoteTtlMinutes: 15,
+              version: 1,
+            },
+            publication: null,
+            quotes: [],
+            currencies: [
+              { code: 'USD', name: 'Dollar américain', activeForCompany: true, covered: false },
+            ],
+            stale: true,
+            freshUntil: null,
+          };
+        if (command === 'admin_request' && args.action === 'exchange-history')
+          return { items: [], page: 1, total: 0, pageSize: 25 };
         if (command === 'admin_request' && args.action === 'money-preferences') {
           const input = args.payload as {
             expectedVersion: number;
@@ -509,4 +538,24 @@ test('préférences monétaires individuelles et brouillon JPY, sans conversion 
       ).receiptDouble.financialCalls(),
     ),
   ).toBe(0);
+});
+
+test('écran BCC sans autorisation de collecte : aucun taux inventé ni conversion (IPC simulé)', async ({
+  page,
+}) => {
+  await installNativeDouble(page);
+  await login(page);
+  await page.getByRole('button', { name: 'Taux de change', exact: true }).click();
+  await expect(
+    page.getByText('Collecte automatique BCC non autorisée : un accord de la BCC est nécessaire.'),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Simuler avec le serveur' })).toBeDisabled();
+  expect(
+    await page.evaluate(() =>
+      (
+        window as unknown as { receiptDouble: { financialCalls(): number } }
+      ).receiptDouble.financialCalls(),
+    ),
+  ).toBe(0);
+  await page.screenshot({ path: 'test-results/bcc-autorisation-requise.png', fullPage: true });
 });

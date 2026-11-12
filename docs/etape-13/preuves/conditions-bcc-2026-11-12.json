@@ -1,0 +1,11 @@
+{
+  "checkedAt": "2026-11-12T09:11:35.398024+00:00",
+  "url": "https://www.bcc.cd/mentions-legales",
+  "httpStatus": 200,
+  "sha256": "f2e5b420401a0f331dafa2f2984cdefec79530e6bacf30c59f269d08d1960f49",
+  "legalBodySha256": "17481df46d7834819f0a4dba79fd2ca040ab56118cde023dc1c8fe6de814c46f",
+  "collectionProhibited": true,
+  "sourceContract": "UNVERIFIED",
+  "authorizationRequired": true,
+  "evidenceQuote": "la collecte automatisée (crawling ou scraping), l’archivage systématique et la rediffusion automatisée des contenus du site au moyen d’applications ou de scripts sont interdits."
+}

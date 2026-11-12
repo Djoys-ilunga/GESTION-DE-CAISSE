@@ -40,6 +40,11 @@ export function view(p = profile()): NativeSessionView {
 export function fakeGateway(initial: NativeSessionView = anonymous) {
   let current = structuredClone(initial);
   const gateway: AuthGateway = {
+    exchangeRates: vi.fn(),
+    exchangeHistory: vi.fn(),
+    refreshExchange: vi.fn(),
+    exchangeQuote: vi.fn(),
+    exchangePolicy: vi.fn(),
     reportValuation: vi.fn(),
     moneyContext: vi.fn(async () => ({
       currencies: [...INITIAL_CURRENCY_CATALOG],

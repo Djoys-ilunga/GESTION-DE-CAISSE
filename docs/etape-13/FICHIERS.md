@@ -1,0 +1,55 @@
+# Fichiers de l’étape 13
+
+Liste complète par rapport à `f87199d`, incluant le chantier du 11 novembre et sa finalisation du 12 novembre. Aucun fichier de migration historique n’a été remplacé.
+
+- `apps/api/prisma/migrations/20261111000200_bcc_exchange/migration.sql`
+- `apps/api/prisma/schema.prisma`
+- `apps/api/src/auth/auth.module.ts`
+- `apps/api/src/data/central-access.ts`
+- `apps/api/src/data/data.module.ts`
+- `apps/api/src/exchange/bcc.authorization.ts`
+- `apps/api/src/exchange/bcc.http.ts`
+- `apps/api/src/exchange/bcc.provider.ts`
+- `apps/api/src/exchange/bcc.refresh.ts`
+- `apps/api/src/exchange/bcc.repository.ts`
+- `apps/api/src/exchange/exchange.controller.ts`
+- `apps/api/src/exchange/exchange.service.ts`
+- `apps/api/src/prisma.service.ts`
+- `apps/api/src/transfers/transfers.service.ts`
+- `apps/api/src/validation.filter.ts`
+- `apps/api/test/bcc-provider.spec.ts`
+- `apps/api/test/integration/bcc.spec.ts`
+- `apps/api/test/integration/synchronization.spec.ts`
+- `apps/api/test/transaction-retries.spec.ts`
+- `apps/desktop/src/App.tsx`
+- `apps/desktop/src/auth/gateway.ts`
+- `apps/desktop/src/auth/test-fixture.ts`
+- `apps/desktop/src/exchange/ExchangePage.tsx`
+- `apps/desktop/src/exchange/exchange.css`
+- `apps/desktop/src/exchange/exchange.test.tsx`
+- `apps/desktop/src/money/MoneyPage.tsx`
+- `apps/desktop/src/transfers/TransfersPage.tsx`
+- `apps/desktop/src/transfers/transfers.css`
+- `docs/etape-13/BILAN.md`
+- `docs/etape-13/DEMANDE-AUTORISATION.md`
+- `docs/etape-13/FICHIERS.md`
+- `docs/etape-13/HISTORIQUE-2026-11-11.md`
+- `docs/etape-13/VALIDATION-2026-11-11.md`
+- `docs/etape-13/VALIDATION.md`
+- `docs/etape-13/captures/autorisation-requise.png`
+- `docs/etape-13/captures/source-non-verifiee.png`
+- `docs/etape-13/preuves/acces-bcc-2026-11-11.txt`
+- `docs/etape-13/preuves/acces-bcc-2026-11-12.txt`
+- `docs/etape-13/preuves/conditions-bcc-2026-11-12.json`
+- `package.json`
+- `packages/session-core/src/broker.rs`
+- `packages/session-core/src/lib.rs`
+- `packages/session-core/src/synchronization.rs`
+- `packages/session-core/src/transport_tests.rs`
+- `packages/shared/src/auth.ts`
+- `packages/shared/src/exchange.ts`
+- `packages/shared/src/index.ts`
+- `packages/shared/src/synchronization.ts`
+- `packages/shared/src/transfers.ts`
+- `scripts/test-currency-upgrade.mjs`
+- `tests/e2e/receipts.spec.ts`

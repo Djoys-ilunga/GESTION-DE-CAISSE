@@ -1,3 +1,4 @@
+import { ExchangePage } from './exchange/ExchangePage';
 import { MoneyProvider } from './money/MoneyContext';
 import { MoneyPage } from './money/MoneyPage';
 import { Appearance } from './ui/Appearance';
@@ -623,6 +624,7 @@ function Workspace({
       permission: 'ledger:read',
     },
     { id: 'expenses', label: 'Dépenses', icon: FilePenLine, permission: 'ledger:read' },
+    { id: 'exchange', label: 'Taux de change', icon: RefreshCw, permission: 'ledger:read' },
     {
       id: 'documents',
       label: 'Documents financiers',
@@ -761,6 +763,8 @@ function Workspace({
             <TransfersPage profile={profile} gateway={gateway} online={online} />
           ) : page === 'sync' ? (
             <SyncCenter profile={profile} gateway={gateway} online={online} />
+          ) : page === 'exchange' ? (
+            <ExchangePage gateway={gateway} profile={profile} online={online} />
           ) : page === 'money' ? (
             <MoneyPage gateway={gateway} profile={profile} online={online} />
           ) : page === 'settings' ? (

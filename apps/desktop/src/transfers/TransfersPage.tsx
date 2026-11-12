@@ -9,6 +9,7 @@ import {
   type CashSnapshot,
   type FormBuffer,
   type TransferView,
+  type ExchangeQuote,
 } from '@caissepro/shared';
 import { message, type AuthGateway } from '../auth/gateway';
 import { formatDate } from '../cash/CashPage';
@@ -48,6 +49,9 @@ export function TransfersPage({
     [rate, setRate] = useState(''),
     [rateSource, setRateSource] = useState(''),
     [description, setDescription] = useState('');
+  const [quote, setQuote] = useState<ExchangeQuote | null>(null),
+    [rateMode, setRateMode] = useState<'BCC' | 'MANUAL'>('MANUAL'),
+    [rateJustification, setRateJustification] = useState('');
   const [selected, setSelected] = useState<TransferView | null>(null),
     [confirmation, setConfirmation] = useState(false),
     [rateValidated, setRateValidated] = useState(false),
@@ -91,6 +95,80 @@ export function TransfersPage({
   const items = catalog?.data.items.filter((r) => r.active) ?? [];
   const sourceCash = items.find((r) => r.id === source),
     fx = currency !== targetCurrency;
+  useEffect(() => {
+    setQuote(null);
+  }, [currency, targetCurrency, amount, rateMode, rate, rateSource, rateJustification, online]);
+  const rateInput = JSON.stringify([
+    currency,
+    targetCurrency,
+    amount,
+    rateMode,
+    rate,
+    rateSource,
+    rateJustification,
+  ]);
+  const latestRateInput = useRef(rateInput);
+  latestRateInput.current = rateInput;
+  async function checkRate() {
+    const requestedInput = rateInput;
+    await action(async () => {
+      const q = await gateway.exchangeQuote({
+        fromCurrency: currency,
+        toCurrency: targetCurrency,
+        amount: amount.replace(',', '.'),
+        mode: rateMode,
+        ...(rateMode === 'MANUAL'
+          ? {
+              manualRate: rate.replace(',', '.'),
+              manualSource: rateSource,
+              justification: rateJustification,
+              manualEffectiveAt: new Date().toISOString(),
+            }
+          : {}),
+      });
+      if (alive.current && latestOnline.current && latestRateInput.current === requestedInput)
+        setQuote(q);
+    });
+  }
+  async function checkBufferRate(b: FormBuffer) {
+    if (!online) return;
+    await action(async () => {
+      const mode = b.fields.rateMode ?? 'MANUAL';
+      const q = await gateway.exchangeQuote({
+        fromCurrency: b.fields.currency!,
+        toCurrency: b.fields.destinationCurrency!,
+        amount: b.fields.amount!,
+        mode,
+        ...(mode === 'MANUAL'
+          ? {
+              manualRate: b.fields.rate!,
+              manualSource: b.fields.rateSource!,
+              justification: b.fields.rateJustification || b.fields.rateSource!,
+              manualEffectiveAt: b.fields.rateEffectiveAt || b.createdAt,
+            }
+          : {}),
+      });
+      if (!alive.current || !latestOnline.current) return;
+      await gateway.saveFormBuffer({
+        id: b.id,
+        kind: b.kind,
+        agencyId: b.agencyId,
+        cashRegisterId: b.cashRegisterId,
+        expectedLocalVersion: b.expectedLocalVersion,
+        fields: {
+          ...b.fields,
+          rateQuoteId: q.id,
+          rate: q.appliedRate,
+          rateSource: q.source,
+          rateMode: q.mode,
+        },
+      });
+      setNotice(
+        'Taux serveur vérifié pour ce brouillon. Relisez le taux avant de transmettre ; aucune remise effectuée.',
+      );
+      await load();
+    });
+  }
   const funds = sourceCash?.funds.find((f) => f.currency === currency);
   const cashName = (cashId: string) =>
     catalog?.data.items.find((r) => r.id === cashId)?.name ??
@@ -117,15 +195,20 @@ export function TransfersPage({
   }
   async function save(e: FormEvent) {
     e.preventDefault();
+    if (fx && online && (!quote || Date.parse(quote.expiresAt) <= Date.now())) {
+      setError('Vérifiez un taux serveur avant de conserver cette conversion.');
+      return;
+    }
     const parsed = transferDraftSchema.safeParse({
       id,
       sourceCashRegisterId: source,
       destinationCashRegisterId: destination,
       sourceCurrency: currency,
       destinationCurrency: targetCurrency,
-      amount,
-      rate: fx ? rate : null,
-      rateSource: fx ? rateSource : '',
+      amount: amount.replace(',', '.'),
+      rate: fx ? (quote?.appliedRate ?? rate.replace(',', '.')) : null,
+      rateSource: fx ? (quote?.source ?? rateSource) : '',
+      ...(fx && quote ? { rateQuoteId: quote.id } : {}),
       description,
     });
     if (!parsed.success) {
@@ -143,12 +226,20 @@ export function TransfersPage({
         cashRegisterId: source,
         expectedLocalVersion: null,
         fields: {
-          amount,
+          amount: amount.replace(',', '.'),
           currency,
           destinationCashRegisterId: destination,
           destinationCurrency: targetCurrency,
-          rate: fx ? rate : '',
-          rateSource: fx ? rateSource : '',
+          rate: fx ? (quote?.appliedRate ?? rate.replace(',', '.')) : '',
+          rateSource: fx ? (quote?.source ?? rateSource) : '',
+          ...(fx
+            ? {
+                rateMode,
+                rateJustification,
+                rateEffectiveAt: quote?.effectiveAt ?? new Date().toISOString(),
+              }
+            : {}),
+          ...(fx && quote ? { rateQuoteId: quote.id } : {}),
           description,
         },
       });
@@ -156,6 +247,7 @@ export function TransfersPage({
       setNotice(
         'Brouillon conservé en mémoire native. Aucun mouvement financier. Transmettez-le explicitement après connexion.',
       );
+      setQuote(null);
       setId(crypto.randomUUID());
       setAmount('');
       setDescription('');
@@ -270,6 +362,30 @@ export function TransfersPage({
             </label>
             {fx && (
               <>
+                <label>
+                  Origine du taux de conversion
+                  <select
+                    value={rateMode}
+                    onChange={(e) => setRateMode(e.target.value as 'BCC' | 'MANUAL')}
+                  >
+                    <option value="MANUAL">Taux manuel justifié</option>
+                    <option value="BCC" disabled={!online}>
+                      Dernière publication BCC
+                    </option>
+                  </select>
+                </label>
+                {rateMode === 'MANUAL' && (
+                  <label>
+                    Justification du taux manuel
+                    <input
+                      required
+                      minLength={3}
+                      maxLength={500}
+                      value={rateJustification}
+                      onChange={(e) => setRateJustification(e.target.value)}
+                    />
+                  </label>
+                )}
                 {online && references && (
                   <label>
                     Taux de référence publié
@@ -300,7 +416,8 @@ export function TransfersPage({
                 <label>
                   Taux : 1 {currency} = … {targetCurrency}
                   <input
-                    required
+                    required={rateMode === 'MANUAL'}
+                    disabled={rateMode === 'BCC'}
                     inputMode="decimal"
                     value={rate}
                     onChange={(e) => setRate(e.target.value)}
@@ -311,13 +428,31 @@ export function TransfersPage({
                   <input
                     required
                     maxLength={100}
+                    disabled={rateMode === 'BCC'}
                     value={rateSource}
                     onChange={(e) => setRateSource(e.target.value)}
                   />
                 </label>
+                {online && (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={busy}
+                    onClick={() => void checkRate()}
+                  >
+                    Vérifier le taux serveur
+                  </button>
+                )}
+                {quote && (
+                  <p role="status">
+                    {quote.mode === 'BCC' ? 'BCC' : 'Manuel'} : 1 {quote.fromCurrency} ={' '}
+                    {quote.appliedRate} {quote.toCurrency} · Montant de destination :{' '}
+                    {quote.targetAmount} · Valable jusqu’au {formatDate(quote.expiresAt)}.
+                  </p>
+                )}
                 <p>
-                  Montant reçu calculé par le serveur, arrondi final au centime, moitié supérieure
-                  (HALF_UP). Aucun taux implicite.
+                  Montant reçu calculé par le serveur, arrondi final HALF_UP à la précision de
+                  destination. Aucun taux implicite.
                 </p>
               </>
             )}
@@ -349,11 +484,26 @@ export function TransfersPage({
           {buffers.map((b) => (
             <div key={b.id} className="transfer-row">
               <span>
-                {b.fields.description} · {b.fields.amount} {b.fields.currency}
+                {b.fields.description} · {b.fields.amount} {b.fields.currency}{' '}
+                {b.fields.rate &&
+                  `· Taux ${b.fields.rate} · ${b.fields.rateMode ?? 'Manuel historique'}`}
               </span>
+              {b.fields.currency !== b.fields.destinationCurrency && (
+                <button
+                  className="secondary-button"
+                  disabled={!online || busy}
+                  onClick={() => void checkBufferRate(b)}
+                >
+                  Vérifier le taux de ce brouillon
+                </button>
+              )}
               <button
                 className="secondary-button"
-                disabled={!online || busy}
+                disabled={
+                  !online ||
+                  busy ||
+                  (b.fields.currency !== b.fields.destinationCurrency && !b.fields.rateQuoteId)
+                }
                 onClick={() => void send(b)}
               >
                 Transmettre ou retrouver
@@ -435,6 +585,34 @@ export function TransfersPage({
             {cashName(selected.destinationCashRegisterId)}
           </p>
           <p>Référence : {selected.id}</p>
+          {selected.rate && (
+            <p>
+              Origine : {selected.rateOrigin ?? 'MANUAL'} · Proposition serveur :{' '}
+              {selected.rateQuoteId ?? 'Déclaration manuelle historique'}.
+            </p>
+          )}
+          {selected.rateEvidence && (
+            <details>
+              <summary>Traçabilité immuable du taux</summary>
+              <dl className="rate-evidence">
+                {[
+                  ['publicationDate', 'Publication officielle'],
+                  ['quoteKind', 'Type de cours'],
+                  ['referenceRate', 'Taux de référence'],
+                  ['appliedRate', 'Taux appliqué'],
+                  ['source', 'Source'],
+                  ['justification', 'Justification manuelle'],
+                  ['confirmedAt', 'Fixé à la remise le'],
+                  ['publicationSourceUrl', 'Document officiel'],
+                ].map(([key, label]) => (
+                  <div key={key}>
+                    <dt>{label}</dt>
+                    <dd>{String(selected.rateEvidence?.[key!] ?? '—')}</dd>
+                  </div>
+                ))}
+              </dl>
+            </details>
+          )}
           {selected.state === 'HANDED_OVER' && (
             <p>
               Remise le {formatDate(selected.handedOverAt!)}. Les fonds sont indisponibles à la
@@ -527,6 +705,25 @@ function TransferSlip({ row, onClose }: { row: TransferView; onClose(): void }) 
               ['Montant remis', `${formatMoney(row.amount)} ${row.sourceCurrency}`],
               ['Montant reçu', `${formatMoney(row.targetAmount)} ${row.destinationCurrency}`],
               ['Taux', row.rate ? `${row.rate} · ${row.rateSource}` : 'Sans conversion'],
+              ...(row.rate
+                ? [
+                    ['Origine du taux', row.rateOrigin ?? 'MANUAL'],
+                    [
+                      'Publication BCC',
+                      String(
+                        row.rateEvidence?.publicationDate ?? 'Aucune publication BCC vérifiée',
+                      ),
+                    ],
+                    [
+                      'Taux de référence',
+                      String(row.rateEvidence?.referenceRate ?? 'Non renseigné'),
+                    ],
+                    [
+                      'Justification manuelle',
+                      String(row.rateEvidence?.justification ?? 'Sans objet'),
+                    ],
+                  ]
+                : []),
               [
                 'Arrondi',
                 `HALF_UP final à ${currencyPrecision(row.destinationCurrency)} décimales`,

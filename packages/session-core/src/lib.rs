@@ -7,6 +7,16 @@ pub use model::*;
 type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("BCC_AUTHORIZATION_REQUIRED")]
+    BccAuthorizationRequired,
+    #[error("BCC_SOURCE_UNVERIFIED")]
+    BccUnverified,
+    #[error("BCC_RATE_UNAVAILABLE")]
+    BccUnavailable,
+    #[error("RATE_QUOTE_STALE")]
+    RateStale,
+    #[error("MANUAL_RATE_FORBIDDEN")]
+    ManualRateForbidden,
     #[error("CURRENCY_INACTIVE")]
     CurrencyInactive,
     #[error("CURRENCY_IN_USE")]
