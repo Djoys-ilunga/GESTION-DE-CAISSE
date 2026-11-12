@@ -4,7 +4,7 @@
 
 La rubrique **Transferts et conversions** distingue quatre actions :
 
-1. **Préparer** une proposition dans la mémoire du courtier natif, avec UUID stable, caisse source, caisse destination, devises, montant exact et motif. Pour une conversion, saisir également le taux et sa source.
+1. **Préparer** une proposition dans le courtier natif, avec UUID stable, caisse source, caisse destination, devises, montant exact et motif. Pour une conversion, saisir également le taux et sa source.
 2. **Transmettre ou retrouver** cette proposition après connexion. Le serveur revalide la session, les deux périmètres, les comptes, le montant calculé et les fonds disponibles. Il conserve une copie `DRAFT` sans réservation ni écriture. La transmission ne constitue jamais une remise ou une réception.
 3. L’auteur confirme explicitement la **remise effective**. Le serveur revalide ses autorisations et les sessions de caisse ouvertes, verrouille les comptes dans un ordre stable, vérifie le disponible et réserve le montant source. État `HANDED_OVER`, version 2. Les fonds remis sont indisponibles pour toute autre dépense ou transfert ; le solde comptable source n’est pas encore débité et la destination n’est pas créditée.
 4. **Un autre utilisateur autorisé** confirme explicitement la réception effective du montant de destination. Dans une seule transaction sérialisable : validation des droits, des caisses et des sessions ouvertes, création des écritures, consommation de la réservation et émission de l’instantané immuable du bordereau. État `RECEIVED`, version 3. Une défaillance annule la totalité de la réception ; les fonds restent réservés.
@@ -37,13 +37,13 @@ Les réservations de transferts sont incluses dans `AvailableFunds` même lorsqu
 
 ## Mode hybride et limites
 
-Les brouillons de transfert utilisent les buffers de préparation existants, strictement en mémoire native : quota partagé de vingt captures, durée maximale quinze minutes, effacement à la fermeture, déconnexion ou changement de périmètre. Aucun stockage navigateur ou disque sensible n’est ajouté. Une saisie devient un brouillon conservé seulement après **Conserver le brouillon**. Les copies serveur transmises peuvent être retrouvées après une nouvelle connexion.
+Les préparations utilisent les buffers du courtier, avec quota partagé de vingt saisies et conservation maximale de sept jours. Sur les cibles qualifiées à l’étape 13-B, elles sont chiffrées dans SQLCipher et récupérables après fermeture ; sur les autres cibles, elles restent temporaires en mémoire. Une saisie devient conservée après **Conserver le brouillon**. « Reprendre la préparation » conserve son UUID et impose une nouvelle vérification serveur du taux de conversion en ligne. Après une transmission incertaine, l’instantané initial est conservé à l’identique et se retrouve sur le même UUID, sans écriture financière automatique. Le centre de synchronisation ouvre le module de transfert pour reprendre ses préparations. Voir [le bilan 13-B](etape-13b/BILAN.md).
 
 Le catalogue de caisses peut provenir d’un instantané autorisé, daté et marqué non actualisé hors connexion. Aucun montant destination n’est ajouté localement au solde. La transmission après reconnexion est **manuelle** depuis la page Transferts. Les synchronisations automatiques des étapes précédentes n’envoient aucune remise ni réception. Le courtier refuse les actions de transfert en ligne lorsque la session est hors connexion/verrouillée, et vérifie la génération pour rejeter les réponses tardives. La copie locale est conservée même après transmission, jusqu’à suppression explicite ou expiration, pour préserver les reprises et les corrections en cours. Une interruption réseau peut verrouiller la session ; déverrouiller puis retrouver le même UUID.
 
 Un transfert remis ne peut pas être annulé automatiquement ou libéré par expiration : les fonds ont été déclarés physiquement remis. En cas d’absence de réception, de perte des fonds ou de révocation d’un intervenant, le montant reste réservé et exige résolution par les responsables habilités. Ce module n’invente pas une réception et ne propose pas encore un circuit de retour physique/annulation d’un transfert remis. Une interruption après remise ne rend donc jamais ces fonds disponibles silencieusement.
 
-La qualification des installateurs Windows/macOS et des magasins de clés reste distincte des validations Linux/API/Chromium. Le stockage SQLCipher sensible demeure désactivé.
+La qualification des installateurs Windows/macOS et des magasins de clés reste distincte des validations Linux/API/Chromium. La portée exacte du stockage natif activé et ses preuves sont consignées dans le bilan 13-B ; les installateurs signés restent hors de cette étape.
 
 ## API et vérification
 

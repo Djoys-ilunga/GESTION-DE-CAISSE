@@ -40,7 +40,7 @@ export function StorageNotice({ gateway, status }: { gateway: AuthGateway; statu
           connexion verrouille les données.{' '}
           {value.lastSavedAt && (
             <>
-              Dernier enregistrement natif : {new Date(value.lastSavedAt).toLocaleString('fr-FR')}.
+              Enregistrement natif vérifié : {new Date(value.lastSavedAt).toLocaleString('fr-FR')}.
             </>
           )}
         </>

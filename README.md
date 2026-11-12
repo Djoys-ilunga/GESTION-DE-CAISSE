@@ -1,12 +1,12 @@
 # CaissePro
 
-L’étape 12 ajoute le catalogue de devises extensible, les préférences monétaires individuelles et les rapports par devise. Consulter le [guide multidevise et de migration](docs/etape-12/MULTIDEVISE.md) et les [résultats de validation](docs/etape-12/VALIDATION.md). La branche dédiée est `feat/etape-12-multidevise` ; l’intégration BCC et la qualification des installateurs ne sont pas commencées.
+L’étape 12 ajoute le catalogue de devises extensible, les préférences monétaires individuelles et les rapports par devise. Consulter le [guide multidevise et de migration](docs/etape-12/MULTIDEVISE.md) et les [résultats de validation](docs/etape-12/VALIDATION.md). L’étape 13-B ajoute la reprise chiffrée des brouillons ; son [bilan et ses preuves natives](docs/etape-13b/BILAN.md) décrivent la portée de qualification. Les installateurs signés restent hors de cette étape.
 
 Gestion de caisse d’entreprise : Tauri 2/Rust/React, NestJS, PostgreSQL et Prisma. Étapes 1 à 9 : socle technique, données centrales, authentification, autorisations, caisses, encaissements, dépenses, synchronisation sécurisée, transferts, conversions, tableau de bord, rapports et administration. L’interface française propose des thèmes clair et sombre, une supervision limitée aux caisses autorisées et un journal d’audit exportable. Les encaissements produisent des reçus après confirmation explicite. Les dépenses disposent d’un circuit de soumission, approbation ou rejet motivé, réservation, paiement explicite et bon de sortie.
 
 L’étape 9 et ses limites de qualification sont détaillées dans [Interface et supervision](docs/interface-supervision.md).
 
-Le [centre de synchronisation](docs/synchronisation.md) suit les brouillons, reprises, conflits et copies serveur sans déclencher de traitement financier. Les brouillons non transmis restent temporaires en mémoire et sont perdus à la fermeture ; les copies reçues sont restaurables après connexion.
+Le [centre de synchronisation](docs/synchronisation.md) suit les brouillons, reprises, conflits et copies serveur sans déclencher de traitement financier. Sur les cibles natives qualifiées, les brouillons déjà enregistrés sont chiffrés et récupérables après fermeture, au plus sept jours. Le mode réellement actif est affiché ; les autres cibles restent en mémoire uniquement. Les copies reçues restent restaurables après connexion.
 
 Cette version est **reconstruite à partir des spécifications et traces de la conversation** après l’absence des fichiers dans une nouvelle instance cloud. Elle ne doit pas être présentée comme une restauration identique de l’ancienne copie. Les résultats de validation de cette reconstruction seront consignés dans `docs/validation.md`.
 
@@ -62,7 +62,7 @@ pnpm test:native:linux
 
 La capture et les journaux sont dans `native-test-results/`, distinct des résultats Playwright et ignoré par Git. Ce contrôle attend un rendu non vide ; les installateurs Windows/macOS restent à qualifier.
 
-La persistance sensible reste interdite dans l’application : jetons, brouillons et caches autorisés en mémoire native uniquement, expiration et périmètres contrôlés. Une reconnexion en ligne est nécessaire après redémarrage. L’accès hors connexion exige une session antérieure, un déverrouillage local et expire au plus après quinze minutes. SQLCipher est testé sur des données synthétiques ; son ouverture publique reste bloquée jusqu’à qualification Windows/macOS et des clés natives. HTTPS est requis hors développement sur loopback.
+Le stockage natif qualifié conserve les brouillons dans SQLCipher, avec clés dans le coffre système et isolation par auteur/entreprise/déploiement. Les jetons serveur restent uniquement en mémoire. Au redémarrage, le courtier est verrouillé : bail hors connexion encore valable et déverrouillage local, ou nouvelle connexion serveur. Ce bail expire au plus après quinze minutes, indépendamment de la conservation des brouillons. Aucun repli en clair ; HTTPS reste requis hors développement sur loopback. Voir [la protection locale](docs/chiffrement-local.md).
 
 Les identifiants PostgreSQL n’appartiennent qu’au backend. `.env`, clés, bases et dépendances sont ignorés par Git. Ne pas utiliser `prisma db push` à la place des migrations SQL : elles portent les protections financières.
 

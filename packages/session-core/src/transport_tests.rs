@@ -110,6 +110,9 @@ impl Api {
         sync: &SyncControl,
     ) {
         let (revoked, offline) = flags;
+        // Accepted sockets can inherit the listener's nonblocking mode on
+        // Windows/BSD. A timed blocking reader must reset it explicitly.
+        stream.set_nonblocking(false).unwrap();
         stream.set_nodelay(true).unwrap();
         stream
             .set_read_timeout(Some(Duration::from_secs(2)))
@@ -300,6 +303,43 @@ impl Drop for Api {
             worker.join().unwrap();
         }
     }
+}
+#[test]
+fn http_fixture_reads_a_fragmented_request_after_accepting_a_nonblocking_socket() {
+    let api = Api::new();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let mut client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+    client
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .unwrap();
+    let (stream, _) = listener.accept().unwrap();
+    stream.set_nonblocking(true).unwrap();
+    let (p, r, o, w, l, d, c) = (
+        api.profile.clone(),
+        api.revoked.clone(),
+        api.offline.clone(),
+        api.writes.clone(),
+        api.logins.clone(),
+        api.deployment.clone(),
+        api.sync.clone(),
+    );
+    let (ready, waiting) = std::sync::mpsc::channel();
+    let worker = thread::spawn(move || {
+        ready.send(()).unwrap();
+        Api::reply(stream, &p, (&r, &o), &w, &l, &d, &c)
+    });
+    waiting.recv().unwrap();
+    thread::sleep(Duration::from_millis(25));
+    client
+        .write_all(b"GET /api/v1/health/ready HTTP/1.1\r\nHost: 127.0.0.1\r\n")
+        .unwrap();
+    thread::sleep(Duration::from_millis(25));
+    client.write_all(b"Connection: close\r\n\r\n").unwrap();
+    let mut response = String::new();
+    client.read_to_string(&mut response).unwrap();
+    worker.join().unwrap();
+    assert!(response.starts_with("HTTP/1.1 200"));
+    assert!(response.contains("caissepro-api"));
 }
 #[tokio::test]
 async fn revoked_session_is_purged_before_any_synchronization() {

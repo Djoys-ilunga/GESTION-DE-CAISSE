@@ -1,4 +1,10 @@
-# Validation de CaissePro — 9 novembre 2026
+# Validation de CaissePro — 12 novembre 2026
+
+## Étape 13-B — 12 novembre 2026
+
+Le [bilan de persistance chiffrée](etape-13b/BILAN.md) contient les résultats actuels, les scénarios, fichiers et limites. SQLCipher réel, isolation, verrou système, reprise après redémarrage et transmission exacte sont intégrés ; la validation native complète est en cours. Les passages GitHub vérifient les véritables coffres et le point d’entrée public sur Windows x64/MSVC et macOS Apple Silicon, puis compilent le desktop sans installateur.
+
+Les résultats historiques ci-dessous gardent leur date et leur périmètre. Leurs mentions de conservation uniquement en mémoire décrivent les anciennes versions ; le bilan 13-B définit le mode désormais actif selon la cible.
 
 ## Étape 12 — 11 novembre 2026
 

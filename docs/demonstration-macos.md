@@ -94,7 +94,7 @@ pnpm demo:stop && bash scripts/demo-macos.command
 
 `demo:stop` contrôle les deux ports, le programme Node, sa commande, son dossier de travail et son identité de processus. Il demande seulement l'arrêt gracieux des services API/Vite reconnus de cette copie du dépôt. Un processus d'un autre projet entraîne un refus avant tout signal. La commande attend aussi la fin du verrou du lanceur. Elle n'arrête pas PostgreSQL et ne réinitialise ni les données ni les mots de passe. Si l'arrêt gracieux échoue ou si un verrou reste présent, elle s'arrête avec un message explicite, sans suppression automatique.
 
-La préparation réutilise la même base et conserve vos essais comptabilisés ou transmis. Les brouillons restés uniquement en mémoire sont perdus à la fermeture. Ne pas supprimer les volumes Docker, `.env`, le dossier `scratch/caissepro-demo` ou son fichier `state.json`. Le fichier d'état contient des secrets de connexion ; ne pas le partager.
+La préparation réutilise la même base et conserve vos essais comptabilisés ou transmis. L’interface indique le mode de conservation des brouillons : les versions qualifiées de l’étape 13-B sur Apple Silicon utilisent SQLCipher et le trousseau macOS, au plus sept jours ; les versions en mémoire uniquement perdent encore les brouillons non transmis à la fermeture. Après redémarrage, un bail encore valide et un déverrouillage, ou une nouvelle authentification serveur, sont nécessaires. Voir [le bilan 13-B](etape-13b/BILAN.md). Ne pas supprimer les volumes Docker, `.env`, le dossier `scratch/caissepro-demo` ou son fichier `state.json`. Le fichier d'état contient des secrets de connexion ; ne pas le partager.
 
 ## En cas de blocage
 
