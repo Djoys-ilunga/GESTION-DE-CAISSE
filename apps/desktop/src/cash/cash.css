@@ -535,3 +535,34 @@
   font-size: 11px;
   color: #7b8d80;
 }
+
+.financial-action {
+  display: grid;
+  gap: 8px;
+  max-width: 320px;
+  align-content: start;
+}
+.financial-action small {
+  line-height: 1.5;
+}
+.expense-workflow {
+  margin-bottom: 20px;
+  padding: 20px;
+  line-height: 1.7;
+}
+.cash-card > .action-buttons {
+  flex-wrap: wrap;
+  margin-block: 12px;
+}
+.page-heading > .action-buttons {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+@media (max-width: 800px) {
+  .page-heading > .action-buttons {
+    justify-content: flex-start;
+  }
+  .financial-action {
+    max-width: 100%;
+  }
+}

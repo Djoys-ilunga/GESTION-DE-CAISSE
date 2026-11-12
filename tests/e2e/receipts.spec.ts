@@ -406,7 +406,7 @@ async function login(page: Page) {
   await page.getByRole('button', { name: 'Encaissements', exact: true }).click();
 }
 async function prepare(page: Page) {
-  await page.getByRole('button', { name: 'Nouveau brouillon d’encaissement' }).click();
+  await page.getByRole('button', { name: '+ Nouvelle entrée' }).click();
   await expect(page.getByRole('group', { name: 'Caisse d’encaissement' })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Caisse', exact: true })).toHaveCount(0);
   await page.getByRole('combobox', { name: 'Devise', exact: true }).selectOption('USD');
@@ -522,7 +522,7 @@ test('préférences monétaires individuelles et brouillon JPY, sans conversion 
     fullPage: true,
   });
   await page.getByRole('button', { name: 'Encaissements', exact: true }).click();
-  await page.getByRole('button', { name: 'Nouveau brouillon d’encaissement' }).click();
+  await page.getByRole('button', { name: '+ Nouvelle entrée' }).click();
   await expect(page.getByRole('combobox', { name: 'Devise', exact: true })).toHaveValue('JPY');
   await page.getByLabel('Montant', { exact: true }).fill('123');
   await page.getByLabel('Provenance / payeur').fill('Client japonais fictif');

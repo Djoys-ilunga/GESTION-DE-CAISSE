@@ -212,6 +212,7 @@ test('préparation de transfert hors connexion sans appel financier (IPC simulé
 }) => {
   await installDouble(page, true);
   await open(page);
+  await page.getByRole('button', { name: 'Nouveau transfert', exact: true }).click();
   await page
     .getByRole('combobox', { name: 'Caisse source', exact: true })
     .selectOption({ label: 'Agence · Caisse source' });
@@ -228,6 +229,43 @@ test('préparation de transfert hors connexion sans appel financier (IPC simulé
     return { financial: d.financial(), buffers: d.buffers() };
   });
   expect(result).toEqual({ financial: 0, buffers: 1 });
+});
+test('raccourcis transfert et conversion, annulation et thèmes à deux tailles (IPC simulé)', async ({
+  page,
+}) => {
+  await installDouble(page);
+  await open(page);
+  await page.getByRole('button', { name: 'Nouvelle conversion', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Préparer une conversion' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Devise source', exact: true })).toHaveValue(
+    'USD',
+  );
+  await expect(page.getByRole('combobox', { name: 'Devise destination', exact: true })).toHaveValue(
+    'CDF',
+  );
+  await page.getByLabel('Montant à remettre').fill('2.00');
+  await page.getByRole('button', { name: 'Nouveau transfert', exact: true }).click();
+  await page.getByRole('button', { name: 'Annuler', exact: true }).click();
+  await expect(page.getByLabel('Montant à remettre')).toHaveValue('2.00');
+  for (const [theme, width] of [
+    ['light', 1440],
+    ['dark', 650],
+  ] as const) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.getByLabel('Apparence').selectOption(theme);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    await page.screenshot({
+      path: `test-results/etape13a-conversion-${theme}-ipc-simule.png`,
+      fullPage: true,
+    });
+  }
+  expect(
+    await page.evaluate(() =>
+      (window as unknown as { transferDouble: { financial(): number } }).transferDouble.financial(),
+    ),
+  ).toBe(0);
 });
 test('réception et bordereau imprimable dans Chromium (IPC simulé)', async ({ page }) => {
   await installDouble(page);

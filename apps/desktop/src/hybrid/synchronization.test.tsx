@@ -158,9 +158,30 @@ describe('Centre de synchronisation sécurisé', () => {
   it('retire tous les champs de saisie de React pendant le verrouillage de l’application', async () => {
     const { p, gateway, set } = setup();
     p.permissions.push('expense:request');
+    vi.mocked(gateway.cashCatalog).mockResolvedValue({
+      stale: false,
+      data: {
+        synchronizedAt: new Date().toISOString(),
+        expiresAt: p.offlineUntil,
+        items: [
+          {
+            id: crypto.randomUUID(),
+            agency: p.agencies[0]!,
+            code: 'A',
+            name: 'Caisse de test',
+            active: true,
+            version: 1,
+            session: null,
+            funds: [],
+          },
+        ],
+      },
+    });
     render(<App gateway={gateway} />);
     await userEvent.click(await screen.findByRole('button', { name: 'Dépenses' }));
-    await userEvent.click(await screen.findByRole('button', { name: /Préparer une demande/ }));
+    await userEvent.click(
+      await screen.findByRole('button', { name: /Nouvelle demande de dépense/ }),
+    );
     await userEvent.type(screen.getByLabelText('Bénéficiaire'), 'Donnée privée en cours');
     set({ ...view(p), state: 'locked', profile: null });
     window.dispatchEvent(new Event('offline'));

@@ -1,7 +1,8 @@
 import { useMoney } from '../money/MoneyContext';
 import { CurrencyOptions } from '../money/MoneyContext';
 import { useEffect, useRef, useState } from 'react';
-import { ClipboardCheck, Plus, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
+import { FinancialAction, preparationRestriction } from '../ui/FinancialAccess';
 import {
   decideExpenseSchema,
   type CashSnapshot,
@@ -169,8 +170,51 @@ export function ExpensesPage({
           <h1>Dépenses et approbations</h1>
           <p>Préparer, soumettre, approuver puis payer : chaque action conserve sa trace.</p>
         </div>
-        <ClipboardCheck size={28} />
+        <FinancialAction
+          label="Nouvelle demande de dépense"
+          busy={busy}
+          reason={
+            preparationRestriction(profile, online) ||
+            (cash?.data.items.every((c) => !c.active)
+              ? 'Aucune caisse active autorisée. Demandez une affectation dans Utilisateurs.'
+              : '')
+          }
+          onClick={() => {
+            setTab('drafts');
+            setForm({ source: null, copy: false });
+          }}
+        />
       </div>
+      <section className="panel expense-workflow" aria-label="Circuit des dépenses">
+        {(
+          [
+            ['Préparer', 'draft:write_own'],
+            ['Soumettre', 'expense:request'],
+            ['Approuver', 'expense:approve'],
+            ['Payer', 'expense:pay'],
+          ] as const
+        ).map(([label, permission]) => (
+          <span key={permission}>
+            <strong>{label}</strong> :{' '}
+            {can(permission) ? 'autorisé dans vos caisses' : 'rôle requis'}.{' '}
+          </span>
+        ))}
+        <p>
+          La soumission, la décision et le paiement exigent le serveur. Personne ne peut approuver
+          sa propre demande.
+        </p>
+        <button
+          className="secondary-button"
+          disabled={!online || busy}
+          onClick={() => {
+            setTab('requests');
+            setState('PENDING');
+            setPage(1);
+          }}
+        >
+          Voir les demandes en attente de validation
+        </button>
+      </section>
       <div className="expense-tabs" role="tablist" aria-label="Gestion des dépenses">
         {can('draft:read_own') && (
           <button role="tab" aria-selected={tab === 'drafts'} onClick={() => setTab('drafts')}>
@@ -233,16 +277,6 @@ export function ExpensesPage({
                 <RefreshCw size={15} />
                 Synchroniser les brouillons
               </button>
-              {can('draft:write_own') && (
-                <button
-                  className="primary-button"
-                  disabled={busy}
-                  onClick={() => setForm({ source: null, copy: false })}
-                >
-                  <Plus size={15} />
-                  Préparer une demande
-                </button>
-              )}
             </div>
           </div>
           <p className="auth-notice">

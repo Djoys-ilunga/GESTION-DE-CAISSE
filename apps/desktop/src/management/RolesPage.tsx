@@ -19,10 +19,19 @@ export const permissionLabels: Record<string, string> = {
   'expense:pay': 'Confirmer un paiement approuvé',
   'transfer:post': 'Remettre ou recevoir un transfert',
   'fx:post': 'Valider une conversion',
+  'fx:manual': 'Déclarer un taux manuel justifié',
   'ledger:reverse': 'Corriger par contre-écriture',
   'session:manage': 'Ouvrir ou clôturer une session de caisse',
 };
-export function RolesPage({ gateway, online }: { gateway: AuthGateway; online: boolean }) {
+export function RolesPage({
+  gateway,
+  online,
+  onManageAccess,
+}: {
+  gateway: AuthGateway;
+  online: boolean;
+  onManageAccess?(): void;
+}) {
   const [data, setData] = useState<AccessCatalog | null>(null),
     [error, setError] = useState('');
   useEffect(() => {
@@ -58,7 +67,17 @@ export function RolesPage({ gateway, online }: { gateway: AuthGateway; online: b
             Référentiel réel du serveur. Affectez les rôles, agences et caisses depuis Utilisateurs.
           </p>
         </div>
+        {onManageAccess && (
+          <button className="primary-button" onClick={onManageAccess}>
+            Gérer les attributions
+          </button>
+        )}
       </header>
+      <p className="auth-notice">
+        Administrateur est un rôle technique. Les rôles financiers se choisissent explicitement dans
+        Utilisateurs et peuvent se cumuler. Ils restent limités aux caisses autorisées et ne
+        permettent jamais d’approuver sa propre demande.
+      </p>
       {error && (
         <p className="form-error" role="alert">
           {error}

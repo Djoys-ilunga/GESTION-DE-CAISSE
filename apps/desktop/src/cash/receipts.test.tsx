@@ -94,7 +94,7 @@ describe('Encaissements desktop avec courtier simulé', () => {
     vi.mocked(gateway.saveDraft).mockResolvedValue({} as never);
     render(<ReceiptsPage gateway={gateway} profile={p} online={false} />);
     await screen.findByText(/Derniers soldes connus/);
-    await userEvent.click(screen.getByRole('button', { name: 'Nouveau brouillon d’encaissement' }));
+    await userEvent.click(screen.getByRole('button', { name: '+ Nouvelle entrée' }));
     expect(screen.getByRole('group', { name: 'Caisse d’encaissement' })).toHaveTextContent(
       'Caisse principale',
     );
@@ -141,9 +141,7 @@ describe('Encaissements desktop avec courtier simulé', () => {
     const { p, gateway } = setup();
     p.permissions = ['ledger:read', 'receipt:read'];
     render(<ReceiptsPage gateway={gateway} profile={p} online />);
-    expect(
-      screen.queryByRole('button', { name: 'Nouveau brouillon d’encaissement' }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '+ Nouvelle entrée' })).toBeDisabled();
     expect(screen.queryByRole('tab', { name: 'Suivi serveur' })).not.toBeInTheDocument();
     await userEvent.selectOptions(screen.getByLabelText('Devise'), 'USD');
     await userEvent.type(screen.getByLabelText('Provenance, motif, référence ou reçu'), 'FACT-001');

@@ -13,6 +13,8 @@ import {
 } from '@caissepro/shared';
 import { message, type AuthGateway } from '../auth/gateway';
 import { formatDate } from '../cash/CashPage';
+import { FinancialAction, preparationRestriction } from '../ui/FinancialAccess';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 import '../cash/cash.css';
 import './transfers.css';
 const stateLabel = {
@@ -61,6 +63,49 @@ export function TransfersPage({
   latestOnline.current = online;
   const canPrepare = profile.permissions.includes('draft:write_own');
   const canExecute = profile.permissions.includes('transfer:post');
+  const composer = useRef<HTMLHeadingElement>(null);
+  const [newKind, setNewKind] = useState<'transfer' | 'conversion' | null>(null);
+  const prepareReason =
+    preparationRestriction(profile, online) ||
+    (catalog?.data.items.every((c) => !c.active)
+      ? 'Aucune caisse active autorisée. Demandez une affectation dans Utilisateurs.'
+      : '');
+  function start(kind: 'transfer' | 'conversion') {
+    if (prepareReason || (kind === 'conversion' && money.active.length < 2)) return;
+    const from = money.preferred('USD');
+    setId(crypto.randomUUID());
+    setSource('');
+    setDestination('');
+    setAmount('');
+    setDescription('');
+    setRate('');
+    setRateSource('');
+    setRateJustification('');
+    setRateMode('MANUAL');
+    setQuote(null);
+    setCurrency(from);
+    setTargetCurrency(kind === 'conversion' ? money.active.find((c) => c !== from)! : from);
+    setNewKind(null);
+    setError('');
+    setNotice('');
+    composer.current?.focus();
+    composer.current?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+  }
+  function requestStart(kind: 'transfer' | 'conversion') {
+    if (
+      source ||
+      destination ||
+      amount ||
+      description ||
+      rate ||
+      rateSource ||
+      rateJustification ||
+      currency !== money.preferred('USD') ||
+      targetCurrency !== money.preferred('USD')
+    )
+      setNewKind(kind);
+    else start(kind);
+  }
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -292,10 +337,53 @@ export function TransfersPage({
           <h1>Transferts et conversions</h1>
           <p>Préparer → transmettre → remettre → recevoir. Un transfert n’est pas une recette.</p>
         </div>
-        <button className="secondary-button" disabled={busy} onClick={() => void action(load)}>
-          Actualiser
-        </button>
+        <div className="action-buttons">
+          <FinancialAction
+            label="Nouveau transfert"
+            reason={prepareReason}
+            busy={busy}
+            onClick={() => requestStart('transfer')}
+          />
+          <FinancialAction
+            label="Nouvelle conversion"
+            reason={
+              prepareReason ||
+              (money.active.length < 2
+                ? 'Deux devises actives sont nécessaires pour une conversion.'
+                : '')
+            }
+            busy={busy}
+            onClick={() => requestStart('conversion')}
+          />
+          <button className="secondary-button" disabled={busy} onClick={() => void action(load)}>
+            Actualiser
+          </button>
+        </div>
       </header>
+      {newKind && (
+        <ConfirmDialog
+          title="Commencer une nouvelle préparation ?"
+          onCancel={() => setNewKind(null)}
+          onConfirm={() => start(newKind)}
+        >
+          <p>
+            La saisie affichée sera remplacée. Les brouillons déjà conservés et les opérations
+            transmises restent disponibles. Annulez pour conserver d’abord votre saisie.
+          </p>
+        </ConfirmDialog>
+      )}
+      {canPrepare && (
+        <p className="auth-notice">
+          Préparation autorisée. Remise et réception :{' '}
+          {canExecute ? 'autorisées dans vos caisses' : 'rôle financier de transfert requis'}.{' '}
+          Conversion :{' '}
+          {profile.permissions.includes('fx:post')
+            ? 'validation autorisée'
+            : 'rôle de conversion requis'}
+          . Le serveur revalide les fonds, les taux et les autorisations ; la réception exige un
+          autre utilisateur.
+        </p>
+      )}
       {!online && (
         <p role="status" className="transfer-warning">
           Hors connexion : préparation uniquement. Soldes non actualisés ; aucune remise, réception
@@ -310,7 +398,9 @@ export function TransfersPage({
       {notice && <p role="status">{notice}</p>}
       {canPrepare && (
         <section className="panel">
-          <h2>Préparer un transfert</h2>
+          <h2 ref={composer} tabIndex={-1}>
+            {fx ? 'Préparer une conversion' : 'Préparer un transfert'}
+          </h2>
           <form onSubmit={(e) => void save(e)} className="transfer-form">
             <label>
               Caisse source

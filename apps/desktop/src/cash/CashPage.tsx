@@ -5,6 +5,7 @@ import { Building2, Plus, RefreshCw, Wallet, LockKeyhole } from 'lucide-react';
 import type { CashConfiguration, CashSnapshot, SessionProfile } from '@caissepro/shared';
 import { message, type AuthGateway } from '../auth/gateway';
 import './cash.css';
+import type { ReportEntry } from '../reports/ReportsPage';
 export const formatMoney = formatMonetary;
 export const formatDate = (value: string) =>
   new Date(value).toLocaleString('fr-FR', { timeZone: 'Africa/Kinshasa' });
@@ -12,10 +13,12 @@ export function CashPage({
   gateway,
   profile,
   online,
+  onOpenReport,
 }: {
   gateway: AuthGateway;
   profile: SessionProfile;
   online: boolean;
+  onOpenReport?(entry: ReportEntry): void;
 }) {
   const money = useMoney();
   const { format: formatMoney } = money;
@@ -155,16 +158,57 @@ export function CashPage({
                   ) : (
                     <span>Aucune session ouverte.</span>
                   )}
-                  {!cash.session && profile.permissions.includes('session:manage') && (
+                  {!cash.session && (
                     <button
                       className="secondary-button"
-                      disabled={!online || !cash.active || busy}
+                      disabled={
+                        !online ||
+                        !cash.active ||
+                        busy ||
+                        !profile.permissions.includes('session:manage')
+                      }
+                      aria-describedby={`cash-access-${cash.id}`}
                       onClick={() => void open(cash.id)}
                     >
                       Ouvrir la session de caisse
                     </button>
                   )}
                 </div>
+                <div className="action-buttons">
+                  {cash.session && (
+                    <button
+                      className="secondary-button"
+                      disabled={
+                        !online ||
+                        busy ||
+                        !onOpenReport ||
+                        !profile.permissions.includes('session:manage')
+                      }
+                      aria-describedby={`cash-access-${cash.id}`}
+                      onClick={() => onOpenReport?.({ tab: 'closures', cashRegisterId: cash.id })}
+                    >
+                      Clôturer la caisse
+                    </button>
+                  )}
+                  <button
+                    className="secondary-button"
+                    disabled={
+                      !online || !onOpenReport || !profile.permissions.includes('ledger:read')
+                    }
+                    onClick={() => onOpenReport?.({ tab: 'journal', cashRegisterId: cash.id })}
+                  >
+                    Journal de caisse
+                  </button>
+                </div>
+                <small id={`cash-access-${cash.id}`} className="block">
+                  {!profile.permissions.includes('session:manage')
+                    ? 'Ouverture et clôture : rôle financier avec gestion des sessions requis. Les droits s’attribuent dans Utilisateurs.'
+                    : !online
+                      ? 'Ouverture, clôture et journal serveur indisponibles hors connexion.'
+                      : !cash.active
+                        ? 'Cette caisse est désactivée : ouverture interdite. Une session existante peut être clôturée après vérification serveur.'
+                        : 'La clôture exige un nouveau comptage par devise et une confirmation dans Rapports.'}
+                </small>
               </article>
             ))}
           </div>

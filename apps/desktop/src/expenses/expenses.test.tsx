@@ -122,7 +122,7 @@ describe('Dépenses desktop avec courtier explicitement simulé', () => {
   it('prépare une demande complète hors connexion sans soumission ni paiement', async () => {
     const s = setup();
     render(<ExpensesPage profile={s.p} gateway={s.gateway} online={false} />);
-    await userEvent.click(screen.getByRole('button', { name: 'Préparer une demande' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Nouvelle demande de dépense' }));
     await userEvent.selectOptions(screen.getByLabelText('Caisse de paiement'), s.cash.id);
     await userEvent.selectOptions(screen.getByLabelText('Devise'), 'CDF');
     await userEvent.type(screen.getByLabelText('Montant exact'), '12,34');

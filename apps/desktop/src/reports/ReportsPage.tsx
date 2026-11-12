@@ -96,6 +96,7 @@ function Curve({ data, currency }: { data: ReportSnapshot['daily']; currency: st
     </figure>
   );
 }
+export type ReportEntry = { tab: 'journal' | 'closures'; cashRegisterId?: string };
 export function ReportsPage({
   profile,
   gateway,
@@ -103,6 +104,7 @@ export function ReportsPage({
   reports = false,
   supervision,
   supervisionError,
+  entry,
 }: {
   profile: SessionProfile;
   gateway: AuthGateway;
@@ -110,18 +112,25 @@ export function ReportsPage({
   reports?: boolean;
   supervision?: Supervision | null;
   supervisionError?: string;
+  entry?: ReportEntry;
 }) {
   const { format: formatMoney } = useMoney();
   const money = useMoney();
   const [data, setData] = useState<ReportSnapshot | null>(null),
-    [query, setQuery] = useState<ReportQuery>({ period: 'month' }),
-    [draft, setDraft] = useState<ReportQuery>({ period: 'month' }),
+    [query, setQuery] = useState<ReportQuery>({
+      period: 'month',
+      ...(entry?.cashRegisterId ? { cashRegisterId: entry.cashRegisterId } : {}),
+    }),
+    [draft, setDraft] = useState<ReportQuery>({
+      period: 'month',
+      ...(entry?.cashRegisterId ? { cashRegisterId: entry.cashRegisterId } : {}),
+    }),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [notice, setNotice] = useState('');
   const [tab, setTab] = useState<
       'journal' | 'category' | 'agency' | 'user' | 'decisions' | 'closures'
-    >('journal'),
+    >(entry?.tab ?? 'journal'),
     [currency, setCurrency] = useState(money.data.preferences.displayCurrency ?? 'ALL'),
     [search, setSearch] = useState(''),
     [page, setPage] = useState(1);
@@ -183,7 +192,17 @@ export function ReportsPage({
     setConfirmed(false);
     try {
       const value = await gateway.cashCatalog();
-      if (alive.current && seq === generation.current && onlineRef.current) setCash(value);
+      if (alive.current && seq === generation.current && onlineRef.current) {
+        setCash(value);
+        if (entry?.cashRegisterId) {
+          const target = value.data.items.find((c) => c.id === entry.cashRegisterId && c.session);
+          if (target) setCloseId(target.id);
+          else
+            setError(
+              'La caisse sélectionnée n’a plus de session ouverte accessible. Aucune autre caisse n’a été sélectionnée.',
+            );
+        }
+      }
     } catch (e) {
       if (alive.current && seq === generation.current) setError(message(e));
     } finally {

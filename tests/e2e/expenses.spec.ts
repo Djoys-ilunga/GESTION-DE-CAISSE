@@ -280,7 +280,7 @@ test('demande hors connexion sans soumission ni paiement dans Chromium avec doub
 }) => {
   await installDouble(page, true);
   await login(page, true);
-  await page.getByRole('button', { name: 'Préparer une demande' }).click();
+  await page.getByRole('button', { name: 'Nouvelle demande de dépense' }).click();
   await page.getByLabel('Caisse de paiement').selectOption({ label: 'Caisse principale' });
   await page.getByRole('combobox', { name: 'Devise', exact: true }).selectOption('CDF');
   await page.getByLabel('Montant exact').fill('125,50');

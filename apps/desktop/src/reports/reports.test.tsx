@@ -121,6 +121,52 @@ async function fillCounts(usd = '1000.00', cdf = '280000.00') {
   await userEvent.click(screen.getByRole('checkbox', { name: /Je confirme le comptage physique/ }));
 }
 describe('Rapports avec passerelle simulée', () => {
+  it('prend la caisse du raccourci de clôture, exige le comptage et ne sélectionne jamais une autre caisse si elle a disparu', async () => {
+    const s = closureFixture(),
+      target = s.items[1]!;
+    const component = render(
+      <ReportsPage
+        profile={s.p}
+        gateway={s.gateway}
+        online
+        reports
+        entry={{ tab: 'closures', cashRegisterId: target.id }}
+      />,
+    );
+    await screen.findByText('Trésorerie actuelle');
+    expect(screen.getByRole('tab', { name: 'Clôtures et écarts' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Préparer une clôture avec comptage' }),
+    );
+    await waitFor(() => expect(screen.getByLabelText('Caisse à clôturer')).toHaveValue(target.id));
+    expect(screen.getByLabelText('USD comptés')).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'Clôturer et établir le PV' })).toBeDisabled();
+    expect(s.gateway.closeCash).not.toHaveBeenCalled();
+    component.unmount();
+    vi.mocked(s.gateway.cashCatalog).mockResolvedValue({
+      ...s.catalog,
+      data: { ...s.catalog.data, items: [s.items[0]!] },
+    });
+    render(
+      <ReportsPage
+        profile={s.p}
+        gateway={s.gateway}
+        online
+        reports
+        entry={{ tab: 'closures', cashRegisterId: target.id }}
+      />,
+    );
+    await screen.findByText('Trésorerie actuelle');
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Préparer une clôture avec comptage' }),
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent('Aucune autre caisse');
+    expect(screen.getByLabelText('Caisse à clôturer')).toHaveValue('');
+    expect(s.gateway.closeCash).not.toHaveBeenCalled();
+  });
   it('exige un nouveau comptage et une confirmation après changement de caisse avant de clôturer', async () => {
     const s = closureFixture();
     vi.mocked(s.gateway.closeCash).mockResolvedValue({});

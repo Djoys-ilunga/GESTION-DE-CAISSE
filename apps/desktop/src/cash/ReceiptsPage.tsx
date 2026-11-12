@@ -5,7 +5,6 @@ import {
   ArrowDownToLine,
   CheckCircle2,
   FilePenLine,
-  Plus,
   RefreshCw,
   Search,
   ReceiptText,
@@ -23,6 +22,7 @@ import { message, type AuthGateway, type SessionDraft } from '../auth/gateway';
 import { formatDate } from './CashPage';
 import { ReceiptForm } from './ReceiptForm';
 import { ReceiptViewer } from './ReceiptViewer';
+import { FinancialAction, preparationRestriction } from '../ui/FinancialAccess';
 import './cash.css';
 export function ReceiptsPage({
   gateway,
@@ -216,20 +216,28 @@ export function ReceiptsPage({
           <h1>Encaissements</h1>
           <p>Préparer, transmettre, puis confirmer la réception effective des fonds.</p>
         </div>
-        {canWrite && (
-          <button
-            className="primary-button"
-            onClick={() => {
-              setEditing(null);
-              setOpen(true);
-              setTab('local');
-            }}
-          >
-            <Plus size={16} />
-            Nouveau brouillon d’encaissement
-          </button>
-        )}
+        <FinancialAction
+          label="+ Nouvelle entrée"
+          reason={
+            preparationRestriction(profile, online) ||
+            (cash?.data.items.every((c) => !c.active)
+              ? 'Aucune caisse active autorisée. Demandez une affectation dans Utilisateurs.'
+              : '')
+          }
+          busy={busy}
+          onClick={() => {
+            setEditing(null);
+            setOpen(true);
+            setTab('local');
+          }}
+        />
       </div>
+      {canWrite && !canPost && (
+        <p className="auth-notice">
+          Vous pouvez préparer un brouillon. La confirmation de réception exige une autorisation
+          d’encaissement et une session de caisse ouverte, validées par le serveur.
+        </p>
+      )}
       <div className="cash-tabs" role="tablist" aria-label="Encaissements">
         {canDraft && (
           <>

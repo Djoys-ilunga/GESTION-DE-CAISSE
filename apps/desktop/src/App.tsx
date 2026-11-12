@@ -12,7 +12,7 @@ import {
   SyncStamp,
   OfflineOverview,
 } from './management/Supervision';
-import { ReportsPage } from './reports/ReportsPage';
+import { ReportsPage, type ReportEntry } from './reports/ReportsPage';
 import { TransfersPage } from './transfers/TransfersPage';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from 'react';
 import {
@@ -608,6 +608,15 @@ function Workspace({
 }) {
   const [page, setPage] = useState('overview'),
     [error, setError] = useState('');
+  const [reportEntry, setReportEntry] = useState<(ReportEntry & { key: number }) | undefined>();
+  const navigate = (target: string) => {
+    setReportEntry(undefined);
+    setPage(target);
+  };
+  const openReport = (entry: ReportEntry) => {
+    setReportEntry((old) => ({ ...entry, key: (old?.key ?? 0) + 1 }));
+    setPage('reports');
+  };
   const profile = view.profile,
     online = view.state === 'online';
   const permission = (p: string) => profile.permissions.includes(p);
@@ -665,7 +674,7 @@ function Workspace({
                       key={id}
                       title={label}
                       aria-label={label}
-                      onClick={() => setPage(id)}
+                      onClick={() => navigate(id)}
                       className={`nav-button ${page === id ? 'active' : ''}`}
                       aria-current={page === id ? 'page' : undefined}
                     >
@@ -749,12 +758,24 @@ function Workspace({
                 supervisionError={supervision.error}
               />
             ) : (
-              <OfflineOverview gateway={gateway} profile={profile} onNavigate={setPage} />
+              <OfflineOverview gateway={gateway} profile={profile} onNavigate={navigate} />
             )
           ) : page === 'reports' ? (
-            <ReportsPage profile={profile} gateway={gateway} online={online} reports />
+            <ReportsPage
+              key={reportEntry?.key ?? 'reports'}
+              entry={reportEntry}
+              profile={profile}
+              gateway={gateway}
+              online={online}
+              reports
+            />
           ) : page === 'cash' ? (
-            <CashPage profile={profile} gateway={gateway} online={online} />
+            <CashPage
+              profile={profile}
+              gateway={gateway}
+              online={online}
+              onOpenReport={openReport}
+            />
           ) : page === 'receipts' ? (
             <ReceiptsPage profile={profile} gateway={gateway} online={online} />
           ) : page === 'expenses' ? (
@@ -770,13 +791,13 @@ function Workspace({
           ) : page === 'settings' ? (
             <SettingsPage profile={profile} gateway={gateway} online={online} />
           ) : page === 'roles' ? (
-            <RolesPage gateway={gateway} online={online} />
+            <RolesPage gateway={gateway} online={online} onManageAccess={() => navigate('users')} />
           ) : page === 'audit' ? (
             <AuditPage profile={profile} gateway={gateway} online={online} />
           ) : page === 'documents' ? (
-            <Documents profile={profile} onNavigate={setPage} />
+            <Documents profile={profile} onNavigate={navigate} />
           ) : page === 'users' ? (
-            <UsersPage gateway={gateway} online={online} />
+            <UsersPage gateway={gateway} online={online} profile={profile} />
           ) : page === 'logs' ? (
             <Logs gateway={gateway} online={online} />
           ) : (
@@ -886,7 +907,15 @@ function Documents({
     </>
   );
 }
-function UsersPage({ gateway, online }: { gateway: AuthGateway; online: boolean }) {
+function UsersPage({
+  gateway,
+  online,
+  profile,
+}: {
+  gateway: AuthGateway;
+  online: boolean;
+  profile: SessionProfile;
+}) {
   const [users, setUsers] = useState<ManagedUser[]>([]),
     [catalog, setCatalog] = useState<AccessCatalog | null>(null),
     [editing, setEditing] = useState<ManagedUser | null | undefined>(undefined),
@@ -935,11 +964,38 @@ function UsersPage({ gateway, online }: { gateway: AuthGateway; online: boolean 
           <h1>Utilisateurs & affectations</h1>
           <p>Les changements de droits révoquent les sessions concernées.</p>
         </div>
-        <button className="primary-button" disabled={!catalog} onClick={() => setEditing(null)}>
+        <button
+          className="primary-button"
+          disabled={!catalog || !profile.permissions.includes('roles:assign')}
+          onClick={() => setEditing(null)}
+        >
           <Plus size={16} />
           Nouvel utilisateur
         </button>
       </div>
+      <section className="panel">
+        <h2>Administration technique et responsabilités financières</h2>
+        <p>
+          Le rôle Administrateur ne donne aucun droit financier automatique. Selon la politique de
+          votre entreprise, sélectionnez explicitement un ou plusieurs rôles métier, puis les
+          agences et caisses autorisées. Personne ne peut approuver sa propre demande de dépense.
+        </p>
+        <button
+          className="secondary-button"
+          disabled={
+            !catalog ||
+            !users.some((u) => u.id === profile.user.id) ||
+            !profile.permissions.includes('roles:assign')
+          }
+          onClick={() => setEditing(users.find((u) => u.id === profile.user.id))}
+        >
+          Examiner mes rôles et affectations
+        </button>
+        <p>
+          Toute modification de vos propres accès révoque aussi votre session. Une nouvelle
+          connexion est obligatoire.
+        </p>
+      </section>
       {error && (
         <p role="alert" className="form-error">
           {error}
@@ -1011,7 +1067,11 @@ function UsersPage({ gateway, online }: { gateway: AuthGateway; online: boolean 
                     </td>
                     <td>{user.active ? 'Actif' : 'Désactivé'}</td>
                     <td>
-                      <button className="text-button" onClick={() => setEditing(user)}>
+                      <button
+                        className="text-button"
+                        disabled={!profile.permissions.includes('roles:assign')}
+                        onClick={() => setEditing(user)}
+                      >
                         Modifier les accès
                       </button>
                     </td>
@@ -1103,6 +1163,19 @@ function UserEditor({
         </ConfirmDialog>
       )}
       <h2>{user ? 'Modifier les accès' : 'Créer un utilisateur'}</h2>
+      <p>
+        Plusieurs rôles peuvent être sélectionnés. Les droits se cumulent uniquement sur les agences
+        et caisses affectées. Aucun rôle ne permet l’auto-approbation d’une dépense.
+      </p>
+      <details>
+        <summary>Droits proposés par les rôles sélectionnés</summary>
+        <ul>
+          {[...new Set(roles.flatMap((role) => catalog.roles[role] ?? []))].map((permission) => (
+            <li key={permission}>{permissionLabels[permission] ?? 'Autorisation métier'}</li>
+          ))}
+        </ul>
+        <p>Cette proposition n’est appliquée qu’après confirmation et validation du serveur.</p>
+      </details>
       {user &&
         (eligibleAgencies.length !== user.agencyIds.length ||
           eligibleCash.length !== user.cashRegisterIds.length) && (
