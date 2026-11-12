@@ -51,12 +51,19 @@ fn public_gate_precedes_any_file_or_key_creation() {
     let vault = Vault {
         key: RefCell::new(None),
     };
-    assert!(matches!(
-        EncryptedStore::open(&path, scope(), &vault),
-        Err(StoreError::PlatformNotValidated)
-    ));
-    assert!(!path.exists());
-    assert!(vault.key.borrow().is_none());
+    if PLATFORM_STORAGE_VALIDATED {
+        let store = EncryptedStore::open(&path, scope(), &vault).unwrap();
+        assert!(path.exists());
+        assert!(vault.key.borrow().is_some());
+        drop(store);
+    } else {
+        assert!(matches!(
+            EncryptedStore::open(&path, scope(), &vault),
+            Err(StoreError::PlatformNotValidated)
+        ));
+        assert!(!path.exists());
+        assert!(vault.key.borrow().is_none());
+    }
 }
 #[test]
 fn checkpoint_is_atomic_versioned_encrypted_and_preserves_payload_on_rejected_write() {
@@ -215,9 +222,8 @@ fn concurrent_connections_cannot_overwrite_the_same_revision() {
 #[test]
 fn authorized_cache_expires_and_requires_explicit_permission() {
     let dir = tempfile::tempdir().unwrap();
-    let mut scope = scope();
-    scope.authorized_until = system_now() + 1000;
-    let s = EncryptedStore::open_encrypted(&dir.path().join("local.db"), scope, &key()).unwrap();
+    let mut s =
+        EncryptedStore::open_encrypted(&dir.path().join("local.db"), scope(), &key()).unwrap();
     let now = system_now();
     s.cache_authorized(
         "balance",
@@ -225,8 +231,8 @@ fn authorized_cache_expires_and_requires_explicit_permission() {
         &serde_json::json!({"amount":"12.34"}),
         1,
         now,
-        now + 500,
-        now + 900,
+        now + 60_000,
+        s.scope.authorized_until,
     )
     .unwrap();
     assert!(s.read_cache("balance", "other").unwrap().is_none());
@@ -243,11 +249,12 @@ fn authorized_cache_expires_and_requires_explicit_permission() {
             &serde_json::json!({}),
             1,
             now,
-            now + 500,
-            now + 900
+            now + 60_000,
+            s.scope.authorized_until
         )
         .is_err());
-    std::thread::sleep(Duration::from_millis(510));
+    s.started_at = now + 60_000;
+    s.clock = Instant::now();
     assert!(s.read_cache("balance", "ledger:read").unwrap().is_none());
 }
 #[test]
@@ -388,9 +395,43 @@ fn windows_database_and_directory_have_protected_owner_system_admin_acl() {
     let file = dir.path().join("private.db");
     let store = EncryptedStore::open_encrypted(&file, scope(), &key()).unwrap();
     for path in [dir.path(), file.as_path()] {
-        let status=std::process::Command::new("powershell.exe").args(["-NoLogo","-NoProfile","-NonInteractive","-Command",r#"$ErrorActionPreference='Stop'; $acl=Get-Acl -LiteralPath $env:CAISSEPRO_ACL_TEST_PATH; if(!$acl.AreAccessRulesProtected -or $acl.Access.Count -lt 3){exit 1}; $allowed=@('S-1-3-4','S-1-5-18','S-1-5-32-544',[System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value); foreach($rule in $acl.Access){if($rule.AccessControlType -eq 'Allow' -and $rule.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value -notin $allowed){exit 1}}; exit 0"#])
+        let status=std::process::Command::new("powershell.exe").args(["-NoLogo","-NoProfile","-NonInteractive","-Command",r#"$ErrorActionPreference='Stop'; $env:PSModulePath=$env:SystemRoot+'\System32\WindowsPowerShell\v1.0\Modules'; $acl=Get-Acl -LiteralPath $env:CAISSEPRO_ACL_TEST_PATH; if(!$acl.AreAccessRulesProtected -or $acl.Access.Count -lt 3){exit 1}; $allowed=@('S-1-3-4','S-1-5-18','S-1-5-32-544',[System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value); foreach($rule in $acl.Access){if($rule.AccessControlType -eq 'Allow' -and $rule.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value -notin $allowed){exit 1}}; exit 0"#])
             .env("CAISSEPRO_ACL_TEST_PATH",path).status().unwrap();
         assert!(status.success(), "Private Windows ACL required");
     }
     drop(store);
+}
+
+#[test]
+fn sqlcipher_build_has_real_cipher_version_before_opening_any_file() {
+    let connection = Connection::open_in_memory().unwrap();
+    let cipher: String = connection
+        .query_row("PRAGMA cipher_version", [], |r| r.get(0))
+        .expect("SQLCipher must be linked, not standard SQLite");
+    assert!(!cipher.trim().is_empty());
+}
+#[cfg(unix)]
+#[test]
+fn trusted_parent_directory_alias_does_not_disable_database_nofollow_protection() {
+    use std::os::unix::fs::symlink;
+    let dir = tempfile::tempdir().unwrap();
+    let actual = dir.path().join("real");
+    fs::create_dir(&actual).unwrap();
+    let alias = dir.path().join("alias");
+    symlink(&actual, &alias).unwrap();
+    let encryption_key = key();
+    let authorized = scope();
+    let store = EncryptedStore::open_encrypted(
+        &alias.join("private.db"),
+        authorized.clone(),
+        &encryption_key,
+    )
+    .unwrap();
+    drop(store);
+    let link = actual.join("unsafe.db");
+    symlink(actual.join("private.db"), &link).unwrap();
+    assert!(matches!(
+        EncryptedStore::open_encrypted(&link, authorized, &encryption_key),
+        Err(StoreError::AccessDenied)
+    ));
 }

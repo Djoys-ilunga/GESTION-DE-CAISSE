@@ -89,6 +89,49 @@ async function fillForm() {
   await userEvent.type(screen.getByLabelText('Motif'), 'Vente professionnelle');
 }
 describe('Encaissements desktop avec courtier simulé', () => {
+  it('conserve UUID, création et expiration d’une saisie reprise la veille sans la transmettre', async () => {
+    const { cash, gateway } = setup();
+    const createdAt = new Date(Date.now() - 86400000).toISOString(),
+      expiresAt = new Date(Date.now() + 5 * 86400000).toISOString(),
+      id = crypto.randomUUID();
+    vi.mocked(gateway.saveDraft).mockResolvedValue({} as never);
+    render(
+      <ReceiptForm
+        gateway={gateway}
+        cashes={[cash]}
+        editing={null}
+        onSaved={() => {}}
+        onCancel={() => {}}
+        buffer={{
+          id,
+          kind: 'receipt',
+          agencyId: cash.agency.id,
+          cashRegisterId: cash.id,
+          expectedLocalVersion: null,
+          createdAt,
+          updatedAt: createdAt,
+          expiresAt,
+          fields: {
+            amount: '12.34',
+            currency: 'USD',
+            provenance: 'Client de test',
+            category: 'Ventes',
+            description: 'Saisie conservée depuis la veille',
+          },
+        }}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Enregistrer le brouillon' }));
+    await waitFor(() => expect(gateway.saveDraft).toHaveBeenCalled());
+    expect(vi.mocked(gateway.saveDraft).mock.calls[0]![0].draft).toMatchObject({
+      id,
+      createdAt,
+      expiresAt,
+      amount: '12.34',
+    });
+    expect(gateway.synchronize).not.toHaveBeenCalled();
+    expect(gateway.confirmReceipt).not.toHaveBeenCalled();
+  });
   it('prépare hors connexion sans confirmer ni produire de reçu', async () => {
     const { p, gateway } = setup();
     vi.mocked(gateway.saveDraft).mockResolvedValue({} as never);

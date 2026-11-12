@@ -151,6 +151,18 @@ impl EncryptedStore {
         if cipher.is_empty() {
             return Err(StoreError::Storage);
         }
+        // Resolve trusted OS aliases such as macOS /var -> /private/var, but
+        // still refuse a symlink as the database itself and keep SQLite NOFOLLOW.
+        if fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink()) {
+            return Err(StoreError::AccessDenied);
+        }
+        let parent = fs::canonicalize(
+            path.parent()
+                .filter(|p| !p.as_os_str().is_empty())
+                .unwrap_or(Path::new(".")),
+        )?;
+        let canonical = parent.join(path.file_name().ok_or(StoreError::InvalidData)?);
+        let path = canonical.as_path();
         if !path.exists() {
             let mut options = fs::OpenOptions::new();
             options.write(true).create_new(true);

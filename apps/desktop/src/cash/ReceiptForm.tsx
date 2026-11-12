@@ -128,7 +128,10 @@ export function ReceiptForm({
       const draft = editing
         ? { ...editing.draft, ...base, receiptDetails }
         : { ...createLocalDraft(base), id: formId, receiptDetails };
-      if (!editing && buffer) draft.expiresAt = buffer.expiresAt;
+      if (!editing && buffer) {
+        draft.createdAt = buffer.createdAt;
+        draft.expiresAt = buffer.expiresAt;
+      }
       await gateway.saveDraft({
         draft,
         agencyId: selected.agency.id,

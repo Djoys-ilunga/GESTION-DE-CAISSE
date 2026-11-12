@@ -1407,3 +1407,59 @@ async fn encrypted_offline_unlock_attempt_counter_survives_restarts_and_revokes_
     assert_eq!(broker.status().unwrap().state, "anonymous");
     assert_eq!(api.sync.financial.load(Ordering::SeqCst), 0);
 }
+
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+#[tokio::test]
+async fn native_production_factory_is_gated_then_reopens_a_real_encrypted_workspace() {
+    let api = Api::new();
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("production-factory");
+    let broker = Broker::with_native_storage(&api.base, "test", root.clone(), true).unwrap();
+    if !caissepro_local_store::PLATFORM_STORAGE_VALIDATED {
+        assert!(!root.exists());
+        return;
+    }
+    {
+        let mut p = api.profile.lock().unwrap();
+        p.device_id = broker.test_device();
+        p.permissions
+            .extend(["offline:access".into(), "ledger:read".into()]);
+        p.offline_until = Some(iso(wall_now() + 120000));
+    }
+    let generation = login_for_sync(&broker).await;
+    let d = api.draft();
+    let id = d.draft.id;
+    broker.save_draft(d, Some(generation)).unwrap();
+    drop(broker);
+    api.offline.store(true, Ordering::SeqCst);
+    let broker = Broker::with_native_storage(&api.base, "test", root, true).unwrap();
+    let generation = broker.status().unwrap().generation;
+    assert_eq!(broker.status().unwrap().state, "locked");
+    let offline = broker
+        .unlock(Zeroizing::new("password-test".into()), Some(generation))
+        .await
+        .unwrap();
+    assert_eq!(offline.state, "offline");
+    assert_eq!(
+        broker.drafts(Some(offline.generation)).unwrap()[0].draft.id,
+        id
+    );
+    api.offline.store(false, Ordering::SeqCst);
+    let online = broker
+        .unlock(
+            Zeroizing::new("password-test".into()),
+            Some(offline.generation),
+        )
+        .await
+        .unwrap();
+    api.revoked.store(true, Ordering::SeqCst);
+    assert!(broker.revalidate(Some(online.generation)).await.is_err());
+    assert_eq!(broker.status().unwrap().state, "anonymous");
+    broker
+        .persistence
+        .as_ref()
+        .unwrap()
+        .forget_test_installation()
+        .unwrap();
+    assert_eq!(api.sync.financial.load(Ordering::SeqCst), 0);
+}

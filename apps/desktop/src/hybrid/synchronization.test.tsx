@@ -175,6 +175,7 @@ describe('Centre de synchronisation sécurisé', () => {
     expect(vi.mocked(gateway.saveDraft).mock.calls[0]![0].draft).toMatchObject({
       id: stable,
       amount: '12.34',
+      createdAt: captured!.createdAt,
       expiresAt: captured!.expiresAt,
     });
     expect(gateway.synchronize).not.toHaveBeenCalled();

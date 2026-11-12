@@ -845,6 +845,10 @@ impl Broker {
         broker.persistence = Some(runtime);
         Ok(broker)
     }
+    #[cfg(all(test, any(target_os = "windows", target_os = "macos")))]
+    pub(crate) fn test_device(&self) -> Uuid {
+        self.device
+    }
     fn generation(state: &State, expected: Option<u64>) -> Result<()> {
         if expected.is_some_and(|v| v != state.generation) {
             Err(Error::SessionChanged)

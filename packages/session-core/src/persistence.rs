@@ -75,6 +75,13 @@ fn storage<T>(value: std::result::Result<T, caissepro_local_store::StoreError>) 
 }
 
 impl Runtime {
+    #[cfg(all(test, any(target_os = "windows", target_os = "macos")))]
+    pub(crate) fn forget_test_installation(&self) -> Result<()> {
+        storage(
+            self.vault
+                .delete(&format!("installation-{}", self.namespace)),
+        )
+    }
     #[cfg(test)]
     pub(crate) fn for_tests(
         root: PathBuf,

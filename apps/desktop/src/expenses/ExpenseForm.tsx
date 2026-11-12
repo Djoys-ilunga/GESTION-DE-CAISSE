@@ -108,7 +108,10 @@ export function ExpenseForm({
         : { ...createLocalDraft(base), id: formId, expenseDetails: details };
       if (cash && !cashes.some((c) => c.id === cash && c.active && c.agency.id === agency))
         throw new Error('PERMISSION_DENIED');
-      if (!editing && buffer) draft.expiresAt = buffer.expiresAt;
+      if (!editing && buffer) {
+        draft.createdAt = buffer.createdAt;
+        draft.expiresAt = buffer.expiresAt;
+      }
       await gateway.saveDraft({
         draft,
         agencyId: agency,

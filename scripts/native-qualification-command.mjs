@@ -25,7 +25,11 @@ child.on('close', (code) => {
     const diagnostic =
       output
         .split('\n')
-        .filter((line) => /error|FAILED|panicked|Err\(|Caused by|failed|not found/i.test(line))
+        .filter((line) =>
+          /error|FAILED|panicked|Err\(|Err value|assertion|left:|right:|Caused by|failed|not found/i.test(
+            line,
+          ),
+        )
         .join('\n')
         .slice(-6000) || output.slice(-3000);
     const escaped = diagnostic
