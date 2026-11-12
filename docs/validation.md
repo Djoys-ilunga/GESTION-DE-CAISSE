@@ -2,7 +2,7 @@
 
 ## Étape 13-B — 12 novembre 2026
 
-Le [bilan de persistance chiffrée](etape-13b/BILAN.md) contient les résultats actuels, les scénarios, fichiers et limites. SQLCipher réel, isolation, verrou système, reprise après redémarrage et transmission exacte sont intégrés ; la validation native complète est en cours. Les passages GitHub vérifient les véritables coffres et le point d’entrée public sur Windows x64/MSVC et macOS Apple Silicon, puis compilent le desktop sans installateur.
+Le [bilan de persistance chiffrée](etape-13b/BILAN.md) contient les résultats actuels, les scénarios, fichiers et limites. SQLCipher réel, isolation, verrou système, reprise après redémarrage et transmission exacte sont intégrés ; la validation native complète réussit sur Windows x64/MSVC et macOS Apple Silicon. Le [passage GitHub réussi](https://github.com/Djoys-ilunga/GESTION-DE-CAISSE/actions/runs/43237829801), code `bd4b8b5`, valide sur chaque cible 15 tests SQLCipher/coffre et 74 tests de session, les contrôles JavaScript et la compilation du véritable desktop sans installateur. Les tests du courtier exigent l’activation réelle du stockage public ; le helper marqué ignoré est invoqué dans trois processus par son test parent.
 
 Les résultats historiques ci-dessous gardent leur date et leur périmètre. Leurs mentions de conservation uniquement en mémoire décrivent les anciennes versions ; le bilan 13-B définit le mode désormais actif selon la cible.
 

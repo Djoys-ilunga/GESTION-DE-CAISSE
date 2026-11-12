@@ -2,7 +2,7 @@
 
 Le desktop réutilise SQLCipher embarqué via `rusqlite 0.41.1`, fonctionnalité `bundled-sqlcipher-vendored-openssl`, et `keyring 3.6.3` pour Windows Credential Manager et le trousseau macOS. SQLite standard ne chiffre pas. Aucun plugin SQL, accès fichiers général, coffre en fichier ou stockage navigateur sensible n’est exposé à React.
 
-Le courtier de sessions et l’adaptateur sont maintenant raccordés. La portée de qualification et les résultats effectifs sont décrits dans [le bilan 13-B](etape-13b/BILAN.md). Une compilation Linux ou un coffre de test en mémoire ne vaut pas qualification Windows/macOS. Le booléen `PLATFORM_STORAGE_VALIDATED` reste la porte de l’application : l’activation candidate est limitée à Windows x64/MSVC et macOS Apple Silicon, avec validation complète en cours. Les autres cibles restent en mémoire uniquement ; le hook de qualification Rust n’est disponible qu’avec la fonctionnalité de test et n’est jamais exposé par Tauri.
+Le courtier de sessions et l’adaptateur sont maintenant raccordés. La portée de qualification et les résultats effectifs sont décrits dans [le bilan 13-B](etape-13b/BILAN.md). Une compilation Linux ou un coffre de test en mémoire ne vaut pas qualification Windows/macOS. Le booléen `PLATFORM_STORAGE_VALIDATED` reste la porte de l’application : l’activation est limitée à Windows x64/MSVC et macOS Apple Silicon, après réussite de la matrice native complète. Les autres cibles restent en mémoire uniquement ; le hook de qualification Rust n’est disponible qu’avec la fonctionnalité de test et n’est jamais exposé par Tauri.
 
 ## Données et clés
 
