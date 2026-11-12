@@ -212,13 +212,19 @@ async function main() {
     throw new Error('Un lancement est déjà actif ou a été interrompu. ' + guide);
   }
   const children = [];
+  const sentSignals = new Set();
   let interrupted = false;
   let closing = false;
   const stop = (signal = 'SIGTERM') => {
     for (const child of children) {
-      if (!child.pid) continue;
+      // An exit callback can enter teardown again. Never address a child that
+      // has exited: its PID/process group can already have been reused.
+      if (!child.pid || child.exitCode !== null || child.signalCode !== null) continue;
+      const attempt = `${child.pid}:${signal}`;
+      if (sentSignals.has(attempt)) continue;
       try {
         process.kill(-child.pid, signal);
+        sentSignals.add(attempt);
       } catch (error) {
         if (error.code !== 'ESRCH') throw error;
       }

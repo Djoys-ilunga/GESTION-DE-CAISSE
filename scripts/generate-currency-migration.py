@@ -7,12 +7,12 @@ import sys
 root = Path(__file__).resolve().parents[1]
 directory = root / "apps/api/prisma/migrations/20261111000100_extensible_currencies"
 directory.mkdir(exist_ok=True)
-catalog = json.loads((root / "data/initial-currencies.json").read_text())
+catalog = json.loads((root / "data/initial-currencies.json").read_text(encoding="utf-8"))
 functions = {}
 for file in sorted((root / "apps/api/prisma/migrations").glob("*/migration.sql")):
     if file.parent.name >= directory.name:
         continue
-    for match in re.finditer(r"CREATE(?: OR REPLACE)? FUNCTION\s+(\w+)\b[^$]*?\$\$.*?\$\$;", file.read_text(), re.S):
+    for match in re.finditer(r"CREATE(?: OR REPLACE)? FUNCTION\s+(\w+)\b[^$]*?\$\$.*?\$\$;", file.read_text(encoding="utf-8"), re.S):
         functions[match[1]] = match[0].replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION", 1)
 
 prefix = """-- Stage 12: schema evolution only. No UPDATE of posted monetary values or snapshots.
@@ -192,8 +192,8 @@ COMMIT;
 """
 output = prefix + core + '\n'.join(patched) + suffix
 if '--check' in sys.argv:
-    if (directory / 'migration.sql').read_text() != output:
+    if (directory / 'migration.sql').read_text(encoding="utf-8") != output:
         raise SystemExit('Migration differs from frozen catalog/historical functions')
 else:
-    (directory / 'migration.sql').write_text(output)
+    (directory / 'migration.sql').write_text(output, encoding="utf-8", newline="\n")
 print('Migration generated:', directory.name, 'catalog:',len(catalog),'functions:',len(patched))
