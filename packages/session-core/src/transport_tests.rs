@@ -1142,7 +1142,10 @@ async fn transfer_transmission_keeps_uuid_after_lost_ack_and_never_executes_a_fi
         ];
         (source, destination, agency)
     };
-    let broker = api.broker();
+    let dir = tempfile::tempdir().unwrap();
+    let vault = Arc::new(crate::persistence::tests::TestVault::default());
+    let runtime = durable_runtime(&api, &dir, vault.clone());
+    let broker = Broker::with_test_storage(&api.base, runtime, false).unwrap();
     let mut view = broker
         .login(
             "TEST".into(),
@@ -1156,7 +1159,7 @@ async fn transfer_transmission_keeps_uuid_after_lost_ack_and_never_executes_a_fi
     let input = json!({"id":id,"kind":"transfer","agencyId":agency,"cashRegisterId":source,"expectedLocalVersion":null,
         "fields":{"amount":"12.34","currency":"USD","destinationCurrency":"CDF","destinationCashRegisterId":destination.to_string(),"rate":"2800","rateSource":"Guichet","rateQuoteId":quote_id.to_string(),"description":"Transfert local"}});
     broker
-        .synchronization_action("buffer-save", Some(input), Some(view.generation))
+        .synchronization_action("buffer-save", Some(input.clone()), Some(view.generation))
         .await
         .unwrap();
     api.sync.drop_reply.store(true, Ordering::SeqCst);
@@ -1182,12 +1185,48 @@ async fn transfer_transmission_keeps_uuid_after_lost_ack_and_never_executes_a_fi
             .len(),
         1
     );
+    assert!(matches!(
+        broker
+            .synchronization_action(
+                "buffer-remove",
+                Some(json!({"id":id})),
+                Some(view.generation)
+            )
+            .await,
+        Err(Error::Conflict)
+    ));
+    let mut edit = input.clone();
+    edit["fields"]["amount"] = json!("99.00");
+    edit["fields"]["rateQuoteId"] = json!(Uuid::new_v4().to_string());
+    broker
+        .synchronization_action("buffer-save", Some(edit), Some(view.generation))
+        .await
+        .unwrap();
+    drop(broker);
+    let runtime = durable_runtime(&api, &dir, vault);
+    let broker = Broker::with_test_storage(&api.base, runtime, true).unwrap();
+    assert_eq!(broker.status().unwrap().state, "locked");
+    view = broker
+        .unlock(
+            Zeroizing::new("test-password".into()),
+            Some(broker.status().unwrap().generation),
+        )
+        .await
+        .unwrap();
     broker.revalidate(Some(view.generation)).await.unwrap();
     let reply = broker
         .transfer_action("send", Some(json!({"id":id})), Some(view.generation))
         .await
         .unwrap();
     assert_eq!(reply["id"], id.to_string());
+    let buffers = broker
+        .synchronization_action("buffers", None, Some(view.generation))
+        .await
+        .unwrap();
+    assert_eq!(buffers[0]["fields"]["amount"], "99.00");
+    assert_eq!(buffers[0]["transmissionState"], "received");
+    assert_eq!(buffers[0]["transmissionChanged"], true);
+    assert_eq!(buffers[0]["transmittedTransferId"], id.to_string());
     {
         let requests = api.sync.requests.lock().unwrap();
         assert_eq!(requests.len(), 2);

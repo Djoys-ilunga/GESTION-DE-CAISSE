@@ -166,7 +166,32 @@ impl Session {
         self.permission("draft:read_own")?;
         self.form_buffers
             .retain(|_, b| millis(&b.expires_at).is_ok_and(|end| end > now));
-        let mut values = self.form_buffers.values().cloned().collect::<Vec<_>>();
+        self.pending_transfers
+            .retain(|id, _| self.form_buffers.contains_key(id));
+        let mut values = self
+            .form_buffers
+            .values()
+            .cloned()
+            .map(|mut b| {
+                if let Some(p) = self.pending_transfers.get(&b.id) {
+                    b.transmission_state = Some(
+                        if p.server_id.is_some() {
+                            "received"
+                        } else {
+                            "uncertain"
+                        }
+                        .into(),
+                    );
+                    b.transmitted_transfer_id = p.server_id;
+                    b.transmission_changed = Some(
+                        b.fields != p.buffer.fields
+                            || b.agency_id != p.buffer.agency_id
+                            || b.cash_register_id != p.buffer.cash_register_id,
+                    );
+                }
+                b
+            })
+            .collect::<Vec<_>>();
         values.sort_by_key(|b| b.id);
         Ok(values)
     }
@@ -178,6 +203,13 @@ impl Session {
         self.guard(now)?;
         self.permission("draft:write_own")?;
         self.scope(input.agency_id, input.cash_register_id)?;
+        if self
+            .form_buffers
+            .get(&input.id)
+            .is_some_and(|b| b.kind != input.kind)
+        {
+            return Err(Error::Conflict);
+        }
         self.form_buffers
             .retain(|_, b| millis(&b.expires_at).is_ok_and(|end| end > now));
         if !["receipt", "expense-request", "transfer"].contains(&input.kind.as_str())
@@ -237,6 +269,9 @@ impl Session {
             .unwrap_or(i64::MAX);
         let old = self.form_buffers.get(&input.id);
         let buffer = FormBuffer {
+            transmission_state: None,
+            transmitted_transfer_id: None,
+            transmission_changed: None,
             id: input.id,
             kind: input.kind,
             agency_id: input.agency_id,

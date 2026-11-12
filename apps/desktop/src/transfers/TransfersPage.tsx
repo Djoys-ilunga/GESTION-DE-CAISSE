@@ -27,10 +27,12 @@ export function TransfersPage({
   profile,
   gateway,
   online,
+  initialBufferId,
 }: {
   profile: SessionProfile;
   gateway: AuthGateway;
   online: boolean;
+  initialBufferId?: string;
 }) {
   const { format: formatMoney } = useMoney();
   const money = useMoney();
@@ -43,7 +45,7 @@ export function TransfersPage({
     [error, setError] = useState(''),
     [notice, setNotice] = useState(''),
     [busy, setBusy] = useState(false);
-  const [id, setId] = useState(() => crypto.randomUUID()),
+  const [id, setId] = useState<string>(() => crypto.randomUUID()),
     [source, setSource] = useState(''),
     [destination, setDestination] = useState('');
   const [currency, setCurrency] = useState<string>(() => money.preferred('USD')),
@@ -66,6 +68,40 @@ export function TransfersPage({
   const canExecute = profile.permissions.includes('transfer:post');
   const composer = useRef<HTMLHeadingElement>(null);
   const [newKind, setNewKind] = useState<'transfer' | 'conversion' | null>(null);
+  const [resumeBuffer, setResumeBuffer] = useState<FormBuffer | null>(null);
+  const initialOpened = useRef(false);
+  function resume(b: FormBuffer) {
+    if (b.transmissionState) {
+      setNotice(
+        'Cette préparation a déjà été transmise. Utilisez « Transmettre ou retrouver » pour consulter sa copie serveur.',
+      );
+      return;
+    }
+    setId(b.id);
+    setSource(b.cashRegisterId ?? '');
+    setDestination(b.fields.destinationCashRegisterId ?? '');
+    setCurrency(b.fields.currency ?? money.preferred('USD'));
+    setTargetCurrency(b.fields.destinationCurrency ?? money.preferred('USD'));
+    setAmount(b.fields.amount ?? '');
+    setRate(b.fields.rate ?? '');
+    setRateSource(b.fields.rateSource ?? '');
+    setDescription(b.fields.description ?? '');
+    setRateMode(b.fields.rateMode === 'BCC' ? 'BCC' : 'MANUAL');
+    setRateJustification(b.fields.rateJustification ?? '');
+    setQuote(null);
+    setResumeBuffer(null);
+    setError('');
+    setNotice(
+      'Préparation reprise avec son identifiant. Vérifiez à nouveau le taux serveur avant de conserver une conversion en ligne.',
+    );
+    composer.current?.focus();
+    composer.current?.scrollIntoView?.({ block: 'start' });
+  }
+  function requestResume(b: FormBuffer) {
+    if (source || destination || amount || description || rate || rateSource || rateJustification)
+      setResumeBuffer(b);
+    else resume(b);
+  }
   const prepareReason =
     preparationRestriction(profile, online) ||
     (catalog?.data.items.every((c) => !c.active)
@@ -121,8 +157,19 @@ export function TransfersPage({
     ]);
     if (!alive.current) return;
     if (results[0].status === 'fulfilled') setCatalog(results[0].value);
-    if (results[1].status === 'fulfilled')
-      setBuffers(results[1].value.filter((b) => b.kind === 'transfer'));
+    if (results[1].status === 'fulfilled') {
+      const found = results[1].value.filter((b) => b.kind === 'transfer');
+      setBuffers(found);
+      if (initialBufferId && !initialOpened.current) {
+        initialOpened.current = true;
+        const b = found.find((b) => b.id === initialBufferId);
+        if (b) resume(b);
+        else
+          setError(
+            'Cette préparation n’est plus accessible. Actualisez les brouillons de votre session.',
+          );
+      }
+    }
     if (results[2].status === 'fulfilled' && results[2].value && latestOnline.current) {
       setRows(results[2].value.items);
       setTotal(results[2].value.total);
@@ -373,6 +420,15 @@ export function TransfersPage({
           </p>
         </ConfirmDialog>
       )}
+      {resumeBuffer && (
+        <ConfirmDialog
+          title="Reprendre cette préparation ?"
+          onCancel={() => setResumeBuffer(null)}
+          onConfirm={() => resume(resumeBuffer)}
+        >
+          <p>La saisie affichée sera remplacée. Conservez-la d’abord si nécessaire.</p>
+        </ConfirmDialog>
+      )}
       {canPrepare && (
         <p className="auth-notice">
           Préparation autorisée. Remise et réception :{' '}
@@ -576,10 +632,27 @@ export function TransfersPage({
                 {b.fields.rate &&
                   `· Taux ${b.fields.rate} · ${b.fields.rateMode ?? 'Manuel historique'}`}
               </span>
+              {b.transmissionState && (
+                <p>
+                  {b.transmissionState === 'uncertain'
+                    ? 'Accusé non confirmé : retrouvez la copie serveur avant toute suppression.'
+                    : 'Copie reçue par le serveur ; consultez son état financier en ligne.'}
+                  {b.transmissionChanged
+                    ? ' Les corrections locales diffèrent de la copie transmise.'
+                    : ''}
+                </p>
+              )}
+              <button
+                className="secondary-button"
+                disabled={busy || Boolean(b.transmissionState)}
+                onClick={() => requestResume(b)}
+              >
+                Reprendre la préparation
+              </button>
               {b.fields.currency !== b.fields.destinationCurrency && (
                 <button
                   className="secondary-button"
-                  disabled={!online || busy}
+                  disabled={!online || busy || Boolean(b.transmissionState)}
                   onClick={() => void checkBufferRate(b)}
                 >
                   Vérifier le taux de ce brouillon
@@ -590,7 +663,9 @@ export function TransfersPage({
                 disabled={
                   !online ||
                   busy ||
-                  (b.fields.currency !== b.fields.destinationCurrency && !b.fields.rateQuoteId)
+                  (!b.transmissionState &&
+                    b.fields.currency !== b.fields.destinationCurrency &&
+                    !b.fields.rateQuoteId)
                 }
                 onClick={() => void send(b)}
               >
@@ -598,7 +673,7 @@ export function TransfersPage({
               </button>
               <button
                 className="secondary-button"
-                disabled={busy}
+                disabled={busy || b.transmissionState === 'uncertain'}
                 onClick={() =>
                   void action(async () => {
                     await gateway.removeFormBuffer(b.id);

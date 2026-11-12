@@ -53,6 +53,33 @@ function noFinance(gateway: ReturnType<typeof setup>['gateway']) {
     expect(method).not.toHaveBeenCalled();
 }
 describe('Centre de synchronisation sécurisé', () => {
+  it('dirige une préparation de transfert vers son module sans ouvrir un formulaire de dépense', async () => {
+    const { p, gateway, now } = setup(),
+      id = crypto.randomUUID(),
+      onOpenTransfer = vi.fn();
+    vi.mocked(gateway.drafts).mockResolvedValue([]);
+    vi.mocked(gateway.formBuffers).mockResolvedValue([
+      {
+        id,
+        kind: 'transfer',
+        agencyId: p.agencies[0]!.id,
+        cashRegisterId: null,
+        expectedLocalVersion: null,
+        fields: { currency: 'USD' },
+        createdAt: now,
+        updatedAt: now,
+        expiresAt: p.offlineUntil!,
+      },
+    ]);
+    render(
+      <SyncCenter profile={p} gateway={gateway} online={false} onOpenTransfer={onOpenTransfer} />,
+    );
+    await userEvent.click(await screen.findByRole('button', { name: 'Reprendre la saisie' }));
+    expect(onOpenTransfer).toHaveBeenCalledWith(id);
+    expect(screen.queryByLabelText('Bénéficiaire')).not.toBeInTheDocument();
+    expect(gateway.sendTransfer).not.toHaveBeenCalled();
+    noFinance(gateway);
+  });
   it('annonce la persistance seulement si le courtier la confirme et ne synchronise rien automatiquement', async () => {
     const { p, gateway } = setup();
     const current = await gateway.syncStatus();

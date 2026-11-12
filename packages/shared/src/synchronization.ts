@@ -125,7 +125,14 @@ export const formBufferInputSchema = z
   })
   .strict();
 export const formBufferSchema = formBufferInputSchema
-  .extend({ createdAt: z.iso.datetime(), updatedAt: z.iso.datetime(), expiresAt: z.iso.datetime() })
+  .extend({
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+    expiresAt: z.iso.datetime(),
+    transmissionState: z.enum(['uncertain', 'received']).optional(),
+    transmittedTransferId: z.uuid().optional(),
+    transmissionChanged: z.boolean().optional(),
+  })
   .strict();
 export type FormBufferInput = z.infer<typeof formBufferInputSchema>;
 export type FormBuffer = z.infer<typeof formBufferSchema>;

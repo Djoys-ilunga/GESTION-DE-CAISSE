@@ -609,8 +609,10 @@ function Workspace({
   const [page, setPage] = useState('overview'),
     [error, setError] = useState('');
   const [reportEntry, setReportEntry] = useState<(ReportEntry & { key: number }) | undefined>();
+  const [transferEntry, setTransferEntry] = useState<{ id: string; key: number }>();
   const navigate = (target: string) => {
     setReportEntry(undefined);
+    setTransferEntry(undefined);
     setPage(target);
   };
   const openReport = (entry: ReportEntry) => {
@@ -781,9 +783,23 @@ function Workspace({
           ) : page === 'expenses' ? (
             <ExpensesPage profile={profile} gateway={gateway} online={online} />
           ) : page === 'transfers' ? (
-            <TransfersPage profile={profile} gateway={gateway} online={online} />
+            <TransfersPage
+              key={transferEntry?.key ?? 'transfers'}
+              initialBufferId={transferEntry?.id}
+              profile={profile}
+              gateway={gateway}
+              online={online}
+            />
           ) : page === 'sync' ? (
-            <SyncCenter profile={profile} gateway={gateway} online={online} />
+            <SyncCenter
+              profile={profile}
+              gateway={gateway}
+              online={online}
+              onOpenTransfer={(id) => {
+                setTransferEntry((old) => ({ id, key: (old?.key ?? 0) + 1 }));
+                setPage('transfers');
+              }}
+            />
           ) : page === 'exchange' ? (
             <ExchangePage gateway={gateway} profile={profile} online={online} />
           ) : page === 'money' ? (

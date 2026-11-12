@@ -50,6 +50,8 @@ struct Checkpoint {
     drafts: HashMap<Uuid, DraftRecord>,
     buffers: HashMap<Uuid, FormBuffer>,
     pending: HashMap<Uuid, PendingSync>,
+    #[serde(default)]
+    pending_transfers: HashMap<Uuid, PendingTransfer>,
     balances: Option<serde_json::Value>,
     cash_catalog: Option<serde_json::Value>,
     money_context: Option<serde_json::Value>,
@@ -259,6 +261,7 @@ impl Checkpoint {
             || self.drafts.len() > 200
             || self.buffers.len() > 20
             || self.pending.len() > 200
+            || self.pending_transfers.len() > 20
         {
             return Err(Error::LocalStorage);
         }
@@ -342,6 +345,18 @@ impl Checkpoint {
                 session.pending_sync.insert(id, p);
             }
         }
+        for (id, p) in self.pending_transfers {
+            if id != p.buffer.id
+                || p.buffer.kind != "transfer"
+                || p.server_id.is_some_and(|v| v != id)
+            {
+                return Err(Error::LocalStorage);
+            }
+            if session.form_buffers.contains_key(&id) {
+                session.scope(p.buffer.agency_id, p.buffer.cash_register_id)?;
+                session.pending_transfers.insert(id, p);
+            }
+        }
         for r in session.drafts.values_mut() {
             if r.state == "syncing" {
                 r.state = "queued".into();
@@ -378,6 +393,7 @@ impl Session {
             drafts: self.drafts.clone(),
             buffers: self.form_buffers.clone(),
             pending: self.pending_sync.clone(),
+            pending_transfers: self.pending_transfers.clone(),
             balances: self.balances.clone(),
             cash_catalog: self.cash_catalog.clone(),
             money_context: self.money_context.clone(),

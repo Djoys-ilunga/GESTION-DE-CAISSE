@@ -77,6 +77,79 @@ async function fill(s: ReturnType<typeof setup>) {
   fireEvent.change(screen.getByLabelText('Motif'), { target: { value: 'Approvisionnement' } });
 }
 describe('Écrans de transfert avec courtier simulé', () => {
+  it('reprend une conversion sur le même UUID et exige un taux serveur renouvelé', async () => {
+    const s = setup();
+    const id = crypto.randomUUID(),
+      now = new Date().toISOString();
+    vi.mocked(s.gateway.formBuffers).mockResolvedValue([
+      {
+        id,
+        kind: 'transfer',
+        agencyId: s.p.agencies[0]!.id,
+        cashRegisterId: s.a,
+        expectedLocalVersion: null,
+        createdAt: now,
+        updatedAt: now,
+        expiresAt: s.p.offlineUntil!,
+        fields: {
+          amount: '12.34',
+          currency: 'USD',
+          destinationCurrency: 'CDF',
+          destinationCashRegisterId: s.b,
+          rate: '2800',
+          rateSource: 'Guichet',
+          rateJustification: 'Publication synthétique',
+          rateQuoteId: crypto.randomUUID(),
+          description: 'Préparation retrouvée',
+        },
+      },
+    ]);
+    render(<TransfersPage profile={s.p} gateway={s.gateway} online initialBufferId={id} />);
+    expect(await screen.findByDisplayValue('Préparation retrouvée')).toBeVisible();
+    expect(screen.getByLabelText('Montant à remettre')).toHaveValue('12.34');
+    await userEvent.click(screen.getByRole('button', { name: 'Conserver le brouillon' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Vérifiez un taux serveur');
+    expect(s.gateway.saveFormBuffer).not.toHaveBeenCalled();
+    expect(s.gateway.sendTransfer).not.toHaveBeenCalled();
+    // Returning to the original currency requires no conversion or quote.
+    fireEvent.change(screen.getByLabelText('Devise destination'), { target: { value: 'USD' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Conserver le brouillon' }));
+    await waitFor(() =>
+      expect(s.gateway.saveFormBuffer).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id,
+          fields: expect.objectContaining({
+            currency: 'USD',
+            destinationCurrency: 'USD',
+            amount: '12.34',
+          }),
+        }),
+      ),
+    );
+  });
+  it('préserve une transmission incertaine et permet seulement de retrouver son accusé', async () => {
+    const s = setup(),
+      now = new Date().toISOString();
+    vi.mocked(s.gateway.formBuffers).mockResolvedValue([
+      {
+        id: s.row.id,
+        kind: 'transfer',
+        agencyId: s.p.agencies[0]!.id,
+        cashRegisterId: s.a,
+        expectedLocalVersion: null,
+        createdAt: now,
+        updatedAt: now,
+        expiresAt: s.p.offlineUntil!,
+        fields: { currency: 'USD', destinationCurrency: 'CDF', amount: '12.34' },
+        transmissionState: 'uncertain',
+      },
+    ]);
+    await open(s);
+    expect(screen.getByRole('button', { name: 'Supprimer la copie locale' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Reprendre la préparation' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Vérifier le taux de ce brouillon' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Transmettre ou retrouver' })).toBeEnabled();
+  });
   it('prépare hors connexion sans transmission ni modification des soldes', async () => {
     const s = setup(false);
     await open(s, false);

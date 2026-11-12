@@ -113,6 +113,11 @@ impl Broker {
         payload: Option<Value>,
         expected: Option<u64>,
     ) -> Result<Value> {
+        let _worker = if action == "send" {
+            Some(self.sync_lock.try_lock().map_err(|_| Error::SyncBusy)?)
+        } else {
+            None
+        };
         let (generation, _) = self.snapshot(true, true, expected)?;
         let payload = payload.unwrap_or_else(|| json!({}));
         let permission = match action {
@@ -142,16 +147,23 @@ impl Broker {
             .ok_or(Error::AuthRequired)?
             .permission(permission)?;
         let mut sent_buffer = None;
+        let mut fresh_transmission = false;
         let (method, path, body) = match action {
             "send" => {
                 let buffer = {
                     let mut state = self.state()?;
                     let session = state.session.as_mut().ok_or(Error::AuthRequired)?;
-                    session
+                    let id = id()?;
+                    let current = session
                         .list_form_buffers(self.clock.now())?
                         .into_iter()
-                        .find(|b| b.id == id().unwrap_or_default())
-                        .ok_or(Error::InvalidInput)?
+                        .find(|b| b.id == id)
+                        .ok_or(Error::InvalidInput)?;
+                    session
+                        .pending_transfers
+                        .get(&id)
+                        .map(|p| p.buffer.clone())
+                        .unwrap_or(current)
                 };
                 if buffer.kind != "transfer" {
                     return Err(Error::InvalidInput);
@@ -173,6 +185,21 @@ impl Broker {
                 if let Some(quote) = fields.get("rateQuoteId").filter(|v| !v.is_empty()) {
                     body["rateQuoteId"] =
                         json!(Uuid::parse_str(quote).map_err(|_| Error::InvalidInput)?);
+                }
+                {
+                    let mut state = self.state()?;
+                    Self::generation(&state, Some(generation))?;
+                    let s = state.session.as_mut().ok_or(Error::AuthRequired)?;
+                    if let std::collections::hash_map::Entry::Vacant(entry) =
+                        s.pending_transfers.entry(buffer.id)
+                    {
+                        entry.insert(PendingTransfer {
+                            buffer: buffer.clone(),
+                            server_id: None,
+                        });
+                        fresh_transmission = true;
+                    }
+                    self.persist(&mut state)?;
                 }
                 sent_buffer = Some(buffer);
                 (Method::POST, "transfers/drafts".into(), Some(body))
@@ -207,18 +234,38 @@ impl Broker {
             }
             _ => return Err(Error::Forbidden),
         };
-        let value = self
-            .protected(method, &path, body, Some(generation))
-            .await?;
+        let response = self.protected(method, &path, body, Some(generation)).await;
+        if fresh_transmission && matches!(response, Err(Error::InvalidInput | Error::Forbidden)) {
+            let mut state = self.state()?;
+            Self::generation(&state, Some(generation))?;
+            state
+                .session
+                .as_mut()
+                .ok_or(Error::AuthRequired)?
+                .pending_transfers
+                .remove(&sent_buffer.as_ref().ok_or(Error::InvalidInput)?.id);
+            self.persist(&mut state)?;
+        }
+        let value = response?;
         let mut state = self.state()?;
         Self::generation(&state, Some(generation))?;
         let session = state.session.as_mut().ok_or(Error::AuthRequired)?;
         session.guard(self.clock.now())?;
         // A lost acknowledgement retains the UUID. A newer edit is never discarded.
         if let Some(buffer) = sent_buffer {
-            if value.get("id").and_then(Value::as_str) != Some(buffer.id.to_string().as_str()) {
+            if value.get("id").and_then(Value::as_str) != Some(buffer.id.to_string().as_str())
+                || !value
+                    .get("state")
+                    .and_then(Value::as_str)
+                    .is_some_and(|v| ["DRAFT", "HANDED_OVER", "RECEIVED"].contains(&v))
+            {
                 return Err(Error::InvalidResponse);
             }
+            session
+                .pending_transfers
+                .get_mut(&buffer.id)
+                .ok_or(Error::Conflict)?
+                .server_id = Some(buffer.id);
         }
         if ["handover", "receive"].contains(&action) {
             session.balances = None;
@@ -1280,6 +1327,7 @@ impl Broker {
                     session.money_context = None;
                     session.drafts.clear();
                     session.pending_sync.clear();
+                    session.pending_transfers.clear();
                     session.form_buffers.clear();
                     session.sync_events.clear();
                     session.last_sync_success = None;
@@ -1382,6 +1430,7 @@ impl Broker {
                             s.money_context = None;
                             s.drafts.clear();
                             s.pending_sync.clear();
+                            s.pending_transfers.clear();
                             s.form_buffers.clear();
                             s.sync_events.clear();
                             s.last_sync_success = None;
@@ -1901,7 +1950,15 @@ impl Broker {
                 return Ok(value);
             }
             s.permission("draft:write_own")?;
-            s.form_buffers.remove(&id()?);
+            let id = id()?;
+            if s.pending_transfers
+                .get(&id)
+                .is_some_and(|p| p.server_id.is_none())
+            {
+                return Err(Error::Conflict);
+            }
+            s.form_buffers.remove(&id);
+            s.pending_transfers.remove(&id);
             self.persist(&mut state)?;
             return Ok(json!({"removed":true}));
         }

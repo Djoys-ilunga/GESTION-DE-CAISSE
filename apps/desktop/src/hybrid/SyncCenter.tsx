@@ -39,10 +39,12 @@ export function SyncCenter({
   gateway,
   profile,
   online,
+  onOpenTransfer,
 }: {
   gateway: AuthGateway;
   profile: SessionProfile;
   online: boolean;
+  onOpenTransfer?(id: string): void;
 }) {
   const [buffers, setBuffers] = useState<FormBuffer[]>([]);
   const [inputBuffer, setInputBuffer] = useState<FormBuffer | null>(null);
@@ -83,7 +85,7 @@ export function SyncCenter({
     if (active.current) {
       setStatus(s);
       setRows(d);
-      setBuffers(b.filter((buffer) => buffer.kind !== 'transfer'));
+      setBuffers(b);
     }
   }
   async function refresh() {
@@ -111,7 +113,7 @@ export function SyncCenter({
         if (current) {
           setStatus(s);
           setRows(d);
-          setBuffers(b.filter((buffer) => buffer.kind !== 'transfer'));
+          setBuffers(b);
         }
       } catch {
         /* Le verrouillage ou la révocation retire cet écran. */
@@ -244,7 +246,7 @@ export function SyncCenter({
           </article>
         ))}
       </div>
-      {(editing || inputBuffer) &&
+      {(editing || (inputBuffer && inputBuffer.kind !== 'transfer')) &&
         ((editing?.draft.kind ?? inputBuffer?.kind) === 'receipt' ? (
           <ReceiptForm
             online={online}
@@ -312,9 +314,14 @@ export function SyncCenter({
                   !canWrite ||
                   busy ||
                   status?.running ||
+                  (b.kind === 'transfer' && !onOpenTransfer) ||
                   (b.expectedLocalVersion !== null && !rows.some((r) => r.draft.id === b.id))
                 }
                 onClick={() => {
+                  if (b.kind === 'transfer') {
+                    onOpenTransfer?.(b.id);
+                    return;
+                  }
                   setEditing(rows.find((r) => r.draft.id === b.id) ?? null);
                   setInputBuffer(b);
                 }}

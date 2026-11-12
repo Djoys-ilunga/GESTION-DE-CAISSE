@@ -213,6 +213,11 @@ pub(crate) struct PendingSync {
     pub record: DraftRecord,
 }
 #[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct PendingTransfer {
+    pub buffer: FormBuffer,
+    pub server_id: Option<Uuid>,
+}
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SyncNote {
     pub draft_id: Uuid,
@@ -259,4 +264,10 @@ pub struct FormBuffer {
     pub created_at: String,
     pub updated_at: String,
     pub expires_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transmission_state: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transmitted_transfer_id: Option<Uuid>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transmission_changed: Option<bool>,
 }

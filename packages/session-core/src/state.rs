@@ -107,6 +107,7 @@ pub struct Session {
     pub revalidating: bool,
     pub form_buffers: HashMap<uuid::Uuid, FormBuffer>,
     pub pending_sync: HashMap<uuid::Uuid, PendingSync>,
+    pub pending_transfers: HashMap<uuid::Uuid, PendingTransfer>,
     pub sync_events: Vec<SyncNote>,
     pub last_sync_success: Option<String>,
     pub sync_cache_updated: Option<String>,
@@ -188,6 +189,7 @@ impl Session {
             money_context: None,
             revalidating: false,
             pending_sync: HashMap::new(),
+            pending_transfers: HashMap::new(),
             form_buffers: HashMap::new(),
             sync_events: Vec::new(),
             last_sync_success: None,
@@ -237,6 +239,14 @@ impl Session {
         self.permission("draft:write_own")?;
         self.scope(input.agency_id, input.cash_register_id)?;
         let draft = input.draft;
+        if self.pending_transfers.contains_key(&draft.id)
+            || self
+                .form_buffers
+                .get(&draft.id)
+                .is_some_and(|b| b.kind != draft.kind)
+        {
+            return Err(Error::Conflict);
+        }
         if let Some(details) = &draft.receipt_details {
             if draft.kind != "receipt"
                 || details.provenance.trim().is_empty()
@@ -418,6 +428,8 @@ impl State {
             s.drafts
                 .retain(|_, r| millis(&r.draft.expires_at).is_ok_and(|t| t > now));
             s.pending_sync.retain(|id, _| s.drafts.contains_key(id));
+            s.pending_transfers
+                .retain(|id, _| s.form_buffers.contains_key(id));
         }
         let expired = self
             .session
