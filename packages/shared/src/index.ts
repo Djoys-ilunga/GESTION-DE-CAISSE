@@ -13,6 +13,8 @@ export * from './receipts.js';
 export * from './expenses.js';
 export * from './synchronization.js';
 export const API_PROTOCOL_VERSION = 2 as const;
+// Retaining a draft never renews the separate, server-granted offline session lease.
+export const MAX_DRAFT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 export const apiHealthSchema = z
   .object({
     service: z.literal('caissepro-api'),

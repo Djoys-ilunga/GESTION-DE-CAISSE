@@ -26,6 +26,7 @@ pub struct Broker {
     state: Arc<Mutex<State>>,
     clock: Clock,
     sync_lock: tokio::sync::Mutex<()>,
+    pub(crate) persistence: Option<Arc<crate::persistence::Runtime>>,
 }
 impl Broker {
     /// Only transmission can read a local buffer. Financial confirmations are always explicit.
@@ -103,6 +104,7 @@ impl Broker {
             session.balances = None;
             session.cash_catalog = None;
         }
+        self.persist(&mut state)?;
         Ok(value)
     }
     pub async fn transfer_action(
@@ -222,6 +224,7 @@ impl Broker {
             session.balances = None;
             session.cash_catalog = None;
         }
+        self.persist(&mut state)?;
         Ok(value)
     }
     pub async fn expense_action(
@@ -433,8 +436,10 @@ impl Broker {
             }
             record.state = "synced".into();
             s.drafts.insert(record.draft.id, record.clone());
+            self.persist(&mut state)?;
             return serde_json::to_value(record).map_err(|_| Error::InvalidResponse);
         }
+        self.persist(&mut state)?;
         Ok(value)
     }
     pub async fn cash_catalog(&self, expected: Option<u64>) -> Result<Value> {
@@ -464,6 +469,7 @@ impl Broker {
             let s = state.session.as_mut().ok_or(Error::AuthRequired)?;
             s.guard(now)?;
             s.cash_catalog = Some(data.clone());
+            self.persist(&mut state)?;
             return Ok(json!({"data":data,"stale":false}));
         }
         let state = self.state()?;
@@ -735,8 +741,10 @@ impl Broker {
             }
             record.state = "synced".into();
             s.drafts.insert(record.draft.id, record.clone());
+            self.persist(&mut state)?;
             return serde_json::to_value(record).map_err(|_| Error::InvalidResponse);
         }
+        self.persist(&mut state)?;
         Ok(value)
     }
     pub fn new(
@@ -772,7 +780,70 @@ impl Broker {
             state: Arc::new(Mutex::new(State::default())),
             clock: Clock::default(),
             sync_lock: tokio::sync::Mutex::new(()),
+            persistence: None,
         })
+    }
+    /// Production activation still requires the native platform qualification gate.
+    pub fn with_native_storage(
+        base: &str,
+        deployment: &str,
+        root: std::path::PathBuf,
+        allow_debug_loopback: bool,
+    ) -> Result<Self> {
+        let mut broker = Self::new(base, deployment, Uuid::new_v4(), allow_debug_loopback)?;
+        if !caissepro_local_store::PLATFORM_STORAGE_VALIDATED {
+            return Ok(broker);
+        }
+        let runtime = crate::persistence::Runtime::new(
+            root,
+            base,
+            deployment,
+            Arc::new(caissepro_local_store::NativeKeyVault),
+        )?;
+        broker.device = runtime.device;
+        match runtime.restore(broker.clock.now()) {
+            Ok(session) => {
+                broker.state()?.session = session;
+            }
+            Err(_) => {
+                broker.state()?.reason = Some("LOCAL_STORAGE_UNAVAILABLE".into());
+            }
+        }
+        broker.persistence = Some(runtime);
+        Ok(broker)
+    }
+    fn persist(&self, state: &mut State) -> Result<()> {
+        let result = if let Some(session) = state.session.as_mut() {
+            if session.durable.is_none() {
+                if let Some(runtime) = &self.persistence {
+                    runtime.attach(session, self.clock.now())
+                } else {
+                    Ok(())
+                }
+            } else {
+                session.checkpoint(self.clock.now())
+            }
+        } else {
+            Ok(())
+        };
+        if result.is_err() {
+            state.clear("LOCAL_STORAGE_UNAVAILABLE");
+            return Err(Error::LocalStorage);
+        }
+        Ok(())
+    }
+    #[cfg(test)]
+    pub(crate) fn with_test_storage(
+        base: &str,
+        runtime: Arc<crate::persistence::Runtime>,
+        restore: bool,
+    ) -> Result<Self> {
+        let mut broker = Self::new(base, "test", runtime.device, true)?;
+        if restore {
+            broker.state()?.session = runtime.restore(broker.clock.now())?;
+        }
+        broker.persistence = Some(runtime);
+        Ok(broker)
     }
     fn generation(state: &State, expected: Option<u64>) -> Result<()> {
         if expected.is_some_and(|v| v != state.generation) {
@@ -1087,7 +1158,10 @@ impl Broker {
                 .await;
             return Err(Error::SessionChanged);
         }
-        let session = Session::new(token, response.profile, verifier, self.clock.now())?;
+        let mut session = Session::new(token, response.profile, verifier, self.clock.now())?;
+        if let Some(runtime) = &self.persistence {
+            runtime.attach(&mut session, self.clock.now())?;
+        }
         let mut state = self.state()?;
         if state.generation != generation {
             return Err(Error::SessionChanged);
@@ -1109,7 +1183,11 @@ impl Broker {
                 .raw(Method::POST, "auth/logout", Some(token.as_str()), None)
                 .await;
         }
-        self.status()
+        let view = self.status()?;
+        if view.reason.as_deref() == Some("LOCAL_STORAGE_UNAVAILABLE") {
+            return Err(Error::LocalStorage);
+        }
+        Ok(view)
     }
     pub async fn lock(&self, expected: Option<u64>) -> Result<SessionView> {
         let (generation, token) = self.snapshot(false, false, expected)?;
@@ -1121,6 +1199,10 @@ impl Broker {
                 s.revalidating = false;
             }
             state.reason = Some("SESSION_LOCKED".into());
+            self.persist(&mut state)?;
+        }
+        if token.is_empty() {
+            return self.status();
         }
         let response = self
             .raw(Method::POST, "auth/lock", Some(token.as_str()), None)
@@ -1132,6 +1214,15 @@ impl Broker {
     }
     pub async fn revalidate(&self, expected: Option<u64>) -> Result<SessionView> {
         let (generation, token) = self.snapshot(false, false, expected)?;
+        if token.is_empty() {
+            let mut state = self.state()?;
+            Self::generation(&state, Some(generation))?;
+            if let Some(s) = state.session.as_mut() {
+                s.locked = true;
+            }
+            state.reason = Some("REAUTHENTICATION_REQUIRED".into());
+            return Err(Error::OnlineRequired);
+        }
         {
             let mut state = self.state()?;
             Self::generation(&state, Some(generation))?;
@@ -1176,6 +1267,10 @@ impl Broker {
                 }
                 let scope_changed = !profile.same_scope(&session.profile);
                 if scope_changed {
+                    if session.detach_storage("SCOPE_CHANGED").is_err() {
+                        state.clear("LOCAL_STORAGE_UNAVAILABLE");
+                        return Err(Error::LocalStorage);
+                    }
                     session.balances = None;
                     session.cash_catalog = None;
                     session.money_context = None;
@@ -1200,6 +1295,7 @@ impl Broker {
                     state.generation += 1;
                 }
                 state.reason = None;
+                self.persist(&mut state)?;
                 Ok(state.view(now))
             }
         }
@@ -1215,6 +1311,15 @@ impl Broker {
         let (generation, token) = self.snapshot(false, false, expected)?;
         match self.health().await {
             Ok(()) => {
+                if token.is_empty() {
+                    let (company, email) = {
+                        let state = self.state()?;
+                        Self::generation(&state, Some(generation))?;
+                        let s = state.session.as_ref().ok_or(Error::AuthRequired)?;
+                        (s.profile.company.code.clone(), s.profile.user.email.clone())
+                    };
+                    return self.login(company, email, password).await;
+                }
                 let response = self
                     .raw(
                         Method::POST,
@@ -1264,6 +1369,10 @@ impl Broker {
                             return Err(Error::InvalidResponse);
                         }
                         if !response.profile.same_scope(&s.profile) {
+                            if s.detach_storage("SCOPE_CHANGED").is_err() {
+                                state.clear("LOCAL_STORAGE_UNAVAILABLE");
+                                return Err(Error::LocalStorage);
+                            }
                             s.balances = None;
                             s.cash_catalog = None;
                             s.money_context = None;
@@ -1286,6 +1395,7 @@ impl Broker {
                         // pas révoquer ou réexposer la nouvelle session locale.
                         state.generation += 1;
                         state.reason = None;
+                        self.persist(&mut state)?;
                         Ok(state.view(now))
                     }
                     Err(Error::Credentials) => {
@@ -1344,6 +1454,9 @@ impl Broker {
                             state.clear("TOO_MANY_ATTEMPTS");
                         }
                     }
+                    if let Some(session) = state.session.as_mut() {
+                        session.checkpoint(now)?;
+                    }
                     Ok(valid)
                 })
                 .await
@@ -1366,6 +1479,7 @@ impl Broker {
                 session.last_activity = now;
                 session.failures = 0;
                 state.reason = Some("OFFLINE_LIMITED".into());
+                self.persist(&mut state)?;
                 Ok(state.view(now))
             }
             Err(error) => {
@@ -1464,6 +1578,7 @@ impl Broker {
             let session = state.session.as_mut().ok_or(Error::AuthRequired)?;
             session.guard(self.clock.now())?;
             session.money_context = Some(value.clone());
+            self.persist(&mut state)?;
             return Ok(value);
         }
         let (generation, _) = self.snapshot(true, true, expected)?;
@@ -1629,11 +1744,13 @@ impl Broker {
         let mut state = self.state()?;
         Self::generation(&state, expected)?;
         let _ = state.view(now);
-        state
+        let record = state
             .session
             .as_mut()
             .ok_or(Error::AuthRequired)?
-            .save_draft(input, now)
+            .save_draft(input, now)?;
+        self.persist(&mut state)?;
+        Ok(record)
     }
     pub fn drafts(&self, expected: Option<u64>) -> Result<Vec<DraftRecord>> {
         let now = self.clock.now();
@@ -1677,6 +1794,7 @@ impl Broker {
             let s = state.session.as_mut().ok_or(Error::AuthRequired)?;
             s.guard(now)?;
             s.balances = Some(value.clone());
+            self.persist(&mut state)?;
             return Ok(json!({"data":value,"stale":false}));
         }
         let state = self.state()?;
@@ -1711,7 +1829,7 @@ impl Broker {
             }
         }
         Ok(
-            json!({"running":self.sync_lock.try_lock().is_err(),"apiOnline":s.online,"lastSuccessfulAt":s.last_sync_success,"cacheUpdatedAt":s.sync_cache_updated,"counts":counts,"persistence":"memory-only","events":s.sync_events}),
+            json!({"running":self.sync_lock.try_lock().is_err(),"apiOnline":s.online,"lastSuccessfulAt":s.last_sync_success,"cacheUpdatedAt":s.sync_cache_updated,"counts":counts,"persistence":if s.durable.is_some(){"encrypted-sqlcipher"}else{"memory-only"},"retentionMs":crate::state::DRAFT_RETENTION_MS,"lastSavedAt":s.durable.as_ref().map(|d|crate::state::iso(d.saved_at)),"events":s.sync_events}),
         )
     }
     pub async fn synchronization_action(
@@ -1757,7 +1875,9 @@ impl Broker {
             r.next_attempt_at = None;
             r.state = "queued".into();
             r.result = None;
-            return serde_json::to_value(r).map_err(|_| Error::InvalidResponse);
+            let value = serde_json::to_value(r).map_err(|_| Error::InvalidResponse)?;
+            self.persist(&mut state)?;
+            return Ok(value);
         }
         if ["buffers", "buffer-save", "buffer-remove"].contains(&action) {
             let now = self.clock.now();
@@ -1771,11 +1891,14 @@ impl Broker {
             if action == "buffer-save" {
                 let input: FormBufferInput =
                     serde_json::from_value(payload).map_err(|_| Error::InvalidInput)?;
-                return serde_json::to_value(s.save_form_buffer(input, now)?)
-                    .map_err(|_| Error::InvalidResponse);
+                let value = serde_json::to_value(s.save_form_buffer(input, now)?)
+                    .map_err(|_| Error::InvalidResponse)?;
+                self.persist(&mut state)?;
+                return Ok(value);
             }
             s.permission("draft:write_own")?;
             s.form_buffers.remove(&id()?);
+            self.persist(&mut state)?;
             return Ok(json!({"removed":true}));
         }
         self.snapshot(true, true, Some(generation))?;
@@ -1927,6 +2050,7 @@ impl Broker {
             record.submitted_expense_id = remote.expense_request_id;
             s.pending_sync.remove(&client);
             s.drafts.insert(client, record.clone());
+            self.persist(&mut state)?;
             return serde_json::to_value(record).map_err(|_| Error::InvalidResponse);
         }
         let path = match action {
@@ -1947,11 +2071,13 @@ impl Broker {
             let pending = {
                 let mut state = self.state()?;
                 Self::generation(&state, Some(generation))?;
-                state
+                let pending = state
                     .session
                     .as_mut()
                     .ok_or(Error::AuthRequired)?
-                    .prepare_sync(record.draft.id, self.clock.now())?
+                    .prepare_sync(record.draft.id, self.clock.now())?;
+                self.persist(&mut state)?;
+                pending
             };
             let Some(pending) = pending else {
                 continue;
@@ -1985,11 +2111,15 @@ impl Broker {
             let applied = {
                 let mut state = self.state()?;
                 Self::generation(&state, Some(generation))?;
-                state
+                let applied = state
                     .session
                     .as_mut()
                     .ok_or(Error::AuthRequired)?
-                    .finish_sync(&pending, response.clone(), self.clock.now())
+                    .finish_sync(&pending, response.clone(), self.clock.now());
+                if applied.is_ok() {
+                    self.persist(&mut state)?;
+                }
+                applied
             };
             if let Err(error) = applied {
                 self.fail(generation, &error)?;

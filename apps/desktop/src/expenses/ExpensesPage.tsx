@@ -1,3 +1,4 @@
+import { StorageNotice } from '../hybrid/StorageNotice';
 import { useMoney } from '../money/MoneyContext';
 import { CurrencyOptions } from '../money/MoneyContext';
 import { useEffect, useRef, useState } from 'react';
@@ -279,10 +280,7 @@ export function ExpensesPage({
               </button>
             </div>
           </div>
-          <p className="auth-notice">
-            Les brouillons locaux sont temporaires : au plus 15 minutes et effacés à la fermeture ou
-            au changement d’utilisateur. Un brouillon synchronisé reste non soumis.
-          </p>
+          <StorageNotice gateway={gateway} />
           {form && (
             <ExpenseForm
               online={online}

@@ -62,10 +62,10 @@ fn forged_attachment_is_rejected_before_it_is_stored() {
 fn profile(now: i64) -> Profile {
     serde_json::from_value(json!({"sessionId":Uuid::new_v4(),"deviceId":Uuid::new_v4(),"user":{"id":Uuid::new_v4(),"email":"test@example.test","displayName":"Utilisateur test","mustChangePassword":false},"company":{"id":Uuid::new_v4(),"code":"TEST","name":"Entreprise test"},"roles":["CASHIER"],"permissions":["offline:access","draft:write_own","draft:read_own","ledger:read"],"agencies":[{"id":Uuid::new_v4(),"code":"A","name":"Agence A"}],"cashRegisters":[],"expiresAt":iso(now+3600000),"idleExpiresAt":iso(now+900000),"offlineUntil":iso(now+900000),"validatedAt":iso(now),"locked":false,"authorizationVersion":1})).unwrap()
 }
-fn session(now: i64) -> Session {
+pub(crate) fn session(now: i64) -> Session {
     Session::new(Zeroizing::new("a".repeat(43)), profile(now), None, now).unwrap()
 }
-fn draft(s: &Session, now: i64) -> SaveDraft {
+pub(crate) fn draft(s: &Session, now: i64) -> SaveDraft {
     SaveDraft {
         draft: Draft {
             receipt_details: None,

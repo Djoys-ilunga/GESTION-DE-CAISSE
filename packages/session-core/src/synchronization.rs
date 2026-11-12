@@ -250,8 +250,7 @@ impl Session {
             expires_at: iso(old
                 .map(|b| millis(&b.expires_at))
                 .transpose()?
-                .unwrap_or(now + 900000)
-                .min(self.absolute_until)
+                .unwrap_or(now + crate::state::DRAFT_RETENTION_MS)
                 .min(source_expiry)),
         };
         self.form_buffers.insert(buffer.id, buffer.clone());

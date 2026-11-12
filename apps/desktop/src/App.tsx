@@ -817,8 +817,9 @@ function Workspace({
                 modification des accès, une nouvelle connexion peut être nécessaire.
               </p>
               <p>
-                Vos données temporaires sont isolées dans cette session. La fermeture de
-                l’application les efface. Le stockage sensible sur disque reste désactivé.
+                Les données locales sont isolées par utilisateur et entreprise. Le centre de
+                synchronisation indique si le stockage est temporaire ou chiffré sur cet appareil.
+                Une expiration de session verrouille leur accès.
               </p>
               <p>
                 Les opérations comptabilisées restent immuables. Aucun paiement, transfert,

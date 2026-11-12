@@ -7,6 +7,7 @@ import type { SessionDraft } from '../auth/gateway';
 import { SyncCenter } from './SyncCenter';
 import { ExpenseForm } from '../expenses/ExpenseForm';
 import { App } from '../App';
+import { StorageNotice } from './StorageNotice';
 function setup() {
   const p = profile();
   const { gateway, set } = fakeGateway(view(p));
@@ -52,6 +53,30 @@ function noFinance(gateway: ReturnType<typeof setup>['gateway']) {
     expect(method).not.toHaveBeenCalled();
 }
 describe('Centre de synchronisation sécurisé', () => {
+  it('annonce la persistance seulement si le courtier la confirme et ne synchronise rien automatiquement', async () => {
+    const { p, gateway } = setup();
+    const current = await gateway.syncStatus();
+    vi.mocked(gateway.syncStatus).mockResolvedValue({
+      ...current,
+      persistence: 'encrypted-sqlcipher',
+      retentionMs: 604800000,
+      lastSavedAt: new Date().toISOString(),
+    });
+    render(<SyncCenter profile={p} gateway={gateway} online={false} />);
+    expect(await screen.findByText(/Brouillons chiffrés sur cet appareil/)).toBeVisible();
+    expect(screen.queryByText(/Fermer l’application efface/)).not.toBeInTheDocument();
+    expect(screen.getByText(/L’expiration du bail hors connexion verrouille/)).toBeVisible();
+    expect(gateway.synchronize).not.toHaveBeenCalled();
+    noFinance(gateway);
+  });
+  it('ne promet aucune conservation après fermeture lorsque le stockage est non vérifiable', async () => {
+    const { gateway } = setup();
+    vi.mocked(gateway.syncStatus).mockRejectedValue(new Error('LOCAL_STORAGE_UNAVAILABLE'));
+    render(<StorageNotice gateway={gateway} />);
+    expect(await screen.findByText(/État du stockage non vérifiable/)).toBeVisible();
+    expect(screen.queryByText(/Brouillons chiffrés sur cet appareil/)).not.toBeInTheDocument();
+    noFinance(gateway);
+  });
   it('affiche versions, conflits et protection mémoire puis résout uniquement sur action explicite', async () => {
     const { p, gateway, record } = setup();
     render(<SyncCenter profile={p} gateway={gateway} online />);

@@ -77,7 +77,9 @@ export const syncStatusSchema = z
         error: z.number().int().nonnegative(),
       })
       .strict(),
-    persistence: z.literal('memory-only'),
+    persistence: z.enum(['memory-only', 'encrypted-sqlcipher']),
+    retentionMs: z.number().int().positive().max(604800000).optional(),
+    lastSavedAt: z.iso.datetime().nullable().optional(),
     events: z
       .array(
         z

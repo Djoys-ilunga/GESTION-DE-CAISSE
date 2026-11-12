@@ -637,6 +637,247 @@ async fn wait_for_sync(api: &Api) {
     }
     panic!("transmission did not start");
 }
+
+fn durable_runtime(
+    api: &Api,
+    dir: &tempfile::TempDir,
+    vault: Arc<crate::persistence::tests::TestVault>,
+) -> Arc<crate::persistence::Runtime> {
+    let runtime =
+        crate::persistence::Runtime::for_tests(dir.path().join("encrypted"), &api.base, vault)
+            .unwrap();
+    let mut p = api.profile.lock().unwrap();
+    p.device_id = runtime.device;
+    if !p.permissions.iter().any(|v| v == "offline:access") {
+        p.permissions.push("offline:access".into());
+        p.permissions.push("ledger:read".into());
+    }
+    if p.offline_until.is_none() {
+        p.offline_until = Some(iso(wall_now() + 120000));
+    }
+    runtime
+}
+
+#[tokio::test]
+async fn encrypted_restart_offline_unlock_reconnect_and_explicit_sync_never_post_financial_movements(
+) {
+    let api = Api::new();
+    let dir = tempfile::tempdir().unwrap();
+    let vault = Arc::new(crate::persistence::tests::TestVault::default());
+    let runtime = durable_runtime(&api, &dir, vault.clone());
+    let broker = Broker::with_test_storage(&api.base, runtime, false).unwrap();
+    let generation = login_for_sync(&broker).await;
+    let draft = api.draft();
+    let id = draft.draft.id;
+    broker.save_draft(draft, Some(generation)).unwrap();
+    broker.cash_catalog(Some(generation)).await.unwrap();
+    assert_eq!(
+        broker.synchronization_status(Some(generation)).unwrap()["persistence"],
+        "encrypted-sqlcipher"
+    );
+    let deadline = broker.status().unwrap().offline_until;
+    drop(broker);
+    api.offline.store(true, Ordering::SeqCst);
+    let runtime = durable_runtime(&api, &dir, vault);
+    let broker = Broker::with_test_storage(&api.base, runtime, true).unwrap();
+    let generation = broker.status().unwrap().generation;
+    assert_eq!(broker.status().unwrap().state, "locked");
+    assert!(broker.drafts(Some(generation)).is_err());
+    let offline = broker
+        .unlock(Zeroizing::new("password-test".into()), Some(generation))
+        .await
+        .unwrap();
+    assert_eq!(offline.state, "offline");
+    assert_eq!(offline.offline_until, deadline);
+    assert_eq!(
+        broker.drafts(Some(offline.generation)).unwrap()[0].draft.id,
+        id
+    );
+    assert_eq!(
+        broker.cash_catalog(Some(offline.generation)).await.unwrap()["stale"],
+        true
+    );
+    for action in ["handover", "receive"] {
+        assert!(broker
+            .transfer_action(
+                action,
+                Some(json!({"id":id,"handedOver":true,"received":true})),
+                Some(offline.generation)
+            )
+            .await
+            .is_err());
+    }
+    for action in ["pay", "decide"] {
+        assert!(broker
+            .expense_action(
+                action,
+                Some(json!({"id":id,"paid":true})),
+                Some(offline.generation)
+            )
+            .await
+            .is_err());
+    }
+    assert!(broker
+        .report_action(
+            "close",
+            Some(json!({"confirmed":true})),
+            Some(offline.generation)
+        )
+        .await
+        .is_err());
+    assert!(broker
+        .cash_action(
+            "confirm",
+            Some(json!({"id":id,"received":true})),
+            Some(offline.generation)
+        )
+        .await
+        .is_err());
+    assert!(broker.synchronize(Some(offline.generation)).await.is_err());
+    assert!(api.sync.requests.lock().unwrap().is_empty());
+    api.offline.store(false, Ordering::SeqCst);
+    let online = broker
+        .unlock(
+            Zeroizing::new("password-test".into()),
+            Some(offline.generation),
+        )
+        .await
+        .unwrap();
+    assert_eq!(online.state, "online");
+    assert_eq!(api.logins.load(Ordering::SeqCst), 2);
+    assert_eq!(
+        broker.drafts(Some(online.generation)).unwrap()[0].draft.id,
+        id
+    );
+    assert!(api.sync.requests.lock().unwrap().is_empty());
+    broker.synchronize(Some(online.generation)).await.unwrap();
+    assert_eq!(
+        broker.drafts(Some(online.generation)).unwrap()[0].state,
+        "synced"
+    );
+    assert_eq!(api.sync.financial.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn encrypted_lost_ack_restart_replays_exact_uuid_revision_and_payload_without_duplicate_confirmation(
+) {
+    let api = Api::new();
+    let dir = tempfile::tempdir().unwrap();
+    let vault = Arc::new(crate::persistence::tests::TestVault::default());
+    let runtime = durable_runtime(&api, &dir, vault.clone());
+    let broker = Broker::with_test_storage(&api.base, runtime, false).unwrap();
+    let generation = login_for_sync(&broker).await;
+    let draft = api.draft();
+    let id = draft.draft.id;
+    broker.save_draft(draft.clone(), Some(generation)).unwrap();
+    api.sync.drop_reply.store(true, Ordering::SeqCst);
+    assert!(broker.synchronize(Some(generation)).await.is_err());
+    drop(broker);
+    let runtime = durable_runtime(&api, &dir, vault);
+    let broker = Broker::with_test_storage(&api.base, runtime, true).unwrap();
+    let generation = broker.status().unwrap().generation;
+    let online = broker
+        .unlock(Zeroizing::new("password-test".into()), Some(generation))
+        .await
+        .unwrap();
+    let generation = online.generation;
+    let mut edit = draft;
+    edit.expected_version = Some(1);
+    edit.draft.amount = "99.00".into();
+    broker.save_draft(edit, Some(generation)).unwrap();
+    broker
+        .synchronization_action(
+            "retry",
+            Some(json!({"id":id,"expectedVersion":2})),
+            Some(generation),
+        )
+        .await
+        .unwrap();
+    broker.synchronize(Some(generation)).await.unwrap();
+    let requests = api.sync.requests.lock().unwrap();
+    assert_eq!(requests.len(), 2);
+    assert_eq!(requests[0], requests[1]);
+    drop(requests);
+    let r = broker.drafts(Some(generation)).unwrap().remove(0);
+    assert_eq!(r.version, 2);
+    assert_eq!(r.draft.amount, "99.00");
+    assert_eq!(r.server_version, Some(1));
+    assert_eq!(r.state, "queued");
+    assert_eq!(api.sync.financial.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn encrypted_logout_and_user_switch_require_authentication_and_isolate_the_author() {
+    let api = Api::new();
+    let dir = tempfile::tempdir().unwrap();
+    let vault = Arc::new(crate::persistence::tests::TestVault::default());
+    let runtime = durable_runtime(&api, &dir, vault.clone());
+    let broker = Broker::with_test_storage(&api.base, runtime, false).unwrap();
+    let generation = login_for_sync(&broker).await;
+    let d = api.draft();
+    let id = d.draft.id;
+    broker.save_draft(d, Some(generation)).unwrap();
+    broker.logout(Some(generation)).await.unwrap();
+    drop(broker);
+    let runtime = durable_runtime(&api, &dir, vault);
+    let broker = Broker::with_test_storage(&api.base, runtime, true).unwrap();
+    assert_eq!(broker.status().unwrap().state, "anonymous");
+    let alice = api.profile.lock().unwrap().clone();
+    {
+        let mut bob = api.profile.lock().unwrap();
+        bob.user.id = Uuid::new_v4();
+        bob.user.email = "bob@example.test".into();
+    }
+    let bob = broker
+        .login(
+            "TEST".into(),
+            "bob@example.test".into(),
+            Zeroizing::new("password-test".into()),
+        )
+        .await
+        .unwrap();
+    assert!(broker.drafts(Some(bob.generation)).unwrap().is_empty());
+    *api.profile.lock().unwrap() = alice;
+    let alice = login_for_sync(&broker).await;
+    assert_eq!(broker.drafts(Some(alice)).unwrap()[0].draft.id, id);
+}
+
+#[tokio::test]
+async fn encrypted_revocation_prevents_draft_transmission_and_offline_recovery() {
+    let api = Api::new();
+    let dir = tempfile::tempdir().unwrap();
+    let vault = Arc::new(crate::persistence::tests::TestVault::default());
+    let runtime = durable_runtime(&api, &dir, vault.clone());
+    let broker = Broker::with_test_storage(&api.base, runtime, false).unwrap();
+    let generation = login_for_sync(&broker).await;
+    broker.save_draft(api.draft(), Some(generation)).unwrap();
+    api.revoked.store(true, Ordering::SeqCst);
+    assert!(broker.synchronize(Some(generation)).await.is_err());
+    assert_eq!(broker.status().unwrap().state, "anonymous");
+    assert!(api.sync.requests.lock().unwrap().is_empty());
+    drop(broker);
+    let runtime = durable_runtime(&api, &dir, vault);
+    let broker = Broker::with_test_storage(&api.base, runtime, true).unwrap();
+    assert_eq!(broker.status().unwrap().state, "anonymous");
+}
+
+#[tokio::test]
+async fn encrypted_checkpoint_failure_is_reported_before_any_draft_is_sent() {
+    let api = Api::new();
+    let dir = tempfile::tempdir().unwrap();
+    let vault = Arc::new(crate::persistence::tests::TestVault::default());
+    let runtime = durable_runtime(&api, &dir, vault.clone());
+    let broker = Broker::with_test_storage(&api.base, runtime, false).unwrap();
+    let generation = login_for_sync(&broker).await;
+    broker.save_draft(api.draft(), Some(generation)).unwrap();
+    vault.fail_writes.store(true, Ordering::SeqCst);
+    assert!(matches!(
+        broker.synchronize(Some(generation)).await,
+        Err(Error::LocalStorage)
+    ));
+    assert!(api.sync.requests.lock().unwrap().is_empty());
+    assert_eq!(broker.status().unwrap().state, "anonymous");
+}
 #[tokio::test]
 async fn simultaneous_sends_use_one_worker_and_keep_newer_edits_after_the_ack() {
     let api = Api::new();
@@ -1133,5 +1374,36 @@ async fn exchange_authorization_error_is_preserved_without_financial_action() {
             .await,
         Err(Error::BccAuthorizationRequired)
     ));
+    assert_eq!(api.sync.financial.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn encrypted_offline_unlock_attempt_counter_survives_restarts_and_revokes_after_five_failures(
+) {
+    let api = Api::new();
+    let dir = tempfile::tempdir().unwrap();
+    let vault = Arc::new(crate::persistence::tests::TestVault::default());
+    let runtime = durable_runtime(&api, &dir, vault.clone());
+    let broker = Broker::with_test_storage(&api.base, runtime, false).unwrap();
+    login_for_sync(&broker).await;
+    drop(broker);
+    api.offline.store(true, Ordering::SeqCst);
+    for _ in 0..5 {
+        let runtime = durable_runtime(&api, &dir, vault.clone());
+        let broker = Broker::with_test_storage(&api.base, runtime, true).unwrap();
+        let generation = broker.status().unwrap().generation;
+        assert!(matches!(
+            broker
+                .unlock(
+                    Zeroizing::new("mauvais-mot-de-passe".into()),
+                    Some(generation)
+                )
+                .await,
+            Err(Error::Credentials)
+        ));
+    }
+    let runtime = durable_runtime(&api, &dir, vault);
+    let broker = Broker::with_test_storage(&api.base, runtime, true).unwrap();
+    assert_eq!(broker.status().unwrap().state, "anonymous");
     assert_eq!(api.sync.financial.load(Ordering::SeqCst), 0);
 }

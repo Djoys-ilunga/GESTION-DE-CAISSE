@@ -1,7 +1,9 @@
 //! SQLCipher est compilé avec OpenSSL embarqué. La porte publique reste fermée
 //! tant que les tests Windows/macOS et la revue de distribution ne sont pas achevés.
 mod key_vault;
+mod permissions;
 pub use key_vault::{KeyVault, NativeKeyVault};
+pub use permissions::protect_directory;
 use rand::{rngs::OsRng, RngCore};
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use serde::{Deserialize, Serialize};
@@ -103,6 +105,15 @@ fn amount_valid(amount: &str) -> bool {
         && amount.bytes().any(|b| (b'1'..=b'9').contains(&b))
 }
 impl EncryptedStore {
+    #[cfg(all(feature = "test-support", debug_assertions))]
+    #[doc(hidden)]
+    pub fn open_test_checkpoint(
+        path: &Path,
+        scope: AuthorizedScope,
+        vault: &dyn KeyVault,
+    ) -> Result<Self> {
+        Self::open_with_vault(path, scope, vault)
+    }
     pub fn open(path: &Path, scope: AuthorizedScope, vault: &dyn KeyVault) -> Result<Self> {
         if !PLATFORM_STORAGE_VALIDATED {
             return Err(StoreError::PlatformNotValidated);
@@ -112,6 +123,9 @@ impl EncryptedStore {
     fn open_with_vault(path: &Path, scope: AuthorizedScope, vault: &dyn KeyVault) -> Result<Self> {
         let account = scope.key_account();
         let existing = path.exists();
+        if existing && fs::symlink_metadata(path)?.len() == 0 {
+            return Err(StoreError::InvalidData);
+        }
         let key = match vault.load(&account)? {
             Some(key) if key.len() == 32 => key,
             Some(_) => return Err(StoreError::KeyUnavailable),
@@ -147,6 +161,7 @@ impl EncryptedStore {
             }
             options.open(path)?;
         }
+        permissions::protect_file(path)?;
         let connection = Connection::open_with_flags(
             path,
             OpenFlags::SQLITE_OPEN_READ_WRITE
@@ -159,7 +174,7 @@ impl EncryptedStore {
         connection.query_row("SELECT count(*) FROM sqlite_master", [], |r| {
             r.get::<_, i64>(0)
         })?;
-        connection.execute_batch("PRAGMA cipher_memory_security=ON;PRAGMA foreign_keys=ON;PRAGMA temp_store=MEMORY;PRAGMA journal_mode=DELETE;PRAGMA synchronous=FULL;")?;
+        connection.execute_batch("PRAGMA cipher_memory_security=ON;PRAGMA foreign_keys=ON;PRAGMA temp_store=MEMORY;PRAGMA journal_mode=DELETE;PRAGMA synchronous=FULL;PRAGMA secure_delete=ON;")?;
         connection.busy_timeout(Duration::from_secs(5))?;
         let mut store = Self {
             connection,
@@ -197,12 +212,16 @@ impl EncryptedStore {
                 ],
             )?;
             transaction.pragma_update(None, "user_version", 1)?;
-        } else if version != 1 && version != 2 {
+        } else if !(1..=3).contains(&version) {
             return Err(StoreError::InvalidData);
         }
         if version < 2 {
             transaction.execute_batch(include_str!("../migrations/002_multicurrency.sql"))?;
             transaction.pragma_update(None, "user_version", 2)?;
+        }
+        if version < 3 {
+            transaction.execute_batch(include_str!("../migrations/003_workspace.sql"))?;
+            transaction.pragma_update(None, "user_version", 3)?;
         }
         let scope: (String, String, String) = transaction.query_row(
             "SELECT company_id,user_id,device_id FROM local_scope WHERE singleton=1",
@@ -406,6 +425,65 @@ impl EncryptedStore {
         self.connection.close().map_err(|_| StoreError::Storage)?;
         vault.delete(&account)?;
         fs::remove_file(path)?;
+        Ok(())
+    }
+
+    /// A complete checkpoint is committed atomically, including an in-flight sync payload.
+    /// The caller is the native broker, never JavaScript or an asserted client identity.
+    pub fn checkpoint(
+        &mut self,
+        payload: &[u8],
+        retained_until: i64,
+        expected: Option<i64>,
+    ) -> Result<i64> {
+        self.check_access()?;
+        let now = self.now();
+        if payload.len() > 32 * 1024 * 1024
+            || retained_until <= now
+            || retained_until - now > 7 * 86_400_000
+            || serde_json::from_slice::<serde_json::Value>(payload).is_err()
+        {
+            return Err(StoreError::InvalidData);
+        }
+        let revision = expected
+            .unwrap_or(0)
+            .checked_add(1)
+            .ok_or(StoreError::InvalidData)?;
+        let changed = self.connection.execute(
+            "INSERT INTO workspace_checkpoint SELECT 1,?1,?2,?3,?4 WHERE (?5 IS NULL AND NOT EXISTS(SELECT 1 FROM workspace_checkpoint)) OR EXISTS(SELECT 1 FROM workspace_checkpoint WHERE revision=?5) ON CONFLICT(singleton) DO UPDATE SET revision=excluded.revision,updated_at=excluded.updated_at,retained_until=excluded.retained_until,payload=excluded.payload WHERE workspace_checkpoint.revision=?5",
+            params![revision, now, retained_until, std::str::from_utf8(payload).map_err(|_|StoreError::InvalidData)?, expected],
+        )?;
+        if changed != 1 {
+            return Err(StoreError::VersionConflict);
+        }
+        Ok(revision)
+    }
+    pub fn read_checkpoint(&self) -> Result<Option<(i64, Zeroizing<Vec<u8>>)>> {
+        self.check_access()?;
+        let row: Option<(i64, i64, Vec<u8>)> = self.connection.query_row(
+            "SELECT revision,retained_until,CAST(payload AS BLOB) FROM workspace_checkpoint WHERE singleton=1",
+            [], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        ).optional()?;
+        Ok(row
+            .filter(|(_, until, _)| *until > self.now())
+            .map(|(rev, _, bytes)| (rev, Zeroizing::new(bytes))))
+    }
+    pub fn checkpoint_revision(&self) -> Result<Option<i64>> {
+        self.check_access()?;
+        Ok(self
+            .connection
+            .query_row(
+                "SELECT revision FROM workspace_checkpoint WHERE singleton=1",
+                [],
+                |r| r.get(0),
+            )
+            .optional()?)
+    }
+    pub fn renew_authorization(&mut self, until: i64) -> Result<()> {
+        if until <= self.now() || until - self.now() > TTL {
+            return Err(StoreError::AccessDenied);
+        }
+        self.scope.authorized_until = until;
         Ok(())
     }
 }

@@ -1,6 +1,7 @@
 import {
   draftSchema,
   draftSyncResultSchema,
+  MAX_DRAFT_RETENTION_MS,
   type Draft,
   type DraftSyncResult,
 } from '@caissepro/shared';
@@ -75,7 +76,7 @@ export class MemoryLocalStore implements LocalStore {
     if (
       Date.parse(draft.expiresAt) <= now ||
       Date.parse(draft.createdAt) > now + 1000 ||
-      Date.parse(draft.expiresAt) - Date.parse(draft.createdAt) > MAX_OFFLINE_TTL
+      Date.parse(draft.expiresAt) - Date.parse(draft.createdAt) > MAX_DRAFT_RETENTION_MS
     )
       throw new Error('OFFLINE_EXPIRATION_INVALID');
     const previous = this.drafts.get(draft.id);
@@ -174,7 +175,7 @@ export function createLocalDraft(
     ...input,
     id: crypto.randomUUID(),
     createdAt: new Date(now).toISOString(),
-    expiresAt: new Date(now + MAX_OFFLINE_TTL).toISOString(),
+    expiresAt: new Date(now + MAX_DRAFT_RETENTION_MS).toISOString(),
   });
 }
 export function assertDiskPersistenceAllowed(): never {

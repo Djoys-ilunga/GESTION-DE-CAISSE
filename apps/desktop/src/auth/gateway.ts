@@ -607,6 +607,8 @@ export function message(error: unknown) {
     ONLINE_REQUIRED: 'Cette action exige une connexion au serveur.',
     DESKTOP_REQUIRED: 'Ouvrez l’application CaissePro pour vous connecter.',
     LOCAL_VERSION_CONFLICT: 'Ce brouillon a changé. Actualisez la liste.',
+    LOCAL_STORAGE_UNAVAILABLE:
+      'Le stockage local protégé est indisponible. Aucun nouvel enregistrement local n’est confirmé. Les fichiers existants sont préservés ; reconnectez-vous avant de réessayer.',
     PASSWORD_CHANGE_REQUIRED: 'Renouvelez votre mot de passe pour continuer.',
     SESSION_CHANGED: 'La session a changé. Réessayez dans votre session actuelle.',
   };

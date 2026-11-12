@@ -1,3 +1,4 @@
+import { StorageNotice } from '../hybrid/StorageNotice';
 import { useMoney, CurrencyOptions } from '../money/MoneyContext';
 import { currencyPrecision } from '@caissepro/shared';
 import { useReferences } from '../ui/use-references';
@@ -290,7 +291,7 @@ export function TransfersPage({
       });
       if (!alive.current) return;
       setNotice(
-        'Brouillon conservé en mémoire native. Aucun mouvement financier. Transmettez-le explicitement après connexion.',
+        'Brouillon reçu par le stockage natif. Consultez son mode de conservation. Aucun mouvement financier ; transmettez-le explicitement après connexion.',
       );
       setQuote(null);
       setId(crypto.randomUUID());
@@ -390,10 +391,7 @@ export function TransfersPage({
           ou conversion exécutée.
         </p>
       )}
-      <p>
-        Les brouillons locaux restent en mémoire native pendant 15 minutes au maximum et
-        disparaissent à la fermeture. Les copies transmises se retrouvent dans l’historique serveur.
-      </p>
+      <StorageNotice gateway={gateway} />
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
       {canPrepare && (

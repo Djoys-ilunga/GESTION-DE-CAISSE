@@ -8,6 +8,7 @@ use std::{
 use subtle::ConstantTimeEq;
 use zeroize::Zeroizing;
 pub const OFFLINE_MS: i64 = 900_000;
+pub const DRAFT_RETENTION_MS: i64 = 7 * 86_400_000;
 const AUTO_LOCK_MS: i64 = 300_000;
 pub fn wall_now() -> i64 {
     SystemTime::now()
@@ -48,6 +49,18 @@ pub struct Verifier {
     key: Zeroizing<[u8; 32]>,
 }
 impl Verifier {
+    pub(crate) fn export(&self) -> crate::persistence::VerifierMaterial {
+        crate::persistence::VerifierMaterial {
+            salt: *self.salt,
+            key: *self.key,
+        }
+    }
+    pub(crate) fn import(value: crate::persistence::VerifierMaterial) -> Self {
+        Self {
+            salt: Zeroizing::new(value.salt),
+            key: Zeroizing::new(value.key),
+        }
+    }
     pub fn create(password: &str) -> Result<Self> {
         let mut salt = Zeroizing::new([0; 16]);
         OsRng
@@ -76,6 +89,7 @@ impl Verifier {
     }
 }
 pub struct Session {
+    pub(crate) durable: Option<crate::persistence::Durable>,
     pub token: Zeroizing<String>,
     pub profile: Profile,
     pub verifier: Option<Verifier>,
@@ -130,7 +144,6 @@ impl Session {
         verifier: Option<Verifier>,
         now: i64,
     ) -> Result<Self> {
-        let (offline_until, absolute_until) = Self::validate_profile(&profile, now)?;
         if token.len() != 43
             || !token
                 .bytes()
@@ -138,7 +151,27 @@ impl Session {
         {
             return Err(Error::InvalidResponse);
         }
+        Self::initialize(token, profile, verifier, now)
+    }
+    pub(crate) fn new_offline(
+        profile: Profile,
+        verifier: Option<Verifier>,
+        now: i64,
+    ) -> Result<Self> {
+        let mut session = Self::initialize(Zeroizing::new(String::new()), profile, verifier, now)?;
+        session.online = false;
+        session.locked = true;
+        Ok(session)
+    }
+    fn initialize(
+        token: Zeroizing<String>,
+        profile: Profile,
+        verifier: Option<Verifier>,
+        now: i64,
+    ) -> Result<Self> {
+        let (offline_until, absolute_until) = Self::validate_profile(&profile, now)?;
         Ok(Self {
+            durable: None,
             token,
             locked: profile.locked,
             profile,
@@ -285,7 +318,8 @@ impl Session {
             || created > now + 1000
             || expires <= now
             || expires <= created
-            || expires - created > OFFLINE_MS
+            || expires - created > DRAFT_RETENTION_MS
+            || (!self.drafts.contains_key(&draft.id) && self.drafts.len() >= 200)
             || (draft.kind == "receipt" && input.cash_register_id.is_none())
         {
             return Err(Error::InvalidInput);
@@ -362,9 +396,20 @@ pub struct State {
 }
 impl State {
     pub fn clear(&mut self, reason: &str) {
+        let storage_failed = self
+            .session
+            .as_mut()
+            .is_some_and(|s| s.detach_storage(reason).is_err());
         self.session = None;
         self.generation += 1;
-        self.reason = Some(reason.into());
+        self.reason = Some(
+            if storage_failed {
+                "LOCAL_STORAGE_UNAVAILABLE"
+            } else {
+                reason
+            }
+            .into(),
+        );
     }
     pub fn view(&mut self, now: i64) -> SessionView {
         if let Some(s) = self.session.as_mut() {

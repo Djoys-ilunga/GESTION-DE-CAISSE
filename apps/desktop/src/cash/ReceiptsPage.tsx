@@ -1,3 +1,4 @@
+import { StorageNotice } from '../hybrid/StorageNotice';
 import { useMoney } from '../money/MoneyContext';
 import { CurrencyOptions } from '../money/MoneyContext';
 import { useEffect, useState, type FormEvent } from 'react';
@@ -310,7 +311,7 @@ export function ReceiptsPage({
                 setOpen(false);
                 setEditing(null);
                 setNotice(
-                  'Brouillon non comptabilisé enregistré en mémoire. Aucun reçu n’a été émis.',
+                  'Brouillon non comptabilisé reçu par le stockage natif. Aucun reçu n’a été émis.',
                 );
                 void refresh().catch((e) => setError(message(e)));
               }}
@@ -350,11 +351,7 @@ export function ReceiptsPage({
                 Transmettre les brouillons
               </button>
             </div>
-            <p className="section-description">
-              Mémoire temporaire, 15 minutes maximum. Fermer l’application ou changer d’utilisateur
-              efface les données locales. Les brouillons déjà transmis restent disponibles dans le
-              suivi serveur.
-            </p>
+            <StorageNotice gateway={gateway} />
             {local.length ? (
               <div className="table-wrap">
                 <table>
@@ -402,7 +399,7 @@ export function ReceiptsPage({
                                       ? 'Transmission refusée'
                                       : row.state === 'confirmed'
                                         ? 'Reçu émis par le serveur'
-                                        : 'En mémoire locale'}
+                                        : 'Local non synchronisé'}
                           </small>
                         </td>
                         <td>

@@ -59,6 +59,47 @@ fn public_gate_precedes_any_file_or_key_creation() {
     assert!(vault.key.borrow().is_none());
 }
 #[test]
+fn checkpoint_is_atomic_versioned_encrypted_and_preserves_payload_on_rejected_write() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("checkpoint.db");
+    let scope = scope();
+    let key = key();
+    let mut s = EncryptedStore::open_encrypted(&file, scope.clone(), &key).unwrap();
+    let now = system_now();
+    let payload=br#"{"format":1,"drafts":[{"id":"stable-id","amount":"9007199254740993.01","currency":"JPY","author":"OWNER_SECRET_TEST"}]}"#;
+    assert!(matches!(
+        s.checkpoint(payload, now + 10000, Some(4)),
+        Err(StoreError::VersionConflict)
+    ));
+    assert_eq!(s.checkpoint(payload, now + 10000, None).unwrap(), 1);
+    assert!(matches!(
+        s.checkpoint(br#"{"bad":true}"#, now + 10000, None),
+        Err(StoreError::VersionConflict)
+    ));
+    assert!(s.checkpoint(b"broken-json", now + 10000, Some(1)).is_err());
+    drop(s);
+    let s = EncryptedStore::open_encrypted(&file, scope, &key).unwrap();
+    let (revision, data) = s.read_checkpoint().unwrap().unwrap();
+    assert_eq!(revision, 1);
+    assert_eq!(data.as_slice(), payload);
+    let bytes = fs::read(file).unwrap();
+    assert!(!bytes.windows(17).any(|b| b == b"OWNER_SECRET_TEST"));
+}
+#[test]
+fn existing_truncated_database_is_not_silently_recreated() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("truncated.db");
+    fs::write(&file, []).unwrap();
+    let vault = Vault {
+        key: RefCell::new(Some(key().to_vec())),
+    };
+    assert!(matches!(
+        EncryptedStore::open_with_vault(&file, scope(), &vault),
+        Err(StoreError::InvalidData)
+    ));
+    assert_eq!(fs::metadata(file).unwrap().len(), 0);
+}
+#[test]
 fn sqlcipher_encrypts_reopens_and_rejects_wrong_or_missing_keys() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("local.db");
@@ -318,7 +359,7 @@ fn legacy_encrypted_drafts_and_acknowledgements_survive_currency_schema_upgrade(
             .connection
             .query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))
             .unwrap(),
-        2
+        3
     );
     let mut japanese = d.clone();
     japanese.id = Uuid::new_v4();
@@ -337,4 +378,19 @@ fn legacy_encrypted_drafts_and_acknowledgements_survive_currency_schema_upgrade(
         "123"
     );
     store.migrate().unwrap();
+}
+
+#[cfg(target_os = "windows")]
+#[test]
+fn windows_database_and_directory_have_protected_owner_system_admin_acl() {
+    let dir = tempfile::tempdir().unwrap();
+    protect_directory(dir.path()).unwrap();
+    let file = dir.path().join("private.db");
+    let store = EncryptedStore::open_encrypted(&file, scope(), &key()).unwrap();
+    for path in [dir.path(), file.as_path()] {
+        let status=std::process::Command::new("powershell.exe").args(["-NoLogo","-NoProfile","-NonInteractive","-Command",r#"$ErrorActionPreference='Stop'; $acl=Get-Acl -LiteralPath $env:CAISSEPRO_ACL_TEST_PATH; if(!$acl.AreAccessRulesProtected -or $acl.Access.Count -lt 3){exit 1}; $allowed=@('S-1-3-4','S-1-5-18','S-1-5-32-544',[System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value); foreach($rule in $acl.Access){if($rule.AccessControlType -eq 'Allow' -and $rule.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value -notin $allowed){exit 1}}; exit 0"#])
+            .env("CAISSEPRO_ACL_TEST_PATH",path).status().unwrap();
+        assert!(status.success(), "Private Windows ACL required");
+    }
+    drop(store);
 }

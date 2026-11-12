@@ -2,7 +2,7 @@ name: Qualification du stockage local
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, feat/etape-13b-brouillons-chiffres]
     paths:
       [
         'apps/desktop/**',
@@ -11,6 +11,7 @@ on:
         'packages/session-core/**',
         'pnpm-lock.yaml',
         'rust-toolchain.toml',
+        'scripts/native-qualification-command.mjs',
         '.github/workflows/local-store-native.yml',
       ]
   pull_request:
@@ -22,6 +23,7 @@ on:
         'packages/session-core/**',
         'pnpm-lock.yaml',
         'rust-toolchain.toml',
+        'scripts/native-qualification-command.mjs',
         '.github/workflows/local-store-native.yml',
       ]
 permissions:
@@ -39,6 +41,22 @@ jobs:
         working-directory: packages/local-store
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - name: Trousseau temporaire de qualification macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          qualification_keychain="$RUNNER_TEMP/CaisseProQualification.keychain-db"
+          qualification_password="$(openssl rand -hex 32)"
+          echo "::add-mask::$qualification_password"
+          previous_keychain="$(security default-keychain -d user 2>/dev/null || true)"
+          previous_keychain="${previous_keychain#*\"}"
+          previous_keychain="${previous_keychain%\"*}"
+          printf 'CAISSEPRO_PREVIOUS_KEYCHAIN=%s\n' "$previous_keychain" >> "$GITHUB_ENV"
+          security create-keychain -p "$qualification_password" "$qualification_keychain"
+          security set-keychain-settings -lut 3600 "$qualification_keychain"
+          security unlock-keychain -p "$qualification_password" "$qualification_keychain"
+          security default-keychain -d user -s "$qualification_keychain"
       - name: Outils OpenSSL Windows
         if: runner.os == 'Windows'
         shell: pwsh
@@ -51,12 +69,12 @@ jobs:
       - name: Rust verrouillé
         run: rustup toolchain install 1.90.0 --profile minimal --component rustfmt --component clippy
       - run: cargo fmt --check
-      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: node ../../scripts/native-qualification-command.mjs cargo clippy --locked --all-targets -- -D warnings
       - name: SQLCipher et magasin de clés natif
-        run: cargo test --locked
+        run: node ../../scripts/native-qualification-command.mjs cargo test --locked
       - name: Sessions natives et isolation hors connexion
         working-directory: packages/session-core
-        run: cargo test --locked
+        run: node ../../scripts/native-qualification-command.mjs cargo test --locked
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version-file: .node-version
@@ -73,7 +91,15 @@ jobs:
         run: pnpm db:generate
       - name: Types, lint, tests unitaires et builds JavaScript
         working-directory: .
-        run: pnpm check
+        run: node scripts/native-qualification-command.mjs pnpm check
       - name: Compiler et lier le véritable desktop avec ses fichiers embarqués
         working-directory: .
-        run: pnpm --filter @caissepro/desktop exec tauri build --debug --no-bundle
+        run: node scripts/native-qualification-command.mjs pnpm --filter @caissepro/desktop exec tauri build --debug --no-bundle
+      - name: Retirer le trousseau de qualification macOS
+        if: always() && runner.os == 'macOS'
+        shell: bash
+        run: |
+          if [[ -n "${CAISSEPRO_PREVIOUS_KEYCHAIN:-}" ]]; then
+            security default-keychain -d user -s "$CAISSEPRO_PREVIOUS_KEYCHAIN"
+          fi
+          security delete-keychain "$RUNNER_TEMP/CaisseProQualification.keychain-db"

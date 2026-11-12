@@ -136,10 +136,10 @@ export function ExpenseForm({
       </p>
       <p className="section-description">
         {capture.state === 'captured'
-          ? 'Saisie capturée temporairement dans votre session. Les fichiers doivent être enregistrés avec le brouillon.'
+          ? 'Saisie reçue par le stockage natif. Vérifiez son mode dans le centre de synchronisation. Les fichiers doivent être enregistrés avec le brouillon.'
           : capture.state === 'unavailable'
             ? 'Saisie non capturée. Enregistrez le brouillon avant de quitter cet écran.'
-            : 'Capture temporaire de la saisie…'}
+            : 'Enregistrement de la saisie en cours…'}
       </p>
       <fieldset disabled={busy} className="expense-fields">
         <div className="form-grid">

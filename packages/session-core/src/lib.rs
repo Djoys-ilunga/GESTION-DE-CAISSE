@@ -1,5 +1,6 @@
 mod broker;
 mod model;
+mod persistence;
 mod state;
 mod synchronization;
 pub use broker::Broker;
@@ -7,6 +8,8 @@ pub use model::*;
 type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("LOCAL_STORAGE_UNAVAILABLE")]
+    LocalStorage,
     #[error("BCC_AUTHORIZATION_REQUIRED")]
     BccAuthorizationRequired,
     #[error("BCC_SOURCE_UNVERIFIED")]

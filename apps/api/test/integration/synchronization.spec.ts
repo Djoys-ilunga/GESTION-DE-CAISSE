@@ -88,6 +88,45 @@ describe('Synchronisation v2 avec API et PostgreSQL réels', () => {
       .set(s.user.headers)
       .send(value);
   }
+  it('reçoit après reconnexion un brouillon conservé depuis la veille, avec identité et dates inchangées, sans comptabiliser', async () => {
+    const s = await setup(),
+      value = body(s),
+      created = Date.now() - 86400000;
+    value.draft.createdAt = new Date(created).toISOString();
+    value.originalCreatedAt = value.draft.createdAt;
+    value.updatedAt = value.draft.createdAt;
+    value.draft.expiresAt = new Date(created + 7 * 86400000).toISOString();
+    const first = await send(s, value).expect(201);
+    const session = await s.login(s.f.userId);
+    const again = await request(app.getHttpServer())
+      .post('/api/v1/workspace/drafts/sync')
+      .set(session.headers)
+      .send(value)
+      .expect(201);
+    expect(again.body.serverId).toBe(first.body.serverId);
+    const stored = await db.importedDraft.findFirstOrThrow({
+      where: { companyId: s.f.companyId, clientDraftId: value.draft.id },
+    });
+    expect(stored.clientCreatedAt?.toISOString()).toBe(value.originalCreatedAt);
+    expect(stored.version).toBe(1);
+    expect(await db.importedDraft.count({ where: { companyId: s.f.companyId } })).toBe(1);
+    expect(await db.financialOperation.count({ where: { companyId: s.f.companyId } })).toBe(0);
+    expect(await db.expenseRequest.count({ where: { companyId: s.f.companyId } })).toBe(0);
+  });
+  it('refuse une conservation dépassant sept jours ou des dates futures, sans importer de brouillon', async () => {
+    const s = await setup(),
+      value = body(s);
+    value.draft.expiresAt = new Date(
+      Date.parse(value.draft.createdAt) + 7 * 86400000 + 1,
+    ).toISOString();
+    await send(s, value).expect(409);
+    const future = body(s);
+    future.draft.createdAt = new Date(Date.now() + 60000).toISOString();
+    future.draft.expiresAt = new Date(Date.now() + 120000).toISOString();
+    await send(s, future).expect(409);
+    expect(await db.importedDraft.count({ where: { companyId: s.f.companyId } })).toBe(0);
+    expect(await db.financialOperation.count({ where: { companyId: s.f.companyId } })).toBe(0);
+  });
   it('déduplique six transmissions et retourne les identifiants sans aucun mouvement financier', async () => {
     const s = await setup(),
       value = body(s),

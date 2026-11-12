@@ -157,10 +157,10 @@ export function ReceiptForm({
       </div>
       <p className="section-description">
         {capture.state === 'captured'
-          ? 'Saisie capturée temporairement dans votre session. Les fichiers doivent être enregistrés avec le brouillon.'
+          ? 'Saisie reçue par le stockage natif. Vérifiez son mode dans le centre de synchronisation. Les fichiers doivent être enregistrés avec le brouillon.'
           : capture.state === 'unavailable'
             ? 'Saisie non capturée. Enregistrez le brouillon avant de quitter cet écran.'
-            : 'Capture temporaire de la saisie…'}
+            : 'Enregistrement de la saisie en cours…'}
       </p>
       <div className="form-grid">
         {onlyCash && cash === onlyCash.id ? (
@@ -285,8 +285,8 @@ export function ReceiptForm({
         </p>
       )}
       <p className="section-description">
-        Aucun reçu ni mouvement financier n’est créé ici. Le brouillon reste temporairement en
-        mémoire pendant cette session ; transmettez-le au serveur avant son expiration.
+        Aucun reçu ni mouvement financier n’est créé ici. Le centre de synchronisation précise le
+        mode de stockage. Transmettez le brouillon avant son expiration.
       </p>
       <div className="action-buttons">
         <button className="primary-button" disabled={busy}>

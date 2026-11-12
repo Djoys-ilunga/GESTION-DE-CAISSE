@@ -1,6 +1,11 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { draftSchema, expenseDetailsSchema, MAX_EVIDENCE_BYTES } from '@caissepro/shared';
+import {
+  draftSchema,
+  expenseDetailsSchema,
+  MAX_EVIDENCE_BYTES,
+  MAX_DRAFT_RETENTION_MS,
+} from '@caissepro/shared';
 import { z } from 'zod';
 import { CentralAccess, DataError, type DataContext } from './central-access';
 import { Prisma } from '../generated/prisma/client';
@@ -23,6 +28,11 @@ export class DraftInboxService {
     z.number().int().positive().parse(version);
     z.number().int().positive().nullable().parse(expectedServerVersion);
     if (Date.parse(draft.expiresAt) <= Date.now()) throw new DataError('DRAFT_EXPIRED');
+    if (
+      Date.parse(draft.createdAt) > Date.now() + 1000 ||
+      Date.parse(draft.expiresAt) - Date.parse(draft.createdAt) > MAX_DRAFT_RETENTION_MS
+    )
+      throw new DataError('DRAFT_DATES_INVALID');
     if (metadata) {
       const created = Date.parse(metadata.createdAt),
         updated = Date.parse(metadata.updatedAt);

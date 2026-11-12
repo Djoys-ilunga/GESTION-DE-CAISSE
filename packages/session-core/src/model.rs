@@ -208,11 +208,11 @@ pub struct SyncResult {
     pub expense_request_id: Option<Uuid>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct PendingSync {
     pub record: DraftRecord,
 }
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SyncNote {
     pub draft_id: Uuid,
@@ -247,7 +247,7 @@ pub struct FormBufferInput {
     pub expected_local_version: Option<u32>,
     pub fields: std::collections::HashMap<String, String>,
 }
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FormBuffer {
     pub id: Uuid,

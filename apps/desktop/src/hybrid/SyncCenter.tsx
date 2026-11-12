@@ -1,3 +1,4 @@
+import { StorageNotice } from './StorageNotice';
 import { useEffect, useRef, useState } from 'react';
 import type {
   CashSnapshot,
@@ -217,11 +218,7 @@ export function SyncCenter({
         {status?.cacheUpdatedAt && (
           <p>Consultations actualisées le {formatDate(status.cacheUpdatedAt)}.</p>
         )}
-        <p className="auth-notice">
-          Brouillons locaux en mémoire temporaire uniquement : au plus 15 minutes. Fermer
-          l’application efface les brouillons non transmis. Après redémarrage, reconnectez-vous pour
-          retrouver les copies déjà reçues par le serveur.
-        </p>
+        <StorageNotice gateway={gateway} status={status ?? undefined} />
         {!online && (
           <p>
             Informations locales non actualisées. Aucun envoi ni traitement financier n’est

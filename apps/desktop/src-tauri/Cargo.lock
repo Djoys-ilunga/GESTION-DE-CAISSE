@@ -257,6 +257,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "uuid",
+ "windows-sys 0.61.2",
  "zeroize",
 ]
 
@@ -265,12 +266,14 @@ name = "caissepro-session"
 version = "0.3.0"
 dependencies = [
  "base64 0.22.1",
+ "caissepro-local-store",
  "chrono",
  "rand 0.8.8",
  "reqwest 0.12.28",
  "scrypt",
  "serde",
  "serde_json",
+ "sha2",
  "subtle",
  "thiserror 2.0.21",
  "tokio",
