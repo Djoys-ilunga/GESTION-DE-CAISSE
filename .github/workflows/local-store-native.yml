@@ -12,6 +12,7 @@ on:
         'pnpm-lock.yaml',
         'rust-toolchain.toml',
         'scripts/native-qualification-command.mjs',
+        'tests/native/**',
         '.github/workflows/local-store-native.yml',
       ]
   pull_request:
@@ -24,6 +25,7 @@ on:
         'pnpm-lock.yaml',
         'rust-toolchain.toml',
         'scripts/native-qualification-command.mjs',
+        'tests/native/**',
         '.github/workflows/local-store-native.yml',
       ]
 permissions:
@@ -37,6 +39,7 @@ jobs:
       # Cases that exercise concurrency still spawn their own workers; isolate
       # the suites to avoid competing KDFs/keychain calls starving HTTP fixtures.
       RUST_TEST_THREADS: '1'
+      CAISSEPRO_REQUIRE_NATIVE_STORAGE: '1'
     strategy:
       fail-fast: false
       matrix:
@@ -48,7 +51,8 @@ jobs:
         working-directory: packages/local-store
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        id: native-cache
         with:
           path: |
             ~/.cargo/registry
@@ -117,3 +121,12 @@ jobs:
             security default-keychain -d user -s "$CAISSEPRO_PREVIOUS_KEYCHAIN"
           fi
           security delete-keychain "$RUNNER_TEMP/CaisseProQualification.keychain-db"
+      - name: Conserver les dépendances de compilation même après un échec de test
+        if: always() && steps.native-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/native-qualification
+          key: ${{ steps.native-cache.outputs.cache-primary-key }}

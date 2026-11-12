@@ -9,6 +9,7 @@ import {
   copyFileSync,
   existsSync,
   rmSync,
+  realpathSync,
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -118,14 +119,16 @@ test(
   },
 );
 
-// Command doubles verify orchestration on Linux; they do not qualify native macOS.
+// Command doubles verify orchestration on Unix; they do not qualify a desktop window.
 test(
   'local launch waits for the API, passes public native settings and stops its own server',
   {
     skip: process.platform === 'win32',
   },
   () => {
-    const fixture = mkdtempSync(join(tmpdir(), 'caissepro-mac-launch-'));
+    // On macOS /var is an alias for /private/var. ESM resolves the imported
+    // launcher to its real path, so argv must use that same path for its CLI guard.
+    const fixture = realpathSync(mkdtempSync(join(tmpdir(), 'caissepro-mac-launch-')));
     try {
       const project = join(fixture, 'project with spaces');
       const scripts = join(project, 'scripts');

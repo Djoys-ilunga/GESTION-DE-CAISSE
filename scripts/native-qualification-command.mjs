@@ -44,10 +44,11 @@ child.on('close', (code) => {
       .filter((line) => /test result: ok\.|Tests\s+[0-9]+ passed/.test(line))
       .join(' · ')
       .slice(-1500);
-    const label = `${command} ${args.join(' ')} : ${summary || 'réussi'}`
-      .replaceAll('%', '%25')
-      .replaceAll('\r', '%0D')
-      .replaceAll('\n', '%0A');
+    const label =
+      `${process.platform}/${process.arch} ${command} ${args.join(' ')} : ${summary || 'réussi'}`
+        .replaceAll('%', '%25')
+        .replaceAll('\r', '%0D')
+        .replaceAll('\n', '%0A');
     console.log(`::notice title=Qualification native réussie::${label}`);
   }
 });

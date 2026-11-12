@@ -7,7 +7,7 @@ pub fn protect_directory(path: &Path) -> Result<()> {
     }
     protect(path, true)
 }
-pub(crate) fn protect_file(path: &Path) -> Result<()> {
+pub fn protect_file(path: &Path) -> Result<()> {
     if !fs::symlink_metadata(path)?.is_file() {
         return Err(StoreError::AccessDenied);
     }

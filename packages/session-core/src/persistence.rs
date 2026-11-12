@@ -101,15 +101,6 @@ impl Runtime {
         vault: Arc<dyn KeyVault + Send + Sync>,
     ) -> Result<Arc<Self>> {
         let namespace = format!("{:x}", Sha256::digest(format!("{server}\0{deployment}")));
-        let account = format!("installation-{namespace}");
-        let device = match storage(vault.load(&account))? {
-            Some(bytes) => Uuid::from_slice(&bytes).map_err(|_| Error::LocalStorage)?,
-            None => {
-                let id = Uuid::new_v4();
-                storage(vault.store(&account, id.as_bytes()))?;
-                id
-            }
-        };
         if root.exists()
             && fs::symlink_metadata(&root)
                 .map_err(|_| Error::LocalStorage)?
@@ -120,6 +111,16 @@ impl Runtime {
         }
         fs::create_dir_all(&root).map_err(|_| Error::LocalStorage)?;
         storage(caissepro_local_store::protect_directory(&root))?;
+        let _guard = Self::lock_path(&root, &namespace)?;
+        let account = format!("installation-{namespace}");
+        let device = match storage(vault.load(&account))? {
+            Some(bytes) => Uuid::from_slice(&bytes).map_err(|_| Error::LocalStorage)?,
+            None => {
+                let id = Uuid::new_v4();
+                storage(vault.store(&account, id.as_bytes()))?;
+                id
+            }
+        };
         Ok(Arc::new(Self {
             root,
             namespace,
@@ -128,6 +129,26 @@ impl Runtime {
             #[cfg(test)]
             test_sqlcipher: false,
         }))
+    }
+    fn lock_path(root: &std::path::Path, namespace: &str) -> Result<fs::File> {
+        let path = root.join(format!("{namespace}.lock"));
+        if path.exists() {
+            storage(caissepro_local_store::protect_file(&path))?;
+        }
+        let mut options = fs::OpenOptions::new();
+        options.read(true).write(true).create(true).truncate(false);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let guard = options.open(&path).map_err(|_| Error::LocalStorage)?;
+        storage(caissepro_local_store::protect_file(&path))?;
+        guard.try_lock().map_err(|_| Error::LocalStorage)?;
+        Ok(guard)
+    }
+    fn lock(&self) -> Result<fs::File> {
+        Self::lock_path(&self.root, &self.namespace)
     }
     fn ticket_account(&self) -> String {
         format!("resume-{}", self.namespace)
@@ -163,6 +184,7 @@ impl Runtime {
         storage(self.vault.delete(&self.ticket_account()))
     }
     pub(crate) fn attach(self: &Arc<Self>, session: &mut Session, now: i64) -> Result<()> {
+        let _guard = self.lock()?;
         let owner = Owner {
             company: session.profile.company.id,
             user: session.profile.user.id,
@@ -195,9 +217,10 @@ impl Runtime {
             revision,
             saved_at: now,
         });
-        session.checkpoint(now)
+        session.checkpoint_locked(now)
     }
     pub(crate) fn restore(self: &Arc<Self>, now: i64) -> Result<Option<Session>> {
+        let _guard = self.lock()?;
         let Some(bytes) = storage(self.vault.load(&self.ticket_account()))? else {
             return Ok(None);
         };
@@ -374,6 +397,14 @@ impl Checkpoint {
 }
 impl Session {
     pub(crate) fn checkpoint(&mut self, now: i64) -> Result<()> {
+        let Some(durable) = self.durable.as_ref() else {
+            return Ok(());
+        };
+        let runtime = durable.runtime.clone();
+        let _guard = runtime.lock()?;
+        self.checkpoint_locked(now)
+    }
+    fn checkpoint_locked(&mut self, now: i64) -> Result<()> {
         if self.durable.is_none() {
             return Ok(());
         }
@@ -442,6 +473,15 @@ impl Session {
         if self.durable.is_none() {
             return Ok(());
         }
+        // Keep the OS lock across revision checking, ticket updates and purge.
+        // A CAS alone cannot protect a later deletion from a fresh login.
+        let runtime = self
+            .durable
+            .as_ref()
+            .ok_or(Error::LocalStorage)?
+            .runtime
+            .clone();
+        let _guard = runtime.lock()?;
         if let Some(durable) = self.durable.as_ref() {
             let current = storage(
                 durable
@@ -460,7 +500,7 @@ impl Session {
         self.offline_until = 0;
         let now = crate::state::wall_now();
         let write_result = if now < self.absolute_until {
-            self.checkpoint(now)
+            self.checkpoint_locked(now)
         } else {
             Ok(())
         };

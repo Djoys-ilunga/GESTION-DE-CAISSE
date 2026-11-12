@@ -2,7 +2,7 @@
 
 Travaux du 12 novembre 2026, branche `feat/etape-13b-brouillons-chiffres`, base `b761b852263dac12653c9329a0febb6dbf9b9dac`.
 
-**Statut de ce premier lot : implémentation intégrée et vérifiée sous Linux ; activation du stockage natif encore bloquée en attendant les résultats Windows/macOS.** Le booléen de qualification reste faux. Le mode effectivement actif est affiché par l’application ; aucun enregistrement sur disque n’est annoncé à tort.
+**Statut : qualification complète en cours.** SQLCipher et les coffres natifs ont passé les 15 tests de magasin sur Windows et macOS. Une activation candidate est intégrée pour Windows x64/MSVC et macOS Apple Silicon, afin de vérifier aussi l’entrée réelle du courtier ; sa validation finale dépend du passage complet suivant. Le mode effectivement actif est affiché par l’application ; aucun enregistrement sur disque n’est annoncé à tort.
 
 ## Audit et changements
 
@@ -35,8 +35,39 @@ Les écrans d’encaissement, dépenses, transferts et synchronisation affichent
 
 ## Validation et suite
 
-Le premier lot passe `pnpm check` (23 tests Node, 30 partagés, 27 unitaires API, 119 React), 161 tests HTTP/PostgreSQL et 16 parcours Chromium avec IPC simulé. Les tests Rust Linux comprennent 12 tests du magasin SQLCipher et 69 tests du courtier ; ils distinguent explicitement coffre de test en mémoire, SQLCipher réel et serveur HTTP simulé.
+Le dernier code vérifié passe `pnpm check` (23 tests Node, 30 partagés, 27 unitaires API, 123 React), 161 tests HTTP/PostgreSQL et 16 parcours Chromium avec IPC simulé. Les tests Rust Linux comprennent 14 tests du magasin SQLCipher et 70 tests du courtier (exécution parallèle puis séquentielle réussies) ; ils distinguent explicitement coffre de test en mémoire, SQLCipher réel et serveur HTTP simulé.
 
-La matrice `.github/workflows/local-store-native.yml` est préparée pour cette branche. Elle doit vérifier les coffres système réels, le redémarrage dans deux processus distincts, les ACL Windows, les régressions et la compilation réelle Tauri sur Windows/macOS. Les résultats seront ajoutés avant toute déclaration de fin d’étape. Aucun installateur ni étape 14 n’est lancé.
+La compilation/liaison Tauri Linux et l’ouverture réelle de sa fenêtre à 1280 × 900 passent également. Les traces et captures sont conservées hors du checkout, dans `/workspace/scratch/etape13b-verification`.
+
+La matrice `.github/workflows/local-store-native.yml` est exécutée réellement sur GitHub, sur cette branche. Les premiers essais ont révélé et permis de corriger l’alias de dossier temporaire macOS, l’environnement PowerShell du contrôle ACL et une fixture de temps trop courte. Les tests des suites sont maintenant isolés pour éviter que les KDF et trousseaux concurrents affament les serveurs HTTP de test ; les cas métier de concurrence continuent de lancer leurs propres workers. Aucune limite de sécurité de l’application n’est élargie.
+
+Le [troisième passage](https://github.com/Djoys-ilunga/GESTION-DE-CAISSE/actions/runs/43229936972), commit `643a505`, confirme sur macOS les **15 tests SQLCipher/coffre et 72 tests de session**, avec un helper ignoré dans la suite normale mais exécuté par le test parent dans deux processus réels. Son contrôle JavaScript a révélé un alias `/var` dans la fixture du lanceur de démo, corrigé avec un chemin temporaire canonique. Windows a également passé ses 15 tests du magasin et 71 tests de session, avec un échec réseau `Unavailable` au retour en ligne. La fixture HTTP séquentielle a été remplacée par des connexions indépendantes et des réponses complètes ; les délais et contrôles réseau de production restent identiques. Le passage suivant impose que le stockage public soit réellement actif sur le runner et exerce le verrou entre processus. Son résultat complet reste à consigner avant toute déclaration de fin d’étape. Aucun installateur ni étape 14 n’est lancé.
+
+## Matrice des scénarios essentiels
+
+| Scénario                                             | Preuve principale                                                                                                       |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Fermeture et redémarrage                             | Checkpoint SQLCipher rouvert verrouillé ; test natif dans deux exécutables successifs avec coffre système               |
+| Coupure, redémarrage hors connexion, retour en ligne | Courtier restauré sans jeton ; mot de passe et bail initial exigés ; nouveau login avant transmission                   |
+| Déconnexion, changement d’auteur ou d’entreprise     | Ticket retiré ; récupération après login uniquement ; aucun mélange des espaces privés                                  |
+| Expiration et permissions révoquées                  | Bail expiré refusé ; scope/version revalidés et purge lors d’une révocation connue                                      |
+| Corruption et clé absente                            | Lecture refusée sans recréer le fichier ou une clé de remplacement                                                      |
+| Transmission interrompue et doublon                  | Instantané exact préservé sur disque, UUID/révision identiques, nouvelle édition locale conservée                       |
+| Transfert interrompu puis corrigé                    | Montant et taux initialement envoyés rejoués à l’identique, correction séparée signalée, suppression incertaine refusée |
+| Concurrence entre processus                          | Compare-and-swap sur révision, un ancien processus ne peut ni écraser ni purger le gagnant                              |
+| Échec du coffre ou du checkpoint                     | Sauvegarde non acquittée ; aucun POST sans checkpoint réussi ; ticket incohérent refusé                                 |
+| Mot de passe incorrect puis redémarrage              | Compteur persistant ; cinq échecs désactivent la reprise hors connexion                                                 |
+| Aucun traitement financier local                     | Tests de toutes les confirmations, approbations, paiements, remises, réceptions et clôtures hors connexion              |
+| Conservation et devises                              | Sept jours au plus, dates initiales conservées, CDF/USD et catalogue/BCC revalidés par les tests financiers existants   |
+
+## Fichiers et responsabilités
+
+- `packages/local-store/src/{lib,permissions,tests}.rs`, `migrations/003_workspace.sql` et Cargo : checkpoint, SQLCipher, droits système et migration locale additive.
+- `packages/session-core/src/{persistence,persistence_tests,broker,state,synchronization,model,tests,transport_tests,lib}.rs` et Cargo : cycle des sessions, récupération, isolation, instantanés et tests.
+- `apps/desktop/src-tauri/src/lib.rs` et son verrou Cargo : raccordement au chemin de données système, sans commande générique de fichiers.
+- `packages/shared/src/{index,synchronization}.ts`, `apps/api/src/data/draft-inbox.service.ts` et `test/integration/synchronization.spec.ts` : contrat et validation des dates de brouillon, sans changement des écritures.
+- `apps/desktop/src/hybrid/{StorageNotice,SyncCenter}.tsx`, `local-store.ts`, les formulaires/pages d’encaissements, dépenses, transferts, `App.tsx`, `auth/gateway.ts` et tests associés : mode de stockage vérifiable et reprise explicite.
+- `.github/workflows/local-store-native.yml`, `scripts/native-qualification-command.mjs`, `tests/native/demo-macos.test.mjs` : qualification réelle et diagnostics bornés, fixture canonique macOS.
+- Ce bilan, `docs/chiffrement-local.md` et `docs/synchronisation.md` : comportement, preuves, durée, limites et retour arrière.
 
 Retour arrière : revenir au commit précédent pour le code, conserver les fichiers chiffrés et leurs clés ; ne pas les ouvrir avec SQLite standard, ne pas supprimer les migrations historiques et ne pas réinitialiser PostgreSQL. L’ancien code n’interprète pas le checkpoint v3 ; une mise à niveau ultérieure doit conserver les fichiers et versions.

@@ -1,9 +1,9 @@
-//! SQLCipher est compilé avec OpenSSL embarqué. La porte publique reste fermée
-//! tant que les tests Windows/macOS et la revue de distribution ne sont pas achevés.
+//! SQLCipher est compilé avec OpenSSL embarqué. Seules les cibles natives
+//! qualifiées sont activées ; la distribution signée relève de l'étape 10.
 mod key_vault;
 mod permissions;
 pub use key_vault::{KeyVault, NativeKeyVault};
-pub use permissions::protect_directory;
+pub use permissions::{protect_directory, protect_file};
 use rand::{rngs::OsRng, RngCore};
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use serde::{Deserialize, Serialize};
@@ -14,7 +14,16 @@ use std::{
 };
 use uuid::Uuid;
 use zeroize::Zeroizing;
-pub const PLATFORM_STORAGE_VALIDATED: bool = false;
+// Native SQLCipher, key-vault and process-restart checks ran on both targets.
+// Other targets remain closed, with no plaintext fallback.
+pub const PLATFORM_STORAGE_VALIDATED: bool = cfg!(any(
+    all(
+        target_os = "windows",
+        target_arch = "x86_64",
+        target_env = "msvc"
+    ),
+    all(target_os = "macos", target_arch = "aarch64")
+));
 const TTL: i64 = 900_000;
 type Result<T> = std::result::Result<T, StoreError>;
 #[derive(Debug, thiserror::Error)]

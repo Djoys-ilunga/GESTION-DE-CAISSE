@@ -931,7 +931,12 @@ impl Broker {
         if let Some(body) = body {
             request = request.json(&body)
         }
-        let mut response = request.send().await.map_err(|_| Error::Unavailable)?;
+        let mut response = request.send().await.map_err(|error| {
+            #[cfg(test)]
+            eprintln!("HTTP fixture error for {path}: {error}");
+            let _ = error;
+            Error::Unavailable
+        })?;
         if path.starts_with("exchange-rates") && response.status().as_u16() == 409 {
             let mut bytes = Vec::new();
             while let Some(chunk) = response.chunk().await.map_err(|_| Error::Unavailable)? {

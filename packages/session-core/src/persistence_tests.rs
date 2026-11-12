@@ -63,10 +63,22 @@ fn setup() -> (tempfile::TempDir, Arc<Runtime>, Arc<TestVault>, Session) {
 fn path(runtime: &Runtime) -> PathBuf {
     fs::read_dir(&runtime.root)
         .unwrap()
-        .next()
+        .filter_map(|v| v.ok().map(|v| v.path()))
+        .find(|p| p.extension().is_some_and(|e| e == "db"))
         .unwrap()
-        .unwrap()
-        .path()
+}
+#[test]
+fn os_lock_prevents_a_checkpoint_or_purge_from_racing_another_process() {
+    let (_dir, runtime, _vault, mut s) = setup();
+    runtime.attach(&mut s, wall_now()).unwrap();
+    let before = fs::read(path(&runtime)).unwrap();
+    let guard = runtime.lock().unwrap();
+    assert!(s.checkpoint(wall_now()).is_err());
+    assert!(s.detach_storage("SESSION_REVOKED").is_err());
+    assert!(runtime.restore(wall_now()).is_err());
+    assert_eq!(fs::read(path(&runtime)).unwrap(), before);
+    drop(guard);
+    assert!(runtime.restore(wall_now()).unwrap().is_some());
 }
 #[test]
 fn sqlcipher_checkpoint_reopens_locked_with_stable_device_and_without_bearer_token() {
@@ -403,6 +415,25 @@ fn native_key_vault_and_sqlcipher_survive_a_real_process_restart() {
         Arc::new(caissepro_local_store::NativeKeyVault),
     )
     .unwrap();
+    let _guard = runtime.lock().unwrap();
+    let result = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--ignored",
+            "--exact",
+            "persistence::tests::native_process_storage_contract",
+            "--nocapture",
+        ])
+        .env("CAISSEPRO_STORAGE_TEST_ROOT", dir.path())
+        .env("CAISSEPRO_STORAGE_TEST_SERVER", &endpoint)
+        .env("CAISSEPRO_STORAGE_TEST_PHASE", "blocked")
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert!(String::from_utf8_lossy(&result.stdout).contains("1 passed"));
     runtime
         .vault
         .delete(&format!("installation-{}", runtime.namespace))
@@ -414,6 +445,17 @@ fn native_key_vault_and_sqlcipher_survive_a_real_process_restart() {
 fn native_process_storage_contract() {
     let root = PathBuf::from(std::env::var_os("CAISSEPRO_STORAGE_TEST_ROOT").expect("test root"));
     let endpoint = std::env::var("CAISSEPRO_STORAGE_TEST_SERVER").expect("test server namespace");
+    if std::env::var("CAISSEPRO_STORAGE_TEST_PHASE").unwrap() == "blocked" {
+        assert!(matches!(
+            Runtime::for_tests(
+                root.join("sealed"),
+                &endpoint,
+                Arc::new(caissepro_local_store::NativeKeyVault)
+            ),
+            Err(Error::LocalStorage)
+        ));
+        return;
+    }
     let runtime = Runtime::for_tests(
         root.join("sealed"),
         &endpoint,

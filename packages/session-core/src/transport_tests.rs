@@ -61,13 +61,30 @@ impl Api {
             deployment.clone(),
         );
         let worker = thread::spawn(move || {
+            // Independent connections must not queue behind a partially read
+            // socket or a deliberately delayed acknowledgement in another test action.
+            let mut workers = Vec::new();
             while !s.load(Ordering::SeqCst) {
                 match listener.accept() {
                     Ok((stream, _)) => {
-                        Self::reply(stream, &p, (&r, &offline_flag), &w, &l, &d, &control)
+                        let (p, r, o, w, l, d, c) = (
+                            p.clone(),
+                            r.clone(),
+                            offline_flag.clone(),
+                            w.clone(),
+                            l.clone(),
+                            d.clone(),
+                            control.clone(),
+                        );
+                        workers.push(thread::spawn(move || {
+                            Self::reply(stream, &p, (&r, &o), &w, &l, &d, &c)
+                        }));
                     }
                     Err(_) => thread::sleep(Duration::from_millis(5)),
                 }
+            }
+            for worker in workers {
+                worker.join().unwrap();
             }
         });
         Self {
@@ -93,6 +110,7 @@ impl Api {
         sync: &SyncControl,
     ) {
         let (revoked, offline) = flags;
+        stream.set_nodelay(true).unwrap();
         stream
             .set_read_timeout(Some(Duration::from_secs(2)))
             .unwrap();
@@ -227,12 +245,12 @@ impl Api {
                 }
                 if sync.invalid_reply.load(Ordering::SeqCst) {
                     let body = "{}";
-                    let _ = write!(
-                        stream,
+                    let response = format!(
                         "HTTP/1.1 201 Test\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
                         body.len(),
                         body
                     );
+                    let _ = stream.write_all(response.as_bytes());
                     return;
                 }
                 (
@@ -243,7 +261,8 @@ impl Api {
             _ => (201, json!({"ok":true})),
         };
         let body = serde_json::to_string(&value).unwrap();
-        let _=write!(stream,"HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",body.len(),body);
+        let response=format!("HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",body.len(),body);
+        let _ = stream.write_all(response.as_bytes());
     }
     fn broker(&self) -> Broker {
         Broker::new(
@@ -1450,6 +1469,12 @@ async fn encrypted_offline_unlock_attempt_counter_survives_restarts_and_revokes_
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 #[tokio::test]
 async fn native_production_factory_is_gated_then_reopens_a_real_encrypted_workspace() {
+    if std::env::var("CAISSEPRO_REQUIRE_NATIVE_STORAGE").as_deref() == Ok("1") {
+        assert!(
+            caissepro_local_store::PLATFORM_STORAGE_VALIDATED,
+            "Native production storage must be enabled on the qualified runner"
+        );
+    }
     let api = Api::new();
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("production-factory");
