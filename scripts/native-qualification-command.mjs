@@ -26,7 +26,7 @@ child.on('close', (code) => {
       output
         .split('\n')
         .filter((line) =>
-          /error|FAILED|panicked|Err\(|Err value|assertion|left:|right:|Caused by|failed|not found/i.test(
+          /error|FAILED|panicked|Err\(|Err.*value|assertion|left:|right:|Caused by|failed|not found/i.test(
             line,
           ),
         )
@@ -38,5 +38,16 @@ child.on('close', (code) => {
       .replaceAll('\n', '%0A');
     console.error(`::error title=Qualification native::${escaped}`);
     process.exitCode = code ?? 1;
+  } else {
+    const summary = output
+      .split('\n')
+      .filter((line) => /test result: ok\.|Tests\s+[0-9]+ passed/.test(line))
+      .join(' · ')
+      .slice(-1500);
+    const label = `${command} ${args.join(' ')} : ${summary || 'réussi'}`
+      .replaceAll('%', '%25')
+      .replaceAll('\r', '%0D')
+      .replaceAll('\n', '%0A');
+    console.log(`::notice title=Qualification native réussie::${label}`);
   }
 });
