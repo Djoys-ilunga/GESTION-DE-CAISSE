@@ -26,7 +26,7 @@ child.on('close', (code) => {
       output
         .split('\n')
         .filter((line) =>
-          /error|FAILED|panicked|Err\(|Err.*value|assertion|left:|right:|Caused by|failed|not found/i.test(
+          /error|FAILED|panicked|Err\(|Err.*value|assertion|left:|right:|Caused by|failed|not found|location:|expected:|actual:|operator:|at .*\.(mjs|js|ts)|✖|not ok/i.test(
             line,
           ),
         )
